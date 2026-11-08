@@ -1,0 +1,16 @@
+# 构建产物
+Build/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+
+# 虚拟环境
+.venv/
+venv/
+
+# IDE 与系统文件
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

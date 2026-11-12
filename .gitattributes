@@ -1,0 +1,8 @@
+# 文本文件默认由 Git 自动判断换行符；下面两条覆盖脚本类文件。
+* text=auto
+
+# Shell 脚本必须保持 LF，否则 Windows 下 checkout 成 CRLF 后 bash 无法执行。
+*.sh text eol=lf
+
+# Windows 批处理保持 CRLF，避免 cmd.exe 解析异常。
+*.cmd text eol=crlf

@@ -17,6 +17,10 @@
 #
 # 输出：
 #   标准输出为 JSON systemMessage；退出码始终为 0。
+#
+# 网络：
+#   脚本不修改网络配置。推送失败时先检查 .git/config 中的
+#   http.https://github.com.proxy 或系统代理是否可用；失败只保留本地提交。
 
 set -u
 

@@ -7,7 +7,7 @@
 边界：
   - 不做量化、不重排权重、不改变张量字节数；
   - 不推导 shape，不分配显存；
-  - 不修改 Graph_Fixed 图对象，只修改 ``ModelGraph``。
+  - 不修改 Graph对象，只修改 ``ModelGraph``。
 """
 
 from __future__ import annotations

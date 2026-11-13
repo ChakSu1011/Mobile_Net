@@ -2,12 +2,12 @@
 //
 // 职责：
 //   定义 Kernel 描述、Kernel 抽象基类，以及 Kernel 执行上下文的前向声明。
-//   RuntimeGraph 通过本接口按 node.kernel_key 选择并调用后端 Kernel。
+//   Graph/OpEnv 通过本接口按 op 类型选择并调用后端 Kernel。
 //
 // 边界：
 //   - 本文件不定义 Backend 接口（见 Runtime/backend/backend.h）；
-//   - 不定义 KernelContext 的字段（见 Graph/cpp/runtime/.../forward_context.h），
-//     避免 Kernel 公共头文件依赖 RuntimeGraph 数据结构。
+//   - 不定义 KernelContext 的字段（见运行时设计文档的 ForwardContext），
+//     避免 Kernel 公共头文件依赖 Graph 数据结构。
 //
 // 依赖：
 //   Runtime/common/status.h、Runtime/common/data_types.h、
@@ -32,9 +32,9 @@ namespace graph {
 //   Attention/Sampling 元数据与 workspace。
 //
 // 边界：
-//   - 由 RuntimeGraph::Forward 在栈上构造，生命周期仅限一次 Execute；
+//   - 由 Executor 在调用 OpEnv::Forward 前构造，生命周期仅限一次 Execute；
 //   - Kernel 不得保存其指针或内部裸指针到下一次调用；
-//   - 定义见 Graph/cpp/runtime/include/graph/forward_context.h。
+//   - 定义见运行时设计文档的 ForwardContext。
 struct KernelContext;
 
 }  // namespace graph

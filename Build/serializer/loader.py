@@ -2,7 +2,7 @@
 
 职责：
   读取并校验 ``model.mgf`` 固定头、manifest 哈希与 ``weights.bin`` 哈希；
-  按 manifest 重放 Graph_Fixed 构图 API，重建可执行图并校验 IR 哈希。
+  按 manifest 重放 Graph 构图 API，重建可执行图并校验 IR 哈希。
 
 边界：
   - 不修改包文件；
@@ -170,7 +170,7 @@ def rebuild_graph(
     *,
     verify_ir: bool = True,
 ) -> Any:
-    """按 manifest 重建 Graph_Fixed 图。
+    """按 manifest 重建 Graph。
 
     参数：
       package：已加载的模型包；

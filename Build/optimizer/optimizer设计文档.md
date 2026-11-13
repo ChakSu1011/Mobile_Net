@@ -9,15 +9,15 @@
 | 模块目录 | `Build/optimizer/` |
 | 上游依赖 | `Build/converter` 输出的 `ModelGraph` |
 | 下游模块 | `Build/serializer` |
-| 权威图设计 | [Graph_Fixed/Graph设计文档.md](../../Graph_Fixed/Graph设计文档.md) |
+| 权威图设计 | [Graph/Graph设计文档.md](../../Graph/Graph设计文档.md) |
 
 ## 1. 背景与目标
 
 ### 1.1 背景
 
-`Graph_Fixed` 只负责图结构与依赖关系，不推导 shape、precision，也不做显存
+`Graph` 只负责图结构与依赖关系，不推导 shape、precision，也不做显存
 规划；其 Python 绑定不暴露 Op/Storage 访问器。因此 Build 阶段的优化对象
-是 Converter 旁路记录的 `ModelGraph`，而不是试图修改不可变的 Graph_Fixed
+是 Converter 旁路记录的 `ModelGraph`，而不是试图修改不可变的 Graph
 图对象。优化结果写回 `ModelGraph`，Serializer 再据此重建可执行图并序列化。
 
 ### 1.2 目标
@@ -34,7 +34,7 @@
 
 ### 1.3 非目标
 
-- 不修改 Graph_Fixed 的图对象；不新增/删除 op。
+- 不修改 Graph 的图对象；不新增/删除 op。
 - 不实现量化（INT8/INT4）；只在策略结构中预留扩展字段。
 - 不做 Dummy Run 真实执行；生命周期由静态依赖分析得到。
 - 不分配真实显存；只输出逻辑偏移计划。
@@ -127,7 +127,7 @@ Pipeline 在 `ModelGraph` 的深拷贝上执行，保证输入对象不被修改
 
 | 决策点 | 选择 | 理由 | 代价 |
 | --- | --- | --- | --- |
-| 优化对象 | `ModelGraph` sidecar | Graph_Fixed 不可变、元数据不可见 | 必须保证 sidecar 与图同步 |
+| 优化对象 | `ModelGraph` sidecar | Graph 不可变、元数据不可见 | 必须保证 sidecar 与图同步 |
 | 形状推导 | 静态规则表 + 拓扑序 | 确定性、可测试、无需执行 | 新算子需补规则 |
 | 动态维 | 固定 `B=1`、`S=max_num_tokens` 规划 | 与首期 prefill 图一致 | 不支持动态 batch |
 | 显存复用 | 生命周期区间 + first-fit | 实现简单、可验证 | 非全局最优 |
@@ -381,7 +381,7 @@ class MemoryPass:
 ### 6.3 测试环境
 
 - Windows 11 / Linux，Python 3.10+；
-- Graph_Fixed 原生扩展已构建；
+- Graph 原生扩展已构建；
 - 命令：`PYTHONUTF8=1 python -m unittest Build.optimizer.test_optimizer -v`。
 
 ### 6.4 通过标准

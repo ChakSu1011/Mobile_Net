@@ -5,7 +5,7 @@
   包字节确定性、显存复用开关与 CLI 入口。
 
 边界：
-  依赖 Graph_Fixed 与 Qwen3 config.json；不依赖真实权重。
+  依赖 Graph 与 Qwen3 config.json；不依赖真实权重。
 """
 
 from __future__ import annotations

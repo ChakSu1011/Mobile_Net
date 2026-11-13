@@ -1,11 +1,11 @@
-"""模块：Graph_Fixed Python 包加载与枚举名称转换。
+"""模块：Graph Python 包加载与枚举名称转换。
 
 职责：
   定位并加载 ``mobilenet_runtime_graph``，提供 Precision/Layout/OpType
   在 Python 枚举与稳定字符串之间的双向映射。
 
 边界：
-  不实现 Graph/Tensor，不修改 Graph_Fixed；本模块只做导入与名称转换。
+  不实现 Graph/Tensor，不修改 Graph；本模块只做导入与名称转换。
 """
 
 from __future__ import annotations
@@ -41,17 +41,17 @@ _CAMEL_BOUNDARY = re.compile(r"(?<!^)(?=[A-Z])")
 
 
 def load_graph_api() -> Any:
-    """加载 Graph_Fixed 的 Python 公共包。
+    """加载 Graph 的 Python 公共包。
 
-    优先使用当前 ``sys.path``；失败时把仓库的 ``Graph_Fixed/python`` 与
-    原生扩展目录 ``Build/graph_fixed/python`` 加入 ``sys.path`` 后重试。
+    优先使用当前 ``sys.path``；失败时把仓库的 ``Graph/python`` 与
+    原生扩展目录 ``Build/graph/python`` 加入 ``sys.path`` 后重试。
     结果会被缓存，重复调用不会重复导入。
 
     返回：
       ``mobilenet_runtime_graph`` 模块对象。
 
     异常：
-      ModuleNotFoundError：公共包或 ``_graph_fixed`` 扩展均不可用时抛出。
+      ModuleNotFoundError：公共包或 ``_graph`` 扩展均不可用时抛出。
     """
     global _CACHED_API
     if _CACHED_API is not None:
@@ -65,8 +65,8 @@ def load_graph_api() -> Any:
 
     repository_root = Path(__file__).resolve().parents[2]
     for candidate in (
-        repository_root / "Graph_Fixed" / "python",
-        repository_root / "Build" / "graph_fixed" / "python",
+        repository_root / "Graph" / "python",
+        repository_root / "Build" / "graph" / "python",
     ):
         if not candidate.is_dir():
             continue

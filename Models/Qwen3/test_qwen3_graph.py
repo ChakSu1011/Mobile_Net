@@ -1,4 +1,4 @@
-"""模块：Qwen3-0.6B Graph_Fixed 组图测试。
+"""模块：Qwen3-0.6B Graph 组图测试。
 
 职责：
   验证 Qwen3-0.6B 静态图的配置解析、图规模、拓扑顺序、权重形状、
@@ -7,7 +7,7 @@
 
 边界：
   - 不加载真实权重、不执行 kernel、不验证数值；
-  - 图测试只依赖 Graph_Fixed 的 Python 绑定；
+  - 图测试只依赖 Graph 的 Python 绑定；
   - Transformers/torch 对照测试在依赖缺失时自动 skip。
 
 依赖：
@@ -28,7 +28,7 @@ MODEL_DIR = Path(__file__).resolve().parent
 REPOSITORY_ROOT = MODEL_DIR.parents[1]
 sys.path.insert(0, str(MODEL_DIR))
 sys.path.insert(
-    0, str(REPOSITORY_ROOT / "Graph_Fixed" / "python"))
+    0, str(REPOSITORY_ROOT / "Graph" / "python"))
 
 from qwen3_config import Qwen3Config  # noqa: E402
 from qwen3_graph_builder import (  # noqa: E402

@@ -2,7 +2,7 @@
 
 职责：
   串联 Converter、Optimizer、Serializer，生成模型包后立即加载并重建
-  Graph_Fixed 图，校验 IR 哈希，输出构建摘要。
+  Graph，校验 IR 哈希，输出构建摘要。
 
 边界：
   - 只支持已注册 Adapter（首期为 Qwen3）；
@@ -53,7 +53,7 @@ class PipelineResult:
       optimization：优化结果；
       serialization：序列化结果；
       package：重新加载的模型包；
-      graph：重建的 Graph_Fixed 图；
+      graph：重建的 Graph；
       work_dir：中间产物目录。
     """
 

@@ -1,7 +1,7 @@
 // 模块：Runtime 公共数据类型（DataType / Layout / DeviceType）
 //
 // 职责：
-//   为 RuntimeGraph、序列化格式与 Kernel 契约提供与 LibTorch 无关的
+//   为 Graph、序列化格式与 Kernel 契约提供与 LibTorch 无关的
 //   数据类型、布局与设备类型枚举，并提供稳定的名称与字节数查询。
 //
 // 边界：

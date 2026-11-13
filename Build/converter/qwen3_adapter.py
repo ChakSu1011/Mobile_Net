@@ -2,7 +2,7 @@
 
 职责：
   加载 Qwen3 配置，复用 ``Models/Qwen3/qwen3_graph_builder.py`` 的层结构，
-  通过 ``RecordingGraph`` 构建 Graph_Fixed 图并补充权重来源、tied 别名与
+  通过 ``RecordingGraph`` 构建 Graph并补充权重来源、tied 别名与
   模型配置元数据。
 
 边界：
@@ -84,7 +84,7 @@ class Qwen3Adapter:
     """Qwen3-0.6B 转换 Adapter。
 
     功能：
-      读取 config.json，构建 Graph_Fixed 图，记录 ModelGraph，并按可选的
+      读取 config.json，构建 Graph，记录 ModelGraph，并按可选的
       safetensors 权重目录登记权重可用性。
 
     边界：
@@ -117,7 +117,7 @@ class Qwen3Adapter:
         异常：
           ValueError：配置非法；
           BuildError：常量缺少权重映射、权重文件损坏或记录不一致；
-          RuntimeError：Graph_Fixed 构图失败。
+          RuntimeError：Graph 构图失败。
         """
         config = Qwen3Config.from_json(self._config_path)
         config.validate()

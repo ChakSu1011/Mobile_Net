@@ -161,7 +161,7 @@ description: 从 Runtime 静态图设计出发，实现不依赖 torch/ATen 的 
 6. **dump 输出指针**：`StorageToString` 打印真实地址会让测试结果随进程变化，
    也无法做快照。只输出 `data=set`/`data=unset`。
 7. **Zig/CMake 归档器丢失**：CMake 探测可能把 `CMAKE_AR` 置为
-   `CMAKE_AR-NOTFOUND`。用 `GRAPH_FIXED_AR` / `GRAPH_FIXED_RANLIB` 缓存
+   `CMAKE_AR-NOTFOUND`。用 `GRAPH_AR` / `GRAPH_RANLIB` 缓存
    覆盖，指向 `python -m ziglang ar` 包装脚本。
 8. **构建脚本路径大小写不一致**：`.cmd` 用反斜杠/大写盘符、`.sh` 用正斜杠/
    大写盘符，CMake 会认为编译器变化并重建缓存，导致归档器覆盖变量丢失。
@@ -186,43 +186,43 @@ description: 从 Runtime 静态图设计出发，实现不依赖 torch/ATen 的 
 
 ```bash
 # 干净构建 + CTest
-rm -rf Build/graph_fixed
-bash Graph_Fixed/tools/build_with_zig.sh
+rm -rf Build/graph
+bash Graph/tools/build_with_zig.sh
 
 # Windows cmd 构建
-cmd //c "Graph_Fixed\\tools\\build_with_zig.cmd"
+cmd //c "Graph\\tools\\build_with_zig.cmd"
 
 # C++ 单测
-Build/graph_fixed/graph_fixed_test.exe
+Build/graph/graph_test.exe
 
 # Python 单测
-GRAPH_FIXED_PYTHON_DIR="D:\Mobile_Net\Build\graph_fixed\python" \
-  PYTHONUTF8=1 python Graph_Fixed/tests/test_graph_fixed.py -v
+GRAPH_PYTHON_DIR="D:\Mobile_Net\Build\graph\python" \
+  PYTHONUTF8=1 python Graph/tests/test_graph.py -v
 
 # CTest
-ctest --test-dir Build/graph_fixed --output-on-failure
+ctest --test-dir Build/graph --output-on-failure
 ```
 
 正式构建（有 MSVC/系统 C++ 工具链时）：
 
 ```bash
-cmake -S Graph_Fixed -B Build/graph_fixed -G Ninja \
+cmake -S Graph -B Build/graph -G Ninja \
   -DCMAKE_BUILD_TYPE=Release
-cmake --build Build/graph_fixed
-ctest --test-dir Build/graph_fixed --output-on-failure
+cmake --build Build/graph
+ctest --test-dir Build/graph --output-on-failure
 ```
 
 ## 参考实现
 
-- 基础设计：`Graph_Fixed/Graph设计文档.md`
-- 实施设计：`Graph_Fixed/Graph模块实施与测试设计.md`
-- 公共类型：`Graph_Fixed/include/runtime_graph/types.h`、`shape.h`、
+- 基础设计：`Graph/Graph设计文档.md`
+- 实施设计：`Graph/Graph模块实施与测试设计.md`
+- 公共类型：`Graph/include/runtime_graph/types.h`、`shape.h`、
   `storage.h`、`attr.h`
-- IR 对象：`Graph_Fixed/include/runtime_graph/tensor.h`、`op.h`、
+- IR 对象：`Graph/include/runtime_graph/tensor.h`、`op.h`、
   `op_env.h`、`graph_env.h`、`graph.h`
-- 实现：`Graph_Fixed/src/`
-- Python 绑定：`Graph_Fixed/python/graph_fixed_python.cc`
-- Python 公共包：`Graph_Fixed/python/mobilenet_runtime_graph/__init__.py`
-- 测试：`Graph_Fixed/tests/graph_fixed_test.cc`、
-  `Graph_Fixed/tests/test_graph_fixed.py`
-- 测试报告：`Graph_Fixed/TestResults.md`
+- 实现：`Graph/src/`
+- Python 绑定：`Graph/python/graph_python.cc`
+- Python 公共包：`Graph/python/mobilenet_runtime_graph/__init__.py`
+- 测试：`Graph/tests/graph_test.cc`、
+  `Graph/tests/test_graph.py`
+- 测试报告：`Graph/TestResults.md`

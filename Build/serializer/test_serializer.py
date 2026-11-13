@@ -5,7 +5,7 @@
   合成权重打包、确定性与 Qwen3 metadata-only 模型包。
 
 边界：
-  依赖 Graph_Fixed 重建图；不依赖真实权重、GPU、torch 或 transformers。
+  依赖 Graph 重建图；不依赖真实权重、GPU、torch 或 transformers。
 """
 
 from __future__ import annotations

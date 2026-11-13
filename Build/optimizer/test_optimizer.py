@@ -5,7 +5,7 @@
   并验证 Qwen3 全图优化结果、显存不变量与确定性。
 
 边界：
-  单元测试使用合成 ``ModelGraph``；集成测试依赖 Graph_Fixed 与
+  单元测试使用合成 ``ModelGraph``；集成测试依赖 Graph 与
   Qwen3 config.json，不依赖真实权重。
 """
 

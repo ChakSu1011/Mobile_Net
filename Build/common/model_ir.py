@@ -5,14 +5,14 @@
   算子元数据 ``OpMeta``、I/O 绑定、显存计划数据结构与 JSON 往返。
 
 边界：
-  - 不创建 Graph_Fixed 图，不执行构图；
+  - 不创建 Graph，不执行构图；
   - 不推导 shape/precision，不分配显存；
   - 图对象以名称引用，TensorMeta 是图元数据的旁路副本。
 
 主要逻辑：
   1. 数据类在构造时做字段与命名校验；
   2. ``ModelGraph.validate()`` 校验引用完整性与无环；
-  3. ``topological_order()`` 复刻 Graph_Fixed 的 post-DFS 顺序；
+  3. ``topological_order()`` 复刻 Graph 的 post-DFS 顺序；
   4. ``to_dict()/from_dict()`` 提供确定性的 JSON 往返。
 """
 
@@ -446,7 +446,7 @@ class ModelGraph:
       模型元信息，作为 Optimizer 与 Serializer 的输入。
 
     边界：
-      不是可执行图；执行仍由 Graph_Fixed Graph 承担。
+      不是可执行图；执行仍由 Graph 承担。
     """
 
     name: str
@@ -708,7 +708,7 @@ class ModelGraph:
         return reachable
 
     def topological_order(self) -> list[OpMeta]:
-        """按 Graph_Fixed 的 post-DFS 规则返回拓扑序。
+        """按 Graph 的 post-DFS 规则返回拓扑序。
 
         返回：
           op 列表；生产者一定排在消费者之前。

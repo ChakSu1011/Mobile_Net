@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
       OSError：文件读写失败。
     """
     parser = argparse.ArgumentParser(
-        description="Convert a model to a Graph_Fixed graph")
+        description="Convert a model to a Graph graph")
     parser.add_argument(
         "--adapter",
         default="qwen3",

@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 文档版本 | v0.2 |
-| 文档状态 | 架构设计（Graph_Fixed 对齐稿） |
+| 文档状态 | 架构设计（Graph 对齐稿） |
 | 编写日期 | 2026-11-13 |
 | 适用范围 | 阶段一：大语言模型推理；阶段二：大语言模型服务框架 |
 | 后续文档 | 各模块设计文档（拆分计划见 3.7） |
@@ -85,19 +85,19 @@ Agent 智能体在服务侧的应用部署已经非常广泛，手机端或者�
 
 | 编号 | 需求描述 | 验收要点 | 关联用例 |
 | --- | --- | --- | --- |
-| FR-1.1 | 提供基于 Graph_Fixed 的 runtime 静态图对象模型：Graph 持有 Op、Tensor、constant tensor、图输入/输出与拓扑序列；Op 以 op_type、attr、src_tensors、dst_tensors 描述计算/输入/输出节点，并挂载 OpEnv；Tensor 表示数据依赖边并内嵌 Storage（shape、precision、layout、device_type、offset、byte_size、data_ptr、reusable）；constant tensor 作为依赖叶子独立持有，不进入执行序列；Graph 提供 create_input、create_constant、create_op、create_output、SortOp 与 GetAllConstantTensor/GetAllInputOp/GetAllOutputOp/GetOrderlyOPList 查询；SortOp 从图输出做后序 DFS，保证生产者先于消费者；Graph 不执行 Forward、不分配显存、不推导 shape/precision/layout，执行由 Engine 为每个 op 创建 OpEnv 并调用 OpEnv::Forward 完成。 | 合法图可构造并通过校验；非法图（重名、成环、悬空依赖、缺少输出生产者、I/O 注册非法）被拒绝并定位；SortOp 后生产者全部先于消费者；constant 不出现在执行序列；Graph 与 OpEnv 生命周期可正确释放。 | TC-GRAPH-01、TC-EXEC-01 |
+| FR-1.1 | 提供基于 Graph 的 runtime 静态图对象模型：Graph 持有 Op、Tensor、constant tensor、图输入/输出与拓扑序列；Op 以 op_type、attr、src_tensors、dst_tensors 描述计算/输入/输出节点，并挂载 OpEnv；Tensor 表示数据依赖边并内嵌 Storage（shape、precision、layout、device_type、offset、byte_size、data_ptr、reusable）；constant tensor 作为依赖叶子独立持有，不进入执行序列；Graph 提供 create_input、create_constant、create_op、create_output、SortOp 与 GetAllConstantTensor/GetAllInputOp/GetAllOutputOp/GetOrderlyOPList 查询；SortOp 从图输出做后序 DFS，保证生产者先于消费者；Graph 不执行 Forward、不分配显存、不推导 shape/precision/layout，执行由 Engine 为每个 op 创建 OpEnv 并调用 OpEnv::Forward 完成。 | 合法图可构造并通过校验；非法图（重名、成环、悬空依赖、缺少输出生产者、I/O 注册非法）被拒绝并定位；SortOp 后生产者全部先于消费者；constant 不出现在执行序列；Graph 与 OpEnv 生命周期可正确释放。 | TC-GRAPH-01、TC-EXEC-01 |
 | FR-1.2 | Graph 对象模型通过 pybind11 暴露给 Python，不使用 LibTorch type caster：Python 侧只暴露 Graph、Tensor（name、is_constant、reusable、set_reusable）与 OpType/Precision/Layout/DeviceType 枚举，以及 create_input、create_constant、create_op、create_output、sort_op、dump_ir；不暴露 Op、Storage、Shape 访问器，不提供序列化与 Forward。Build 阶段由 Converter 的 RecordingGraph 透明代理构图 API，并旁路记录 ModelGraph 元数据 sidecar，供 Optimizer 与 Serializer 使用。 | Python 构造图与 C++ 构造图的 dump_ir 逐字节一致；ModelGraph 的 op/tensor 计数与 dump_ir 一致；Python 侧不存在 torch.Tensor/torch.dtype 属性；C++ 运行时不链接 LibTorch。 | TC-GRAPH-02 |
-| FR-1.3 | Converter 将模型厂商发布的模型源码（首期 Qwen3-0.6B）转换为 Graph_Fixed 静态图，并同步旁路记录 ModelGraph；完整保留原图结构、算子属性、常量权重来源与图输出。 | 节点/常量/权重映射与参考模型一致；RecordingGraph 与原生 Graph 的 dump_ir 一致；转换报告完整。 | TC-CONV-01 |
+| FR-1.3 | Converter 将模型厂商发布的模型源码（首期 Qwen3-0.6B）转换为 Graph 静态图，并同步旁路记录 ModelGraph；完整保留原图结构、算子属性、常量权重来源与图输出。 | 节点/常量/权重映射与参考模型一致；RecordingGraph 与原生 Graph 的 dump_ir 一致；转换报告完整。 | TC-CONV-01 |
 | FR-1.4 | Precision Infer 将 BF16 权重与激活转换为 FP16，并为所有 op 的输入、输出、参数、权重确定唯一精度。后续模型量化（INT8/INT4 等）统一在 Precision Infer 阶段扩展，不新增独立优化阶段。 | 所有 Tensor 均有明确 dtype；精度策略可审查；量化扩展点已在精度表中预留。 | TC-OPT-01 |
 | FR-1.5 | Shape Infer 以模型 Config、MaxNumToken、ContextLength 为输入，推导图中所有 Tensor 与 op 的形状，并校验合法性。 | 形状与配置及运行边界一致；无未推导维度。 | TC-OPT-01 |
 | FR-1.6 | Memory Manage 基于 ModelGraph 的静态依赖与生命周期分析推导 Activation 显存复用方案，生成显存排版，降低峰值占用；不执行图，也不分配真实显存。 | 活跃区间无冲突；开启/关闭复用图结构与输出绑定一致；arena 不小于峰值。 | TC-OPT-02 |
 | FR-1.7 | Optimizer 以结构化日志输出所有算子的精度、形状、显存排版与生命周期，供 Agent 自动校验与人工审查。 | 日志可被脚本解析；关键不变量自动检查通过。 | TC-OPT-01 |
-| FR-1.8 | Serializer 把优化后的 ModelGraph 固化为自描述的 `model.mgf` 模型包（112 字节固定头 + 规范化 JSON manifest），可选写出独立 `weights.bin`；manifest 包含完整图、显存计划、权重表、格式版本与 SHA-256 校验；Loader 可据此重建 Graph_Fixed 图。 | 序列化往返图一致；重建图 dump_ir 的 SHA-256 与 manifest 记录一致；权重校验和一致；无权重时可生成 metadata-only 包。 | TC-SER-01 |
-| FR-1.9 | Loader 读取并校验 `model.mgf`，按 manifest 重建 Graph_Fixed 图，按推理配置从后端注册表选择并初始化后端（首期 OpenCL），完成 GraphEnv/OpEnv、Kernel 准备、权重转换/上传、输入/输出存储绑定与运行时资源创建。 | 正常包加载成功；后端选择正确；未知后端、损坏文件或缺少 I/O 传输能力返回错误码且不崩溃。 | TC-LOAD-01 |
+| FR-1.8 | Serializer 把优化后的 ModelGraph 固化为自描述的 `model.mgf` 模型包（112 字节固定头 + 规范化 JSON manifest），可选写出独立 `weights.bin`；manifest 包含完整图、显存计划、权重表、格式版本与 SHA-256 校验；Loader 可据此重建 Graph。 | 序列化往返图一致；重建图 dump_ir 的 SHA-256 与 manifest 记录一致；权重校验和一致；无权重时可生成 metadata-only 包。 | TC-SER-01 |
+| FR-1.9 | Loader 读取并校验 `model.mgf`，按 manifest 重建 Graph，按推理配置从后端注册表选择并初始化后端（首期 OpenCL），完成 GraphEnv/OpEnv、Kernel 准备、权重转换/上传、输入/输出存储绑定与运行时资源创建。 | 正常包加载成功；后端选择正确；未知后端、损坏文件或缺少 I/O 传输能力返回错误码且不崩溃。 | TC-LOAD-01 |
 | FR-1.10 | Scheduler 实现 Continuous Batching；维护 Waiting/Running 队列；对上层提供 Merge（添加请求）、Update（回写生成 Token 与状态）、Stop（结束请求）接口。 | 多请求并发正确、无串扰；取消与超时生效。 | TC-SCHED-01、TC-SCHED-02 |
 | FR-1.11 | KVCache Manager 实现 Paged Attention 的 KV Block 分配、追加、回收与 Block Table 管理，支持多请求并发与显存不足时的抢占。 | 块分配不变量成立；OOM 时触发抢占并可恢复。 | TC-KV-01 |
 | FR-1.12 | Executor 按调度计划构建主机输入/输出绑定与 ForwardContext；通过 Engine 的 I/O 绑定接口写入 Input/Output op 的 storage attr，随后按 Graph::GetOrderlyOPList() 逐 op 调用 OpEnv::Forward()，完成 Input H2D、计算与 Output D2H；经 Backend/Kernel 公共接口提交节点执行；优先对 Waiting 请求做 Prefill，再对 Running 请求做 Decode；同一 Step 内按 Token 维度 Packing 多请求；采样 op 输出 Token。 | 单请求/多请求结果与参考一致；H2D/D2H 往返正确；Kernel 独立对齐通过；Executor 无后端专有代码；不直接修改 Graph 拓扑。 | TC-EXEC-01、TC-KERNEL-01 |
-| FR-1.13 | Engine 聚合 Loader、Scheduler、KVCache Manager、Executor、Destroy，持有 Backend、Graph_Fixed Graph 与各 op 的 OpEnv，对上层提供统一的 Load、Schedule、Execute、Destroy 接口与生命周期管理。 | 生命周期状态正确；Backend、Graph 与 OpEnv 生命周期正确；接口可重复调用且错误可诊断。 | TC-ENG-01 |
+| FR-1.13 | Engine 聚合 Loader、Scheduler、KVCache Manager、Executor、Destroy，持有 Backend、Graph 与各 op 的 OpEnv，对上层提供统一的 Load、Schedule、Execute、Destroy 接口与生命周期管理。 | 生命周期状态正确；Backend、Graph 与 OpEnv 生命周期正确；接口可重复调用且错误可诊断。 | TC-ENG-01 |
 | FR-1.14 | Destroy 按依赖顺序释放各 op 的 OpEnv、Kernel、Buffer（含输入/输出设备缓冲）、GraphEnv、Graph、Backend 与主机资源；释放接口可重复调用，不产生内存、设备或线程资源泄漏。 | 反复 Load/Destroy 无泄漏；后端句柄计数归零；Destroy 幂等。 | TC-ENG-01 |
 
 ### 2.2.2 阶段二：大语言模型服务框架
@@ -123,9 +123,9 @@ Agent 智能体在服务侧的应用部署已经非常广泛，手机端或者�
 
 ## 2.4 约束条件
 
-- **工具链环境**：Python 3.10+（当前验证环境为 Python 3.13）、CMake 3.20+；运行于 Windows 11 或 Linux 开发机。Build 阶段不依赖 PyTorch、LibTorch 或 Protobuf；Graph_Fixed 原生扩展由仓库内 CMake 构建，产物位于 `Build/graph_fixed/python/`。
-- **运行时环境**：C++17、CMake 3.20+、OpenCL 1.2+（优先使用设备支持的更高版本）；首期目标平台为 Android arm64-v8a（Android NDK），主机侧编译用于单元测试。Graph_Fixed 与运行时均不链接 LibTorch。
-- **图表示约束**：全项目只有一套可执行图表示，即 Graph_Fixed 的 C++17 runtime IR（Graph/Op/Tensor/Storage/GraphEnv/OpEnv）；Python 侧仅通过 pybind11 最小构图接口访问，不暴露 Op/Storage/Shape 访问器。Build 阶段的优化与序列化元数据由 Converter 旁路记录的 `ModelGraph` sidecar 承载；不存在 Graph IR/RuntimeGraph 双表示，也不存在 `TensorDesc` 转换层。
+- **工具链环境**：Python 3.10+（当前验证环境为 Python 3.13）、CMake 3.20+；运行于 Windows 11 或 Linux 开发机。Build 阶段不依赖 PyTorch、LibTorch 或 Protobuf；Graph 原生扩展由仓库内 CMake 构建，产物位于 `Build/graph/python/`。
+- **运行时环境**：C++17、CMake 3.20+、OpenCL 1.2+（优先使用设备支持的更高版本）；首期目标平台为 Android arm64-v8a（Android NDK），主机侧编译用于单元测试。Graph 与运行时均不链接 LibTorch。
+- **图表示约束**：全项目只有一套可执行图表示，即 Graph 的 C++17 runtime IR（Graph/Op/Tensor/Storage/GraphEnv/OpEnv）；Python 侧仅通过 pybind11 最小构图接口访问，不暴露 Op/Storage/Shape 访问器。Build 阶段的优化与序列化元数据由 Converter 旁路记录的 `ModelGraph` sidecar 承载；不存在 Graph IR/RuntimeGraph 双表示，也不存在 `TensorDesc` 转换层。
 - **设备目标**：首期只实现高通 Adreno GPU 的 OpenCL 后端；其他 GPU/CPU 后端不在首期实现，按目录级插件规范预留接入能力。
 - **离线运行**：运行时不访问网络；模型、权重、Tokenizer 文件全部本地加载。
 - **格式自主**：模型包 `model.mgf`（固定头 + 规范化 JSON manifest + 可选 `weights.bin`）由本项目定义并版本化，不兼容第三方推理格式。
@@ -138,7 +138,7 @@ Agent 智能体在服务侧的应用部署已经非常广泛，手机端或者�
 | 编号 | 验收项 | 通过条件 |
 | --- | --- | --- |
 | AC-1 | 阶段一端到端功能 | Qwen3-0.6B 在参考机 GPU 上完成文本输入到自回归文本输出；贪心 64 Token 与 PyTorch 参考一致率 ≥ 95%。 |
-| AC-2 | 工具链完整性 | 图、权重、优化日志完整且可复现；所有 Tensor 的精度、形状、显存排版可由脚本校验；Python 构建的 Graph_Fixed 图 `dump_ir` 与重建图逐字节一致，IR SHA-256 与 manifest 一致。 |
+| AC-2 | 工具链完整性 | 图、权重、优化日志完整且可复现；所有 Tensor 的精度、形状、显存排版可由脚本校验；Python 构建的 Graph `dump_ir` 与重建图逐字节一致，IR SHA-256 与 manifest 一致。 |
 | AC-3 | 动态调度 | ≥ 4 并发请求连续批处理；输出无串扰；请求可取消；KV 不足时可抢占并恢复。 |
 | AC-4 | 资源与稳定性 | 峰值内存 ≤ 3 GB；1 小时混合负载无崩溃、无泄漏。 |
 | AC-5 | 阶段二服务框架 | Tokenizer 编解码往返正确；PrefixCache 命中后输出一致且 Prefill 开销下降；流式会话可用。 |
@@ -160,7 +160,7 @@ Agent 智能体在服务侧的应用部署已经非常广泛，手机端或者�
 │   HF 模型源码（config / tokenizer / weights）                                            │
 │       │                                                                                 │
 │       ▼                                                                                 │
-│   Converter ──────▶ Graph_Fixed.Graph（C++17 runtime IR）                               │
+│   Converter ──────▶ Graph.Graph（C++17 runtime IR）                               │
 │       │                    │  旁路记录 ModelGraph（元数据 sidecar）                      │
 │       │                    ▼                                                            │
 │       │              Optimizer（Precision → Shape → Memory，作用于 ModelGraph）          │
@@ -192,20 +192,20 @@ Agent 智能体在服务侧的应用部署已经非常广泛，手机端或者�
 
 架构要点：
 
-1. **单一图表示、元数据旁路**：Graph_Fixed 是全项目唯一可执行图表示，采用 C++17 runtime IR（Graph/Op/Tensor/Storage/GraphEnv/OpEnv），不依赖 torch/LibTorch；Python 侧只有 pybind11 暴露的最小构图接口。Build 阶段所需的 shape、precision、权重来源等元数据由 Converter 在构图时旁路记录为 `ModelGraph` sidecar，既不改动 Graph_Fixed C++ 接口，也不维护第二套可执行图。
+1. **单一图表示、元数据旁路**：Graph 是全项目唯一可执行图表示，采用 C++17 runtime IR（Graph/Op/Tensor/Storage/GraphEnv/OpEnv），不依赖 torch/LibTorch；Python 侧只有 pybind11 暴露的最小构图接口。Build 阶段所需的 shape、precision、权重来源等元数据由 Converter 在构图时旁路记录为 `ModelGraph` sidecar，既不改动 Graph C++ 接口，也不维护第二套可执行图。
 2. **离线优化、在线执行**：融合、精度转换、形状推导、显存复用全部在工具链完成；运行时只负责加载、调度、执行与释放。
 3. **引擎分层**：Service（阶段二）→ Engine（阶段一）→ OpEnv/Kernel/Backend → GPU，上层不感知设备细节。
-4. **可替换模块**：Loader、Scheduler、Executor、KVCache、Backend 均以接口注入 Engine，支持 mock、单测与后续后端扩展；Graph_Fixed 作为冻结的图契约不随后端或模型替换。
+4. **可替换模块**：Loader、Scheduler、Executor、KVCache、Backend 均以接口注入 Engine，支持 mock、单测与后续后端扩展；Graph 作为冻结的图契约不随后端或模型替换。
 
 ## 3.2 分层与模块划分
 
 | 层次 | 模块 | 主要职责 | 实现与目录 |
 | --- | --- | --- | --- |
-| 图与契约层 | 融合算子图（Graph_Fixed） | C++17 runtime IR：Graph/Op/Tensor/Storage/GraphEnv/OpEnv；模型无关的 op_type 与 attr、Input/Output op、后序 DFS 拓扑排序、常量依赖叶子；pybind11 最小构图接口与 `dump_ir()` 调试输出 | C++/pybind11，`Graph_Fixed/` |
-| 离线工具链层 | Converter | 模型源码转换为 Graph_Fixed 图，并旁路记录 ModelGraph | Python，`Build/converter/` |
+| 图与契约层 | 融合算子图（Graph） | C++17 runtime IR：Graph/Op/Tensor/Storage/GraphEnv/OpEnv；模型无关的 op_type 与 attr、Input/Output op、后序 DFS 拓扑排序、常量依赖叶子；pybind11 最小构图接口与 `dump_ir()` 调试输出 | C++/pybind11，`Graph/` |
+| 离线工具链层 | Converter | 模型源码转换为 Graph，并旁路记录 ModelGraph | Python，`Build/converter/` |
 | 离线工具链层 | Optimizer | 在 ModelGraph 上做精度推导、形状推导、显存编排、优化日志 | Python，`Build/optimizer/` |
 | 离线工具链层 | Serializer | 把优化后的 ModelGraph 与权重序列化为 `model.mgf` 模型包 | Python，`Build/serializer/` |
-| 运行时核心层 | Loader | 模型包加载、校验、Graph_Fixed 图重建、后端选择与能力校验、GraphEnv/OpEnv 创建、权重转换/上传 | C++，`Runtime/loader/` |
+| 运行时核心层 | Loader | 模型包加载、校验、Graph重建、后端选择与能力校验、GraphEnv/OpEnv 创建、权重转换/上传 | C++，`Runtime/loader/` |
 | 运行时核心层 | Scheduler | 请求队列、Continuous Batching、调度计划 | C++，`Runtime/scheduler/` |
 | 运行时核心层 | KVCache Manager | Paged KV Block 分配、共享与回收 | C++，`Runtime/kvcache/` |
 | 运行时核心层 | Executor | Packing、主机 I/O 绑定、按 `GetOrderlyOPList()` 驱动 OpEnv（H2D/计算/D2H）、采样、结果回写 | C++，`Runtime/executor/` |
@@ -224,13 +224,13 @@ Agent 智能体在服务侧的应用部署已经非常广泛，手机端或者�
 
 ```text
 MobileNet/
-├── Graph_Fixed/           # C++17 runtime 静态图 IR 与 pybind11 构图绑定（权威图实现）
+├── Graph/           # C++17 runtime 静态图 IR 与 pybind11 构图绑定（权威图实现）
 │   ├── include/runtime_graph/  # Graph/Op/Tensor/Storage/Shape/GraphEnv/OpEnv
 │   ├── src/               # 构图、排序、属性/存储/环境实现
 │   ├── python/            # pybind11 绑定与最小 Python 构图 API
-│   └── tests/             # Graph_Fixed C++/Python 测试
+│   └── tests/             # Graph C++/Python 测试
 ├── Build/                 # 离线工具链（Python）
-│   ├── graph_fixed/       # Graph_Fixed 构建产物（_graph_fixed 原生扩展）
+│   ├── graph/       # Graph 构建产物（_graph 原生扩展）
 │   ├── common/            # ModelGraph、safetensors、JSON、错误与哈希工具
 │   ├── converter/         # RecordingGraph、Qwen3 Adapter、转换报告
 │   ├── optimizer/         # Precision / Shape / Memory Pass
@@ -267,9 +267,9 @@ MobileNet/
 
 工具链主要实现以下功能流程：
 
-1. **Converter**：读取模型目录（`config.json`、Tokenizer 配置、可选 safetensors 权重），按模型族 Adapter 构建 Graph_Fixed 图；构图 API 由 `RecordingGraph` 透明代理，在创建输入、常量与 op 的同时旁路记录 `ModelGraph`；常量记录 HF 权重名与可用性，权重字节不做数值变换；输出 Graph 对象、ModelGraph 与转换报告。
+1. **Converter**：读取模型目录（`config.json`、Tokenizer 配置、可选 safetensors 权重），按模型族 Adapter 构建 Graph；构图 API 由 `RecordingGraph` 透明代理，在创建输入、常量与 op 的同时旁路记录 `ModelGraph`；常量记录 HF 权重名与可用性，权重字节不做数值变换；输出 Graph 对象、ModelGraph 与转换报告。
 2. **Optimizer**：在 ModelGraph 深拷贝上按顺序执行 Precision Infer（含后续量化扩展）、Shape Infer、Memory Manage 三个 Pass；每个 Pass 输出结构化报告；任一 Pass 失败即终止并定位到张量/op。
-3. **Serializer**：校验 ModelGraph 精度与形状完整；按 manifest 在内存中重建 Graph_Fixed 图并计算 `dump_ir()` 的 SHA-256 与行数；写出 `model.mgf`、可选 `weights.bin` 与 `compile_report.json`；记录格式版本与校验和。
+3. **Serializer**：校验 ModelGraph 精度与形状完整；按 manifest 在内存中重建 Graph并计算 `dump_ir()` 的 SHA-256 与行数；写出 `model.mgf`、可选 `weights.bin` 与 `compile_report.json`；记录格式版本与校验和。
 4. **产物归档**：记录模型 ID、配置哈希、工具链版本与生成信息；manifest 保持确定性，时间戳等字段只写入 `compile_report.json`，不参与运行时校验。
 
 工具链产物：
@@ -327,7 +327,7 @@ APP          Tokenizer        Scheduler        Executor          GPU
 | --- | --- | --- | --- |
 | 执行形态 | 融合算子静态图 | 性能可预测、离线优化空间大、运行时轻量 | 自研图与 Kernel 成本高 |
 | 语言分工 | 工具链 Python + 运行时 C++ | Build 迭代与文本处理效率高；端侧性能与包体可控 | 双语言一致性需 IR 哈希与契约测试保障 |
-| 图表示与属性载体 | Graph_Fixed C++17 runtime IR 单一表示；Build 旁路 `ModelGraph` 元数据 sidecar | 图语义与运行时代码同源，避免双表示漂移；Python 绑定最小化，C++ 运行时不链接 LibTorch | 需保证 RecordingGraph 记录与原生图同步；Python 侧元数据访问受限 |
+| 图表示与属性载体 | Graph C++17 runtime IR 单一表示；Build 旁路 `ModelGraph` 元数据 sidecar | 图语义与运行时代码同源，避免双表示漂移；Python 绑定最小化，C++ 运行时不链接 LibTorch | 需保证 RecordingGraph 记录与原生图同步；Python 侧元数据访问受限 |
 | 序列化 | 自研 `model.mgf`（固定头 + canonical JSON manifest + 可选 `weights.bin`） | 无 protoc 依赖、可审查、可确定性生成、支持 Graph 重建校验 | 需自行维护格式版本与迁移；manifest 体积较大 |
 | KV 管理 | Paged Attention | 低碎片、支持变长与并发、便于前缀共享 | 实现与调试复杂度高 |
 | 调度 | Continuous Batching | 提高 GPU 利用率、降低尾延迟 | 组批与抢占逻辑复杂 |
@@ -354,7 +354,7 @@ APP          Tokenizer        Scheduler        Executor          GPU
 
 | 序号 | 设计文档 | 覆盖模块 | 主要依赖 | 建议顺序 |
 | --- | --- | --- | --- | --- |
-| 1 | [Graph_Fixed Graph 设计文档](Graph_Fixed/Graph设计文档.md) | C++17 runtime IR（Graph/Op/Tensor/Storage/GraphEnv/OpEnv）、Input/Output op、SortOp、pybind11 最小构图接口、dump_ir | 无 | 1 |
+| 1 | [Graph 设计文档](Graph/Graph设计文档.md) | C++17 runtime IR（Graph/Op/Tensor/Storage/GraphEnv/OpEnv）、Input/Output op、SortOp、pybind11 最小构图接口、dump_ir | 无 | 1 |
 | 2 | [Converter 设计文档](Build/converter/converter设计文档.md) | Qwen3 Adapter、RecordingGraph、ModelGraph sidecar、权重映射 | 1 | 2 |
 | 3 | [Optimizer 设计文档](Build/optimizer/optimizer设计文档.md) | Precision/Shape/Memory Pass、显存复用、优化报告 | 1、2 | 3 |
 | 4 | [Serializer 设计文档](Build/serializer/serializer设计文档.md) | model.mgf 格式、manifest、权重打包、图重建校验 | 1、3 | 4 |
@@ -370,9 +370,9 @@ APP          Tokenizer        Scheduler        Executor          GPU
 
 本章给出各模块的架构级详细设计，覆盖职责边界、输入输出、关键接口、设计要点与异常处理。模块内部的算法、数据结构细节与代码级接口，由对应的模块设计文档展开。
 
-## 4.1 融合算子图（Graph_Fixed）
+## 4.1 融合算子图（Graph）
 
-**职责**：Graph_Fixed 提供全项目唯一的 C++17 runtime 静态图 IR，承载模型拓扑、Op、Tensor、constant、图输入输出与索引；提供构图、图边界注册、`SortOp()` 拓扑排序与查询接口。Graph 只表达“图是什么”和“对象如何连接”，不直接执行 kernel、不申请显存、不推导 shape/precision/layout，也不提供序列化与 Forward。运行时由 Engine 为每个计算 op 创建 `OpEnv`，Forward 阶段按 `GetOrderlyOPList()` 逐 op 调用 `OpEnv::Forward()`。
+**职责**：Graph 提供全项目唯一的 C++17 runtime 静态图 IR，承载模型拓扑、Op、Tensor、constant、图输入输出与索引；提供构图、图边界注册、`SortOp()` 拓扑排序与查询接口。Graph 只表达“图是什么”和“对象如何连接”，不直接执行 kernel、不申请显存、不推导 shape/precision/layout，也不提供序列化与 Forward。运行时由 Engine 为每个计算 op 创建 `OpEnv`，Forward 阶段按 `GetOrderlyOPList()` 逐 op 调用 `OpEnv::Forward()`。
 
 **不负责**：算子设备实现（Kernel/Backend）、显存实际分配、请求调度与批处理决策、采样策略参数生成、shape/precision/layout 推导策略、模型包序列化。
 
@@ -388,20 +388,20 @@ APP          Tokenizer        Scheduler        Executor          GPU
 
 设计要点：
 
-- **单一 runtime IR**：全项目只有 Graph_Fixed 这一套可执行图表示，不存在 Graph IR/RuntimeGraph 双表示，也不存在 `TensorDesc`。Graph 用 `OpType`、`Storage`、`Shape` 与 `attr` 表达图语义；C++ 运行时不链接 LibTorch，Python 侧不出现 `torch.Tensor`。
+- **单一 runtime IR**：全项目只有 Graph 这一套可执行图表示，不存在 Graph IR/RuntimeGraph 双表示，也不存在 `TensorDesc`。Graph 用 `OpType`、`Storage`、`Shape` 与 `attr` 表达图语义；C++ 运行时不链接 LibTorch，Python 侧不出现 `torch.Tensor`。
 - **模型无关**：Graph 是全部模型族共用的 runtime 图表达，模型差异由 `OpType` 与 `Op.attr` 表达；Qwen3-0.6B 是阶段一首个验证模型，不是 Graph 的适用范围边界。
 - **构图接口**：Python 侧仅暴露 `Graph(name)`、`create_input`、`create_constant`、`create_op`、`create_output`、`sort_op`、`dump_ir`。`create_op(name, src_tensors, out_cnt, op_type, attr)` 创建普通计算 op 与输出 tensor；输出命名固定为 `out_cnt==1` 时 `<op>.out`，否则 `<op>.out.<i>`。
 - **常量是依赖叶子**：`create_constant(name, dims, pitch, precision, layout, byte_size, data_ptr)` 创建 constant tensor，独立存入 `constant_tensor_map_`，不创建 producer op，不进入 `SortOp()` 的执行序列；Engine 初始化阶段通过 `GetAllConstantTensor()` 统一加载权重。
 - **拓扑排序**：`SortOp()` 从 `output_op_list_` 出发，沿 tensor 的生产者依赖做后序 DFS，将 graph op 按拓扑顺序写入 `op_list_`；生产者先于消费者，constant 遇到即停，不要求 producer op。
 - **I/O 边界**：`CreateInput(name)` 创建 Input op 并登记图输入；`CreateOutput(name, input)` 创建 Output op 并登记图输出，Output op 不产生新 tensor。Input/Output op 预置 `attr["storage"] = Storage{}`，Engine 在 Init/Forward 时通过 `SetInput()`/`SetOutput()` 覆盖该值，解绑时恢复默认值。
 - **执行环境**：Graph 本身没有 `Forward()`。Engine 初始化阶段创建 `GraphEnv`，按 `OpType` 为每个计算 op 创建 `OpEnv` 并调用 `Op::SetOpEnv()`；Forward 阶段按 `GetOrderlyOPList()` 逐 op 调用 `OpEnv::Forward()`。`OpEnv` 从所属 op 的输入/输出 Tensor 的 `Storage` 读取 shape、precision、layout 与 data_ptr，不拥有 Op/Tensor，也不申请显存。
-- **I/O 执行**：Input/Output op 不产生计算 Kernel；对应的 I/O `OpEnv` 读取 `attr["storage"]` 完成 H2D/D2H。首版 Graph_Fixed 只提供 `OpEnv` 抽象与 `MegaAttentionOpEnv` 示例，I/O OpEnv 与真实算子 OpEnv 由后续引擎/后端实现接入。
+- **I/O 执行**：Input/Output op 不产生计算 Kernel；对应的 I/O `OpEnv` 读取 `attr["storage"]` 完成 H2D/D2H。首版 Graph 只提供 `OpEnv` 抽象与 `MegaAttentionOpEnv` 示例，I/O OpEnv 与真实算子 OpEnv 由后续引擎/后端实现接入。
 - **融合表达**：融合体现为 `OpType` 与 `attr`（例如 `kLinearRmsNormRope` 等融合类型）；具体融合规则由模型组图文档与 Converter 决定，Graph 只承载融合结果，不自动识别或改写算子。
 - **Python 绑定最小化**：`Tensor` 仅暴露 `name`、`is_constant`、`reusable`、`set_reusable`；不暴露 `Op`、`Storage`、`Shape` 访问器，也不提供 op 遍历接口。`dump_ir()` 是只读调试接口，输出 graph/inputs/constants/ops/outputs 文本，不作为 runtime 数据交换边界。
-- **Build 元数据旁路**：由于 Python 绑定不暴露 shape/precision/storage，Converter 使用 `RecordingGraph` 代理构图 API，在调用原生 Graph 成功后同步记录 `ModelGraph`（输入、常量、激活、op 属性、权重来源、输出绑定）。`ModelGraph` 是可序列化的 sidecar，不是第二套可执行图；Optimizer 与 Serializer 只消费它，运行时仍以 Graph_Fixed 重建的图为准。
-- **图校验**：唯一命名、输出 tensor 有生产者、Input/Output 注册合法、constant 不参与执行序列、`SortOp()` 覆盖所有从输出可达的计算 op；非法构图由 Graph_Fixed 返回错误，Python 侧以异常形式抛出。
-- **版本化**：Graph_Fixed IR 本身不携带 schema_version；模型包版本由 `model.mgf` 的 `format_version` 与 manifest 管理，运行时拒绝不兼容版本。
-- **无 Dummy Run**：Memory Manage 直接基于 ModelGraph 的静态依赖与拓扑序做生命周期分析，不执行图；Graph_Fixed 首版也不提供执行模拟。
+- **Build 元数据旁路**：由于 Python 绑定不暴露 shape/precision/storage，Converter 使用 `RecordingGraph` 代理构图 API，在调用原生 Graph 成功后同步记录 `ModelGraph`（输入、常量、激活、op 属性、权重来源、输出绑定）。`ModelGraph` 是可序列化的 sidecar，不是第二套可执行图；Optimizer 与 Serializer 只消费它，运行时仍以 Graph 重建的图为准。
+- **图校验**：唯一命名、输出 tensor 有生产者、Input/Output 注册合法、constant 不参与执行序列、`SortOp()` 覆盖所有从输出可达的计算 op；非法构图由 Graph 返回错误，Python 侧以异常形式抛出。
+- **版本化**：Graph IR 本身不携带 schema_version；模型包版本由 `model.mgf` 的 `format_version` 与 manifest 管理，运行时拒绝不兼容版本。
+- **无 Dummy Run**：Memory Manage 直接基于 ModelGraph 的静态依赖与拓扑序做生命周期分析，不执行图；Graph 首版也不提供执行模拟。
 
 ```text
 Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）──▶ 设备张量
@@ -417,23 +417,23 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 
 ### 4.2.1 Converter
 
-**职责**：把厂商模型源码转换为 Graph_Fixed 静态图，并同步旁路记录 `ModelGraph`；保持计算语义、结构、算子属性与常量权重映射不变。
+**职责**：把厂商模型源码转换为 Graph 静态图，并同步旁路记录 `ModelGraph`；保持计算语义、结构、算子属性与常量权重映射不变。
 
 **输入**：模型目录（`config.json`、Tokenizer 配置、可选 safetensors 权重）、转换配置（模型族、上下文上限、权重目录）。
 
-**输出**：`Graph_Fixed.Graph`、`ModelGraph`（输入、常量、激活、op 属性、权重来源、输出绑定）、转换报告（结构映射、算子/常量统计、权重可用性）。
+**输出**：`Graph.Graph`、`ModelGraph`（输入、常量、激活、op 属性、权重来源、输出绑定）、转换报告（结构映射、算子/常量统计、权重可用性）。
 
 设计要点：
 
 - **模型族 Adapter**：首期实现 Qwen3 Dense Decoder-only Adapter；模型结构差异隔离在 Adapter，公共构图逻辑复用。
-- **构图方式**：以模型配置与层结构描述为基础，由 `Qwen3GraphBuilder` 通过注入的 `graph_factory` 显式调用 Graph_Fixed 构图接口；不执行 PyTorch 模型、不做 TorchScript/图捕获。
+- **构图方式**：以模型配置与层结构描述为基础，由 `Qwen3GraphBuilder` 通过注入的 `graph_factory` 显式调用 Graph 构图接口；不执行 PyTorch 模型、不做 TorchScript/图捕获。
 - **RecordingGraph**：对 `create_input/create_constant/create_op/create_output/sort_op/dump_ir` 做透明代理；每个方法先转发原生 Graph，成功后再记录元数据，防止“图已创建但元数据缺失”。`ModelGraph` 不是第二套可执行图。
-- **融合算子表达**：使用 Graph_Fixed 的 `OpType`（如 `gather`、`linear`、`linear_swi_glu`、`rms_norm`、`rope`、`mega_attention`、`add`）与 `attr` 表达算子；Qwen3 首版以基础 op 组合为主，融合规则在模型组图文档中定义，Graph 只承载结果。
+- **融合算子表达**：使用 Graph 的 `OpType`（如 `gather`、`linear`、`linear_swi_glu`、`rms_norm`、`rope`、`mega_attention`、`add`）与 `attr` 表达算子；Qwen3 首版以基础 op 组合为主，融合规则在模型组图文档中定义，Graph 只承载结果。
 - **权重映射**：逐常量记录图内名称、HF/Transformers 参数名、shape、dtype、byte_size 与是否可用；转换期不读取或变换权重数值。
 - **I/O op**：在模型子图外层统一生成 Input/Output op；Input 记录 `int64`、`row_major` 与符号形状 `[B,S]`，Output 绑定最终 logits 张量；主机指针与设备 storage 由运行时绑定，不进入转换产物。
 - **不静默降级**：不支持的算子、缺失权重映射或非法属性直接报错并列出位置，禁止悄悄换成低效路径。
 
-**异常**：模型结构不支持、常量缺少 HF 映射、权重文件损坏、属性非 JSON 安全、Graph_Fixed 构图失败。
+**异常**：模型结构不支持、常量缺少 HF 映射、权重文件损坏、属性非 JSON 安全、Graph 构图失败。
 
 ### 4.2.2 Optimizer
 
@@ -470,7 +470,7 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 
 ### 4.2.3 Serializer
 
-**职责**：把优化后的 `ModelGraph`、显存计划与权重固化为运行时可直接加载的 `model.mgf` 模型包；Loader 按 manifest 重建 Graph_Fixed 图并校验 IR 哈希。
+**职责**：把优化后的 `ModelGraph`、显存计划与权重固化为运行时可直接加载的 `model.mgf` 模型包；Loader 按 manifest 重建 Graph并校验 IR 哈希。
 
 **输入**：优化后的 `ModelGraph`、`MemoryPlan`、`OptimizeConfig`、可选 safetensors 权重路径、工具链版本。
 
@@ -483,11 +483,11 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 设计要点：
 
 - **容器格式**：magic `MNETMGF\0`、容器 version、flags（bit0 表示有 `weights.bin`）、manifest offset/length/SHA-256、weights offset/length/SHA-256；Loader 先校验头部与边界，再解析 manifest。
-- **manifest 内容**：直接嵌入 `ModelGraph.to_dict()`，附加 `ir_sha256` 与 `ir_line_count`；`ir_sha256` 由“按该 manifest 重建后的 Graph_Fixed 图 `dump_ir()`”计算，形成 Loader 自校验闭环。
+- **manifest 内容**：直接嵌入 `ModelGraph.to_dict()`，附加 `ir_sha256` 与 `ir_line_count`；`ir_sha256` 由“按该 manifest 重建后的 Graph `dump_ir()`”计算，形成 Loader 自校验闭环。
 - **权重布局**：只打包 `weight_available=true` 且 shape/dtype/byte_size 匹配的常量；不转换 dtype，BF16 字节原样写入；每个权重按 256 B 对齐并计算 SHA-256；不可用权重写入 `reason`。
 - **完整性校验**：manifest 整体 SHA-256 + 权重文件 SHA-256 + 逐权重 SHA-256；任何截断、篡改或版本不兼容均由 Loader 拒绝。
 - **I/O 绑定序列化**：manifest 记录 `inputs` 名称与 `outputs`（输出名、张量名）绑定；主机指针、设备 storage 不序列化，由 Engine 在运行时通过 `SetInput/SetOutput` 绑定。
-- **图重建**：按常量创建顺序、输入顺序、op 创建顺序、输出绑定顺序重放 Graph_Fixed 构图 API，最后 `sort_op()`；不能以拓扑序替代 op 创建顺序。
+- **图重建**：按常量创建顺序、输入顺序、op 创建顺序、输出绑定顺序重放 Graph 构图 API，最后 `sort_op()`；不能以拓扑序替代 op 创建顺序。
 - **确定性**：canonical JSON（键排序、紧凑分隔符、UTF-8）保证同一输入与配置产生逐字节一致的 `model.mgf`；时间戳只写入 `compile_report.json`。
 - **metadata-only**：无权重或权重不可用时仍生成可加载的包，不写 `weights.bin`，manifest 中逐项标记 `available=false`。
 
@@ -495,20 +495,20 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 
 ## 4.3 运行时（Runtime）
 
-运行时由 Loader、Scheduler、KVCache Manager、Executor、Engine、Destroy 组成；Loader 按 `model.mgf` 重建 Graph_Fixed 图，Engine 持有 Graph、GraphEnv 与各 op 的 OpEnv，Executor 按 `GetOrderlyOPList()` 驱动 OpEnv 执行；Engine 聚合其余模块并提供统一门面。Graph_Fixed 不链接 LibTorch。
+运行时由 Loader、Scheduler、KVCache Manager、Executor、Engine、Destroy 组成；Loader 按 `model.mgf` 重建 Graph，Engine 持有 Graph、GraphEnv 与各 op 的 OpEnv，Executor 按 `GetOrderlyOPList()` 驱动 OpEnv 执行；Engine 聚合其余模块并提供统一门面。Graph 不链接 LibTorch。
 
 ### 4.3.1 Loader
 
-**职责**：运行时加载入口，读取并校验模型包，重建 Graph_Fixed 图与执行环境，并完成所选后端的初始化。
+**职责**：运行时加载入口，读取并校验模型包，重建 Graph与执行环境，并完成所选后端的初始化。
 
 **输入**：`model.mgf`、可选 `weights.bin`、运行时配置（backend、device_id、queue_count、memory_budget、Kernel 编译选项）。
 
-**输出**：Graph_Fixed `Graph`、`GraphEnv`、各计算 op 的 `OpEnv`、Backend 实例、权重常驻缓冲、输入/输出设备缓冲、Activation 池与 KV 池。
+**输出**：Graph `Graph`、`GraphEnv`、各计算 op 的 `OpEnv`、Backend 实例、权重常驻缓冲、输入/输出设备缓冲、Activation 池与 KV 池。
 
 流程：
 
 1. 读取 `model.mgf` 固定头与 manifest，校验 magic、`format_version`、边界与 SHA-256；有 `weights.bin` 时校验其长度与 SHA-256。
-2. 解析 manifest 中的 `ModelGraph`，按常量、输入、op、输出的记录顺序调用 Graph_Fixed 构图 API，最后 `sort_op()`；计算 `dump_ir()` 的 SHA-256 并与 manifest 的 `graph.ir_sha256` 比对。
+2. 解析 manifest 中的 `ModelGraph`，按常量、输入、op、输出的记录顺序调用 Graph 构图 API，最后 `sort_op()`；计算 `dump_ir()` 的 SHA-256 并与 manifest 的 `graph.ir_sha256` 比对。
 3. 按 `RuntimeConfig.backend` 从 BackendRegistry 创建后端，调用 `Backend::Init`；平台、设备、Context、Queue 由后端内部创建。
 4. 读取 `BackendCapability`，校验 dtype、算子、最小对齐、单缓冲上限、传输方向（H2D/D2H）与 MemoryPlan。
 5. 逐权重调用 `Backend::ConvertParam`，由后端完成转换并创建权重 Buffer；`GetAllConstantTensor()` 提供全部常量。
@@ -518,11 +518,11 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 
 设计要点：
 
-- **零设备 API**：Loader 不直接调用 OpenCL/Vulkan/CUDA API；上下文、显存、权重转换、Kernel/OpEnv 创建全部经 Backend 或 Graph_Fixed 接口。
+- **零设备 API**：Loader 不直接调用 OpenCL/Vulkan/CUDA API；上下文、显存、权重转换、Kernel/OpEnv 创建全部经 Backend 或 Graph 接口。
 - **显存计划与对齐**：Memory Manage 以统一对齐（默认 256 B，待真机校准）排版；Loader 用 `BackendCapability.min_alignment` 校验，不满足则加载失败，不做运行时静默重排。
 - **后端解耦**：同一模型包可加载到不同后端；后端选择由 `RuntimeConfig.backend` 决定；未知后端、缺失算子或不支持精度在加载期返回明确错误码。
 - **I/O 缓冲**：Input/Output op 不创建计算 Kernel；Loader 为 I/O storage 分配设备缓冲，并通过 `BackendCapability.copy_directions` 校验 H2D/D2H 能力；主机缓冲由 Executor 持有，不属于 Loader。
-- **IR 闭环**：重建图后必须通过 `dump_ir()` 哈希校验；失败说明 manifest 与 Graph_Fixed 构图语义不一致，拒绝加载。
+- **IR 闭环**：重建图后必须通过 `dump_ir()` 哈希校验；失败说明 manifest 与 Graph 构图语义不一致，拒绝加载。
 - **失败回滚**：任一步失败按逆序调用 `Op::ClearOpEnv()`、`Backend::DestroyBuffer`、`Graph::ClearGraphEnv()`、`Backend::Deinit`；`Backend::Init` 自身保证失败时清理内部资源。
 
 **异常**：文件损坏、版本不兼容、IR 哈希不一致、不支持的后端、设备初始化失败、Kernel 编译失败、显存不足、缺少 H2D/D2H 传输能力。
@@ -569,9 +569,9 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 
 ### 4.3.4 Executor
 
-**职责**：执行 ExecutionPlan，构建主机输入/输出绑定与 ForwardContext，按 Graph_Fixed 拓扑序驱动 OpEnv，完成 H2D、图执行、D2H 与采样。
+**职责**：执行 ExecutionPlan，构建主机输入/输出绑定与 ForwardContext，按 Graph 拓扑序驱动 OpEnv，完成 H2D、图执行、D2H 与采样。
 
-**输入**：ExecutionPlan、Graph_Fixed `Graph`（非拥有）、Backend（非拥有）、KVCache 视图、主机输入/输出缓冲、采样参数。
+**输入**：ExecutionPlan、Graph `Graph`（非拥有）、Backend（非拥有）、KVCache 视图、主机输入/输出缓冲、采样参数。
 
 **输出**：每个请求的新 Token（调试模式可输出 logits）、执行统计。
 
@@ -597,7 +597,7 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 
 ### 4.3.5 Engine
 
-**职责**：统一门面与生命周期管理，聚合 Loader、Scheduler、KVCache Manager、Executor、Destroy，并持有 Backend、Graph_Fixed Graph、GraphEnv 与各 op 的 OpEnv。
+**职责**：统一门面与生命周期管理，聚合 Loader、Scheduler、KVCache Manager、Executor、Destroy，并持有 Backend、Graph、GraphEnv 与各 op 的 OpEnv。
 
 接口：
 
@@ -723,7 +723,7 @@ Engine.Load(config)
 ### 4.4.7 资源封装与释放
 
 - Loader/Destroy 只做编排，不直接调用设备 API；上下文、显存、H2D/D2H、权重转换、Kernel、同步全部经 Backend。
-- Backend 实例与 Graph_Fixed Graph 由 Loader 创建并移交 Engine；Op 持有 `OpEnv`，OpEnv 持有 Kernel 执行环境；Executor 持有 Backend/Graph 非拥有指针；Buffer/Kernel 句柄由 Backend 创建，运行时对象通过 Backend 释放。
+- Backend 实例与 Graph 由 Loader 创建并移交 Engine；Op 持有 `OpEnv`，OpEnv 持有 Kernel 执行环境；Executor 持有 Backend/Graph 非拥有指针；Buffer/Kernel 句柄由 Backend 创建，运行时对象通过 Backend 释放。
 - Input/Output op 的设备缓冲由 Loader 创建、Destroy 释放；主机输入/输出缓冲由 Executor 持有，Backend 只在执行期间使用，不保留指针。
 - 释放顺序：停止调度 → Synchronize → 逐 op `ClearOpEnv()` → DestroyBuffer → `Graph::ClearGraphEnv()` → Deinit → 销毁 Graph 与 Backend。
 - `Backend::Init` 全有或全无；`Deinit` 幂等；部分加载失败与正常 Destroy 使用同一逆序回滚路径。
@@ -778,7 +778,7 @@ Engine.Load(config)
 | Request | id、prompt_ids、max_new_tokens、sampling_params、priority、state、arrival_time | 一次生成请求 |
 | ExecutionPlan | step_id、entries[]、token_budget_used | 单 Step 调度结果 |
 | PlanEntry | request_id、phase（PREFILL/DECODE）、token_range、block_table、sampling_params | 请求在本 Step 的执行片段 |
-| Graph_Fixed Graph | op_list、constant_tensor_list、input_op_list、output_op_list、op_map、tensor_map、constant_tensor_map、graph_env | 全项目唯一可执行图；提供构图、SortOp 与查询接口 |
+| Graph | op_list、constant_tensor_list、input_op_list、output_op_list、op_map、tensor_map、constant_tensor_map、graph_env | 全项目唯一可执行图；提供构图、SortOp 与查询接口 |
 | Op | name、op_type、attr、src_tensors、dst_tensors、op_env | 计算/输入/输出节点；OpEnv 由 Engine 创建并挂载 |
 | Tensor / Storage | name、src_ops、dst_ops、is_constant；Storage（Shape、precision、layout、device_type、offset、byte_size、data_ptr、reusable） | 数据依赖边与物理存储描述 |
 | ModelGraph | name、adapter、inputs、constants、outputs、tensors、ops、metadata | Build 阶段旁路记录的元数据 sidecar；Optimizer 输入、Serializer 序列化对象 |
@@ -801,8 +801,8 @@ Engine.Load(config)
 | `Merge(req)` / `Stop(id)` | Scheduler | 请求加入与取消 |
 | `Schedule() -> ExecutionPlan` | Scheduler、Engine | 生成本 Step 调度计划 |
 | `Update(id, tokens, status)` | Scheduler | 回写生成结果与状态 |
-| `CreateOp/CreateConstant/CreateInput/CreateOutput/SortOp` | Graph_Fixed | 构图、图边界注册与拓扑排序 |
-| `GetOrderlyOPList/GetAllConstantTensor/GetAllInputOp/GetAllOutputOp` | Graph_Fixed | 拓扑序列、常量与 I/O 查询 |
+| `CreateOp/CreateConstant/CreateInput/CreateOutput/SortOp` | Graph | 构图、图边界注册与拓扑排序 |
+| `GetOrderlyOPList/GetAllConstantTensor/GetAllInputOp/GetAllOutputOp` | Graph | 拓扑序列、常量与 I/O 查询 |
 | `SetInput/SetOutput` | Engine | 绑定 Input/Output op 的 host/device storage |
 | `SetOpEnv/ClearOpEnv/GetOpEnv` | Op | 挂载、释放与访问执行环境 |
 | `Forward() -> Status` | OpEnv | 单 op 执行入口；Executor 按拓扑序逐个调用 |
@@ -914,7 +914,7 @@ CREATED ──Load──▶ LOADED ──Run──▶ RUNNING ──Destroy─�
 
 - **新增模型**：实现新的模型族 Adapter 与组图逻辑；如模型引入新算子，则同步扩展 `OpType`、`OpEnv` 与 Kernel；Graph、Loader、Scheduler、Executor、Engine 接口不变；Converter 以插件方式注册。
 - **新增后端（目录级插件）**：仅新增 `Runtime/backend/<name>/` 目录，包含 Backend 接口实现、H2D/D2H 传输实现、该后端全部 Kernel、自注册入口与 CMakeLists；构建自动发现，推理配置指定后端名即可。Graph、Loader、Scheduler、Executor、Engine、Service 无需修改；加载期通过能力校验发现缺失算子/精度/传输方向并报错；所有后端必须通过统一契约测试。后端在编译期选择并链接，不支持运行时热插拔。
-- **量化能力**：后续所有量化能力统一在 Precision Infer 阶段实现（INT8/INT4、权重/激活量化、分组量化等），不新增独立 Pass；`ModelGraph.quantization`、`model.mgf` 权重表与 Graph_Fixed `Precision` 枚举预留量化描述；Kernel 增加低精度与反量化路径。
+- **量化能力**：后续所有量化能力统一在 Precision Infer 阶段实现（INT8/INT4、权重/激活量化、分组量化等），不新增独立 Pass；`ModelGraph.quantization`、`model.mgf` 权重表与 Graph `Precision` 枚举预留量化描述；Kernel 增加低精度与反量化路径。
 - **多模态（阶段三）**：在 Graph 中增加编码器子图（新增 OpType/Op 与对应 OpEnv），向 LLM 注入 embedding；Service 层增加图片/语音输入通道；Engine 的请求结构预留多模态输入字段。
 - **多模型/多实例**：每个 Engine 实例独立资源与线程；通过资源配额与调度策略隔离。
 - **跨语言/跨进程**：阶段四通过 JNI/FFI 封装 C++ 接口；服务框架可扩展为独立进程或本地服务。
@@ -926,8 +926,8 @@ CREATED ──Load──▶ LOADED ──Run──▶ RUNNING ──Destroy─�
 
 | 里程碑 | 内容 | 完成标志 |
 | --- | --- | --- |
-| M0 基础设施 | 仓库骨架、Graph_Fixed 构建、日志/错误码、测试框架 | 主机侧可编译、可跑单元测试 |
-| M1 图与工具链 | T1-1 ~ T1-6 | Python 构图与 Graph_Fixed IR 一致；Qwen3-0.6B 产出 model.mgf 与 compile_report.json；优化报告可校验 |
+| M0 基础设施 | 仓库骨架、Graph 构建、日志/错误码、测试框架 | 主机侧可编译、可跑单元测试 |
+| M1 图与工具链 | T1-1 ~ T1-6 | Python 构图与 Graph IR 一致；Qwen3-0.6B 产出 model.mgf 与 compile_report.json；优化报告可校验 |
 | M2 单请求推理 | T1-7 ~ T1-9 | 参考机加载模型，单请求 Prefill/Decode 跑通并与 PyTorch 对齐 |
 | M3 多请求调度 | T1-10 ~ T1-11 | 连续批处理、Paged KV、抢占、Engine 生命周期可用 |
 | M4 阶段一验收 | T1-12 ~ T1-13 | AC-1 ~ AC-4、AC-7 通过 |
@@ -939,13 +939,13 @@ CREATED ──Load──▶ LOADED ──Run──▶ RUNNING ──Destroy─�
 
 | 编号 | 任务 | 主要内容 | 依赖 | 验收 |
 | --- | --- | --- | --- | --- |
-| T1-1 | Graph_Fixed 静态图 | C++17 runtime IR（Graph/Op/Tensor/Storage/GraphEnv/OpEnv）、Input/Output op、SortOp、pybind11 构图绑定、dump_ir、Python 侧构图工具 | M0 | TC-GRAPH-01、TC-GRAPH-02 |
+| T1-1 | Graph 静态图 | C++17 runtime IR（Graph/Op/Tensor/Storage/GraphEnv/OpEnv）、Input/Output op、SortOp、pybind11 构图绑定、dump_ir、Python 侧构图工具 | M0 | TC-GRAPH-01、TC-GRAPH-02 |
 | T1-2 | Converter | Qwen3-0.6B 模型 Adapter、RecordingGraph、ModelGraph sidecar、权重映射、转换报告 | T1-1 | TC-CONV-01 |
 | T1-3 | Precision Infer | BF16→FP16、逐 Tensor 精度推导、敏感路径 FP32 累加策略、预留量化扩展接口 | T1-2 | TC-OPT-01 |
 | T1-4 | Shape Infer | Config/MaxNumToken/ContextLength 驱动的全图形状推导与校验 | T1-2 | TC-OPT-01 |
 | T1-5 | Memory Manage | Activation 静态生命周期、显存复用与排版、结构化日志 | T1-2、T1-4 | TC-OPT-02 |
 | T1-6 | Serializer | model.mgf 格式、图/权重序列化、Graph 重建校验、版本与确定性产出 | T1-3、T1-4、T1-5 | TC-SER-01 |
-| T1-7 | Loader | 模型包校验、Graph_Fixed 重建、GraphEnv/OpEnv 创建、后端选择与能力校验、Kernel 准备、I/O 缓冲分配、权重转换/上传、资源池创建 | T1-6 | TC-LOAD-01 |
+| T1-7 | Loader | 模型包校验、Graph 重建、GraphEnv/OpEnv 创建、后端选择与能力校验、Kernel 准备、I/O 缓冲分配、权重转换/上传、资源池创建 | T1-6 | TC-LOAD-01 |
 | T1-8 | Backend 插件框架与 OCL 后端 | Backend/Kernel 公共接口、Upload/Download 传输接口、注册表与自注册、目录自动发现构建、能力校验、OCL 设备/内存/队列、Kernel 编译缓存、Qwen3 算子 Kernel、模板目录、mock 后端与后端契约测试 | T1-1、T1-7 | TC-KERNEL-01、TC-COMPAT-01、TC-LOAD-01、TC-ENG-01 |
 | T1-9 | Executor | Packing、attention metadata、主机 I/O 绑定、按 GetOrderlyOPList 驱动 OpEnv（H2D/计算/D2H）、采样、结果回写、调试导出 | T1-7、T1-8 | TC-EXEC-01 |
 | T1-10 | Scheduler 与 KVCache | 连续批处理、分页 KV、Block Table、抢占、取消与超时 | T1-7 | TC-SCHED-01、TC-SCHED-02、TC-KV-01 |
@@ -965,7 +965,7 @@ CREATED ──Load──▶ LOADED ──Run──▶ RUNNING ──Destroy─�
 
 - T1-1 是所有任务的前置。
 - T1-2 依赖 T1-1；T1-3、T1-4、T1-5 依赖 T1-2；T1-6 依赖 T1-3、T1-4、T1-5。
-- T1-7 依赖 T1-6；T1-8 依赖 T1-1、T1-7；T1-9 依赖 T1-7、T1-8；T1-1 冻结 Graph_Fixed IR、SortOp、OpEnv 与 I/O 契约，T1-9 完成与 Backend/Kernel 的集成。
+- T1-7 依赖 T1-6；T1-8 依赖 T1-1、T1-7；T1-9 依赖 T1-7、T1-8；T1-1 冻结 Graph IR、SortOp、OpEnv 与 I/O 契约，T1-9 完成与 Backend/Kernel 的集成。
 - T1-10 依赖 T1-7 与调度/KV 接口契约，可与 T1-8、T1-9 并行开发（使用 mock）。
 - T1-11 依赖 T1-9、T1-10；T1-12、T1-13 顺序推进。
 - T2-1 ~ T2-3 依赖阶段一 Engine 接口稳定；T2-2 依赖 T1-10 的 KV 共享接口。
@@ -985,7 +985,7 @@ Graph ──▶ Converter ──▶ Optimizer ──▶ Serializer ──▶ Loa
 | FP16 数值偏差导致 Token 不一致 | 输出质量与验收风险 | 中 | 关键累加 FP32；逐层对齐；金标准回归；阈值用真机数据校准 |
 | 后续量化引入数值误差与 Kernel 适配复杂度 | 量化模型质量或性能不达标 | 中 | 量化统一在 Precision Infer 中逐层校准与误差评估；量化描述与 Kernel 精度路径解耦；量化验收单独立项 |
 | 显存不足或碎片 | OOM、频繁抢占 | 中 | Paged KV、Activation 复用、预算控制、抢占策略、内存 profiling |
-| Python 构图与 Graph_Fixed IR 漂移 | 工具链与运行时不一致 | 中 | Graph_Fixed C++ 单一事实源；ModelGraph 与 dump_ir 计数/IR 哈希一致性测试；CI 回归 |
+| Python 构图与 Graph IR 漂移 | 工具链与运行时不一致 | 中 | Graph C++ 单一事实源；ModelGraph 与 dump_ir 计数/IR 哈希一致性测试；CI 回归 |
 | Kernel 开发量大 | 进度风险 | 高 | 按模型图优先级实现；先跑通再优化；复用融合规则；与调度并行开发 |
 | 后端操作封装不彻底，Loader/Destroy 出现专有 API 或资源泄漏 | 新后端接入仍需改上层；Destroy 泄漏 | 中 | 公共头隔离检查；所有权与释放顺序规范；TC-LOAD-01/TC-ENG-01 覆盖 Init 失败与重复 Destroy；CI 禁止上层 include 厂商头 |
 | H2D/D2H 拷贝或同步成为延迟瓶颈 | 首 Token 延迟与 Decode 吞吐不达标 | 中 | 主机缓冲复用；异步传输与计算重叠；减少同步点；按后端能力批量传输；性能基线覆盖 I/O 占比 |
@@ -1033,7 +1033,7 @@ Graph ──▶ Converter ──▶ Optimizer ──▶ Serializer ──▶ Loa
 
 | 环境 | 配置 | 用途 |
 | --- | --- | --- |
-| 开发主机 | Windows 11 或 Linux；Python 3.10+；CMake 3.20+；MSVC/Clang；Graph_Fixed 原生扩展 | 工具链、主机单测、图与序列化测试 |
+| 开发主机 | Windows 11 或 Linux；Python 3.10+；CMake 3.20+；MSVC/Clang；Graph 原生扩展 | 工具链、主机单测、图与序列化测试 |
 | 交叉构建 | Android NDK（r26 或以上）；arm64-v8a；Release + 调试符号 | 运行时构建与打包 |
 | 参考机 | 高通骁龙 8 系 Android 手机；Adreno GPU；OpenCL 1.2+；机型在阶段一启动时锁定 | Kernel、端到端、性能、稳定性测试 |
 | 性能工具 | Snapdragon Profiler/Adreno Profiler、Perfetto、adb/logcat、系统内存工具 | GPU/内存/耗时分析 |
@@ -1096,7 +1096,7 @@ Graph ──▶ Converter ──▶ Optimizer ──▶ Serializer ──▶ Loa
 | --- | --- |
 | 工具链（Build） | 离线模型转换、优化与序列化流程，主要由 Python 实现 |
 | 运行时（Runtime） | 端侧模型加载、调度、执行与释放流程，主要由 C++ 实现 |
-| Graph_Fixed | 项目唯一可执行图表示：C++17 runtime 静态图 IR，提供 Graph/Op/Tensor/Storage/GraphEnv/OpEnv；不依赖 torch/LibTorch |
+| Graph | 项目唯一可执行图表示：C++17 runtime 静态图 IR，提供 Graph/Op/Tensor/Storage/GraphEnv/OpEnv；不依赖 torch/LibTorch |
 | Graph | 图容器，持有 op、tensor、常量、输入/输出注册与拓扑序列 |
 | Op | 图中的一个计算或 I/O op，含 op_type、attr、src_tensors、dst_tensors 与 OpEnv |
 | Tensor | op 之间的数据依赖边，内嵌 Storage；常量 tensor 是依赖叶子，不进入执行序列 |
@@ -1104,9 +1104,9 @@ Graph ──▶ Converter ──▶ Optimizer ──▶ Serializer ──▶ Loa
 | OpType | 算子类型枚举，决定运行时创建哪种 OpEnv/Kernel |
 | GraphEnv / OpEnv | 图级运行环境与单个 op 的执行环境；Engine 创建 OpEnv，`OpEnv::Forward()` 执行计算 |
 | SortOp | 从图输出做后序 DFS 生成拓扑序，保证生产者先于消费者 |
-| Input op / Output op | Graph_Fixed 中负责图输入/输出边界的 op；`attr["storage"]` 由 Engine 的 SetInput/SetOutput 覆盖 |
+| Input op / Output op | Graph 中负责图输入/输出边界的 op；`attr["storage"]` 由 Engine 的 SetInput/SetOutput 覆盖 |
 | ModelGraph | Converter 旁路记录的非执行元数据 sidecar（tensor/op/权重来源/量化描述），供 Optimizer 与 Serializer 使用 |
-| RecordingGraph | Converter 对 Graph_Fixed 构图 API 的透明代理，构图同时记录 ModelGraph |
+| RecordingGraph | Converter 对 Graph 构图 API 的透明代理，构图同时记录 ModelGraph |
 | model.mgf | 自定义模型包格式：112 字节固定头 + 规范化 JSON manifest + 可选独立 weights.bin |
 | metadata-only | 未提供真实权重时生成的模型包：图与显存计划完整，权重表标记不可用 |
 | 融合算子 | 多个原生算子合并后的 op，对应运行时一个 OpEnv/Kernel |
@@ -1137,7 +1137,7 @@ Graph ──▶ Converter ──▶ Optimizer ──▶ Serializer ──▶ Loa
 1. Qwen3 模型卡与技术报告（Alibaba Qwen 团队）。
 2. vLLM: Efficient Memory Management for Large Language Model Serving with PagedAttention（SOSP 2023）。
 3. OpenCL Specification（Khronos Group）。
-4. Graph_Fixed 设计文档（`Graph_Fixed/Graph设计文档.md`，项目内）。
+4. Graph 设计文档（`Graph/Graph设计文档.md`，项目内）。
 5. safetensors 格式规范（Hugging Face）。
 6. Google C++ Style Guide 与 Google Python Style Guide（中文版）。
 7. pybind11 官方文档。

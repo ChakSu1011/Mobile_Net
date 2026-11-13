@@ -7,19 +7,19 @@
 | 编写日期 | 2026-11-13 |
 | 所属阶段 | Build（离线工具链） |
 | 模块目录 | `Build/converter/` |
-| 上游依赖 | `Graph_Fixed`（图对象模型）、`Models/Qwen3`（Qwen3 Adapter） |
+| 上游依赖 | `Graph`（图对象模型）、`Models/Qwen3`（Qwen3 Adapter） |
 | 下游模块 | `Build/optimizer`、`Build/serializer` |
-| 权威图设计 | [Graph_Fixed/Graph设计文档.md](../../Graph_Fixed/Graph设计文档.md) |
+| 权威图设计 | [Graph/Graph设计文档.md](../../Graph/Graph设计文档.md) |
 
 ## 1. 背景与目标
 
 ### 1.1 背景
 
 推理引擎在工具链端的流程为“模型源码 → Python 端静态图 → 精度/Shape 推导 →
-显存管理 → 序列化”。其中静态图表示已由 `Graph_Fixed` 重新定义：图、算子、
+显存管理 → 序列化”。其中静态图表示已由 `Graph` 重新定义：图、算子、
 张量与常量全部由 C++ 实现，Python 侧只通过 pybind11 暴露最小构图接口。
 
-`Graph_Fixed` 的 Python 绑定刻意只暴露 `Graph`、`Tensor` 与四个枚举，
+`Graph` 的 Python 绑定刻意只暴露 `Graph`、`Tensor` 与四个枚举，
 `Tensor` 仅提供 `name`、`is_constant`、`reusable`、`set_reusable`，
 不提供 shape、precision、storage 访问器，也不提供 op 遍历接口。
 因此 Converter 不能把优化与序列化所需元数据只留在 Graph 对象里，必须
@@ -27,12 +27,12 @@
 
 ### 1.2 目标
 
-1. 以 `Graph_Fixed` 为唯一图表示，把模型源码转换为可执行的静态图。
+1. 以 `Graph` 为唯一图表示，把模型源码转换为可执行的静态图。
 2. 首期实现 Qwen3-0.6B Dense Decoder-only Adapter，复用
    `Models/Qwen3/qwen3_graph_builder.py` 的既有层结构。
 3. 构图时旁路记录 `ModelGraph`，完整描述输入、常量、激活张量、算子属性、
    权重来源与图输出，供 Optimizer 与 Serializer 消费。
-4. 提供 `RecordingGraph`，对 `Graph_Fixed` 的构图 API 做透明代理与记录，
+4. 提供 `RecordingGraph`，对 `Graph` 的构图 API 做透明代理与记录，
    不改变图语义，不维护第二套可执行图。
 5. 支持权重目录探测：只读取 safetensors 头信息，登记权重是否可用，
    不加载真实权重内容。
@@ -53,7 +53,7 @@
 | 编号 | 需求 | 验收要点 |
 | --- | --- | --- |
 | FR-CONV-01 | `RecordingGraph` 必须完整代理 `create_input`、`create_constant`、`create_op`、`create_output`、`sort_op`、`dump_ir`，调用方无感知 | 使用 RecordingGraph 与直接使用 Graph 构建同一模型，`dump_ir()` 完全一致 |
-| FR-CONV-02 | Converter 输出必须同时包含可执行的 `Graph_Fixed.Graph` 与 `ModelGraph` 元数据 | 两个对象均非空；`ModelGraph` 通过自校验 |
+| FR-CONV-02 | Converter 输出必须同时包含可执行的 `Graph.Graph` 与 `ModelGraph` 元数据 | 两个对象均非空；`ModelGraph` 通过自校验 |
 | FR-CONV-03 | Qwen3 Adapter 必须按 `Models/Qwen3/qwen3_graph_builder.py` 的结构构图，不得复制或改写层结构 | 图计数与既有 Qwen3 测试一致：2 inputs、310 constants、423 个计算 op、1 output；`dump_ir()` 的 `ops` 段为 426，因为额外包含 2 个 Input op 与 1 个 Output op |
 | FR-CONV-04 | 每个 constant 必须记录图内名称、shape、dtype、byte_size 与 Hugging Face 权重名 | 覆盖 embedding、28 层 11 个权重、final norm；tied LM Head 记录别名关系 |
 | FR-CONV-05 | 输入张量必须记录符号形状 `[B, S]` 与 `int64` 精度，并作为 `ModelGraph` 的图输入 | `input_ids`、`position_ids` 均为 `[B, S]`、`int64` |
@@ -66,7 +66,7 @@
 
 | 编号 | 类别 | 要求 |
 | --- | --- | --- |
-| NFR-CONV-01 | 正确性 | 代理层不得改变 Graph_Fixed 的命名、连接与拓扑排序语义 |
+| NFR-CONV-01 | 正确性 | 代理层不得改变 Graph 的命名、连接与拓扑排序语义 |
 | NFR-CONV-02 | 可重复性 | 同一配置与权重目录产生完全一致的 `ModelGraph` JSON |
 | NFR-CONV-03 | 性能 | Qwen3-0.6B 转换在 10 s 内完成（不含权重读取） |
 | NFR-CONV-04 | 内存 | 只记录元数据；不复制权重字节；峰值内存与图规模线性相关 |
@@ -75,10 +75,10 @@
 
 ### 2.3 约束条件
 
-- Python 3.10+；图对象必须来自 `Graph_Fixed/python/mobilenet_runtime_graph`。
-- 原生扩展位于 `Build/graph_fixed/python/_graph_fixed.pyd`（或 `.so`/`.dylib`）。
-- `Graph_Fixed` 不允许删除/改写已创建的 op 与 tensor；Converter 只做增量构图。
-- `Graph_Fixed` 的常量是依赖叶子，不进入 `sort_op()` 执行序列。
+- Python 3.10+；图对象必须来自 `Graph/python/mobilenet_runtime_graph`。
+- 原生扩展位于 `Build/graph/python/_graph.pyd`（或 `.so`/`.dylib`）。
+- `Graph` 不允许删除/改写已创建的 op 与 tensor；Converter 只做增量构图。
+- `Graph` 的常量是依赖叶子，不进入 `sort_op()` 执行序列。
 - `Tensor` 句柄由 Graph 持有；Converter 不得在 Graph 析构后继续使用句柄。
 
 ### 2.4 验收标准
@@ -102,7 +102,7 @@ config.json ─────────────┐
                   Qwen3Adapter
                          │ 创建
                          ▼
-   Graph_Fixed.Graph ◀── RecordingGraph ──▶ ModelGraph（旁路记录）
+   Graph.Graph ◀── RecordingGraph ──▶ ModelGraph（旁路记录）
                          │                        │
                          ▼                        ▼
                   dump_ir()/sort_op()      model_graph.json
@@ -114,7 +114,7 @@ config.json ─────────────┐
 ```
 
 Converter 不引入第二套可执行图。`RecordingGraph` 的每个方法先转发给
-`Graph_Fixed.Graph`，成功后再记录元数据；记录失败时抛出异常，避免出现
+`Graph.Graph`，成功后再记录元数据；记录失败时抛出异常，避免出现
 “图已创建但元数据缺失”的不一致状态。
 
 ### 3.2 模块划分
@@ -131,7 +131,7 @@ Converter 不引入第二套可执行图。`RecordingGraph` 的每个方法先�
 ### 3.3 关键流程
 
 1. 加载并校验 `Qwen3Config`。
-2. 创建 `Graph_Fixed.Graph` 与 `RecordingGraph`。
+2. 创建 `Graph.Graph` 与 `RecordingGraph`。
 3. 通过注入的 `graph_factory` 让 `Qwen3GraphBuilder` 使用 RecordingGraph。
 4. Builder 依次登记常量、输入、计算 op、输出，并调用 `sort_op()`。
 5. Adapter 补充权重来源、tied 别名与模型配置元数据。
@@ -142,8 +142,8 @@ Converter 不引入第二套可执行图。`RecordingGraph` 的每个方法先�
 
 | 决策点 | 选择 | 理由 | 代价 |
 | --- | --- | --- | --- |
-| 图表示 | Graph_Fixed 单一表示 | 与权威设计一致，避免双表示漂移 | Python 可见元数据少，需旁路记录 |
-| 元数据载体 | `ModelGraph` sidecar | 不改 Graph_Fixed C++ 接口，Optimizer/Serializer 可独立演进 | 需保证记录与图同步 |
+| 图表示 | Graph 单一表示 | 与权威设计一致，避免双表示漂移 | Python 可见元数据少，需旁路记录 |
+| 元数据载体 | `ModelGraph` sidecar | 不改 Graph C++ 接口，Optimizer/Serializer 可独立演进 | 需保证记录与图同步 |
 | 构图方式 | 复用现有 Qwen3 builder + `graph_factory` 注入 | 不复制层结构，测试覆盖已存在 | Builder 需增加一个可选参数 |
 | 权重探测 | safetensors 头信息 | 不加载 1.2 GB 权重即可生成包 | 无法验证数值内容 |
 | 序列化中间格式 | 规范化 JSON | 可审查、可 diff、稳定 | 文件体积大于二进制 |
@@ -158,7 +158,7 @@ Converter 不引入第二套可执行图。`RecordingGraph` 的每个方法先�
 - `TensorMeta`：`name`、`kind`（input/constant/activation/output）、
   `shape`、`precision`、`layout`、`byte_size`、`pitch`、`data_ptr`、
   `reusable`、`weight_source`、`weight_available`、`quantization`。
-- `OpMeta`：`name`、`op_type`（Graph_Fixed 字符串名）、`inputs`、`outputs`、
+- `OpMeta`：`name`、`op_type`（Graph 字符串名）、`inputs`、`outputs`、
   `attrs`、`origin`。
 - `IOBinding`：`name`（输出 op 名）、`tensor`（被输出张量名）。
 - `ModelGraph`：`name`、`adapter`、`inputs`、`constants`、`outputs`、
@@ -203,7 +203,7 @@ class ConversionResult:
 
 #### 4.3.1 输出张量命名
 
-与 `Graph_Fixed::CreateOp` 保持一致：
+与 `Graph::CreateOp` 保持一致：
 
 - `out_cnt == 1`：`<op_name>.out`；
 - `out_cnt > 1`：`<op_name>.out.<index>`。
@@ -284,7 +284,7 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 | 未知 OpType | `BuildError` | 枚举名 |
 | 属性值非 JSON 安全 | `BuildError` | op 名、属性名、类型 |
 | 配置非法 | `ValueError` | 由 `Qwen3Config.validate()` 抛出 |
-| 图构造失败 | `RuntimeError` | 由 Graph_Fixed 抛出，原样传播 |
+| 图构造失败 | `RuntimeError` | 由 Graph 抛出，原样传播 |
 | 输出路径不可写 | `OSError` | 文件路径 |
 
 错误信息统一包含阶段名与对象名，禁止只输出“转换失败”。
@@ -312,7 +312,7 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 
 - **Builder 改动影响既有测试**：`graph_factory` 默认 `None`，行为不变；
   运行 `Models/Qwen3/test_qwen3_graph.py` 回归。
-- **Graph_Fixed 枚举名称变化**：用显式映射表并在未知类型时报错。
+- **Graph 枚举名称变化**：用显式映射表并在未知类型时报错。
 - **safetensors 版本差异**：只依赖文件格式规范（8 字节头长度 + JSON 头 +
   数据区），不依赖 Hugging Face 运行时库；遇到未知 dtype 显式报错。
 
@@ -344,7 +344,7 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 ### 6.3 测试环境
 
 - Windows 11 / Linux，Python 3.10+；
-- Graph_Fixed 原生扩展已构建；
+- Graph 原生扩展已构建；
 - 不需要 GPU、torch 或 transformers；
 - 命令：`PYTHONUTF8=1 python -m unittest Build.converter.test_converter -v`。
 

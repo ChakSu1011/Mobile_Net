@@ -1,4 +1,4 @@
-# Qwen3-0.6B Graph_Fixed 组图测试结果
+# Qwen3-0.6B Graph 组图测试结果
 
 | 项目 | 内容 |
 |------|------|
@@ -18,8 +18,8 @@
 | Python | 3.13.3 |
 | PyTorch | 2.12.0+cpu（仅测试） |
 | Transformers | 5.9.0（仅测试） |
-| Graph_Fixed Python 包 | `Graph_Fixed/python/mobilenet_runtime_graph/__init__.py` |
-| Graph_Fixed 原生扩展 | `Build/graph_fixed/python/_graph_fixed.pyd` |
+| Graph Python 包 | `Graph/python/mobilenet_runtime_graph/__init__.py` |
+| Graph 原生扩展 | `Build/graph/python/_graph.pyd` |
 | 执行方式 | `PYTHONUTF8=1 python Models/Qwen3/test_qwen3_graph.py -v` |
 
 ## 2. 测试命令
@@ -169,13 +169,13 @@ Models/Qwen3/test_qwen3_graph.py
 | 项目 | 说明 |
 |------|------|
 | 真实权重 | 本任务只登记元信息，`data_ptr=0`，未验证权重内容 |
-| Shape/Precision 推导 | `Graph_Fixed` 不推导激活形状，测试只验证连接关系 |
+| Shape/Precision 推导 | `Graph` 不推导激活形状，测试只验证连接关系 |
 | 数值正确性 | 未运行 kernel，无法验证 logits 数值 |
 | KV Cache | 本图是 prefill 图，不含 past/present KV cache |
 | Padding Mask | 只建模 causal mask，不含 padding mask |
 | 其他精度 | 代码声明支持 float16/float32，但字节数测试只覆盖 bfloat16 |
 | 平台覆盖 | 只在 Windows 11 + Python 3.13.3 验证 |
-| 线程安全 | 未测试并发构图；Graph_Fixed 本身不保证线程安全 |
+| 线程安全 | 未测试并发构图；Graph 本身不保证线程安全 |
 
 ## 9. 结论
 

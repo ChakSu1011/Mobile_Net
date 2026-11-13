@@ -1,7 +1,7 @@
 """模块：Build 阶段公共工具。
 
 职责：
-  提供模型 IR 数据类、Graph_Fixed 动态加载、规范化 JSON、哈希与错误类型，
+  提供模型 IR 数据类、Graph 动态加载、规范化 JSON、哈希与错误类型，
   供 converter、optimizer、serializer 共享。
 
 边界：

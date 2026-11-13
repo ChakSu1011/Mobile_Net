@@ -1,4 +1,4 @@
-"""模块：Converter（模型转换为 Graph_Fixed 图）。
+"""模块：Converter（模型转换为 Graph）。
 
 职责：
   导出转换编排、Qwen3 Adapter、记录代理与结果类型。

@@ -1,13 +1,13 @@
 ---
 name: build-stage-pipeline
-description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer → Serializer 固化为 Graph_Fixed 模型包 model.mgf，并用加载重建与 IR SHA-256 自校验；适用于离线构图、精度/形状/显存规划、权重打包与模型包交付。
+description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer → Serializer 固化为 Graph 模型包 model.mgf，并用加载重建与 IR SHA-256 自校验；适用于离线构图、精度/形状/显存规划、权重打包与模型包交付。
 ---
 
 # Build 阶段流水线：Convert → Optimize → Serialize
 
 ## 适用场景
 
-- 已有 Graph_Fixed（C++17 runtime 静态图）与 Python 最小构图绑定，需要把
+- 已有 Graph（C++17 runtime 静态图）与 Python 最小构图绑定，需要把
   模型结构转换为可执行的 `Graph`，同时记录优化/序列化所需的元数据。
 - 需要在不链接 PyTorch/LibTorch 的前提下完成精度推导、Shape 推导、
   激活显存复用规划与模型包打包。
@@ -21,14 +21,14 @@ description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer 
   OpEnv/Kernel，不做 Dummy Run。
 - 需要训练、量化校准或 INT8/INT4 权重生成：当前只有精度扩展点。
 - 需要通用 ONNX/Protobuf 导出：本项目使用自定义 `model.mgf`。
-- 模型结构无法用现有 `OpType` 表达：应先扩展 Graph_Fixed 的 OpType 与
+- 模型结构无法用现有 `OpType` 表达：应先扩展 Graph 的 OpType 与
   运行时 OpEnv/Kernel，而不是在 Converter 中静默降级。
 
 ## 输入
 
 1. 模型 `config.json`（Transformers 风格），首期
    `Models/Qwen3/config.json`。
-2. Graph_Fixed Python 扩展（`Build/graph_fixed/python/`）。
+2. Graph Python 扩展（`Build/graph/python/`）。
 3. 可选的 safetensors 权重文件或目录；不提供时生成 metadata-only 包。
 4. 优化配置：`target_precision`、`max_num_tokens`、`context_length`、
    `alignment`、`enable_reuse`。
@@ -53,7 +53,7 @@ description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer 
 
 ## 核心不变量
 
-- **单一可执行图**：只有 Graph_Fixed 的 `Graph/Op/Tensor/Storage`；
+- **单一可执行图**：只有 Graph 的 `Graph/Op/Tensor/Storage`；
   `ModelGraph` 是非执行 sidecar，不得被当作第二套图。
 - **RecordingGraph 透明**：代理必须透传 `create_input`、`create_constant`、
   `create_op`、`create_output`、`sort_op`、`dump_ir`；代理图与原生图
@@ -79,7 +79,7 @@ description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer 
 
 ### 1. 确认图契约
 
-- 阅读 `Graph_Fixed/Graph设计文档.md`，确认 `create_input`、
+- 阅读 `Graph/Graph设计文档.md`，确认 `create_input`、
   `create_constant`、`create_op`、`create_output`、`sort_op`、
   `GetOrderlyOPList()` 的签名与语义。
 - 确认输出命名规则：`out_cnt == 1` 为 `<op>.out`，否则为
@@ -114,7 +114,7 @@ description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer 
 ### 4. Serializer
 
 - 校验 `OptimizeResult`：精度已确定、activation 形状无符号维、显存计划存在。
-- 用优化后的 `ModelGraph` 重建 Graph_Fixed 图，计算 `dump_ir()` 的
+- 用优化后的 `ModelGraph` 重建 Graph，计算 `dump_ir()` 的
   SHA-256 与行数，写入 manifest。
 - 扫描常量与可选权重，生成 `WeightEntry`：不可用时写 `reason`
   （`weights not supplied`、`source tensor not found`、`shape mismatch`、

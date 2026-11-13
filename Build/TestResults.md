@@ -7,10 +7,10 @@
 | 操作系统 | Windows 11（10.0.26200） |
 | Python | 3.13.3 |
 | 解释器 | `C:\Users\18626\AppData\Local\Programs\Python\Python313\python.exe` |
-| Graph_Fixed 扩展 | `Build/graph_fixed/python/_graph_fixed.pyd`（2026-11-12 构建） |
+| Graph 扩展 | `Build/graph/python/_graph.pyd`（2026-11-14 构建） |
 | 字符编码 | `PYTHONUTF8=1` |
 | 外部依赖 | 无 PyTorch / LibTorch / Protobuf；safetensors 由仓库内解析器读取 |
-| 测试日期 | 2026-11-13 |
+| 测试日期 | 2026-11-14 |
 
 ## 2. 测试命令与结果
 
@@ -25,7 +25,7 @@ PYTHONUTF8=1 python -m unittest Build.converter.test_converter -v
 实际输出（末尾）：
 
 ```text
-Ran 13 tests in 0.047s
+Ran 13 tests in 0.054s
 
 OK
 ```
@@ -45,7 +45,7 @@ PYTHONUTF8=1 python -m unittest Build.optimizer.test_optimizer -v
 实际输出（末尾）：
 
 ```text
-Ran 18 tests in 0.126s
+Ran 18 tests in 0.146s
 
 OK
 ```
@@ -65,7 +65,7 @@ PYTHONUTF8=1 python -m unittest Build.serializer.test_serializer -v
 实际输出（末尾）：
 
 ```text
-Ran 13 tests in 0.258s
+Ran 13 tests in 0.398s
 
 OK
 ```
@@ -85,7 +85,7 @@ PYTHONUTF8=1 python -m unittest Build.test_pipeline -v
 实际输出（末尾）：
 
 ```text
-Ran 6 tests in 0.580s
+Ran 6 tests in 0.943s
 
 OK
 adapter qwen3
@@ -97,8 +97,8 @@ weights_available 0
 weights_total_bytes 0
 ir_sha256 3578cbfd1ed37776f8f6384c5b84d5c1ea24589bac5eed39a381376d0a94da20
 manifest_sha256 5f62384fe1fa14b0002b616c51309e9bf7e2b742ad41303d32ef4dd6a203f1df
-package C:\Users\18626\AppData\Local\Temp\pipeline_fnzs49k4\package4
-work_dir C:\Users\18626\AppData\Local\Temp\pipeline_fnzs49k4\work4
+package C:\Users\18626\AppData\Local\Temp\pipeline_uxaw4kkf\package4
+work_dir C:\Users\18626\AppData\Local\Temp\pipeline_uxaw4kkf\work4
 ```
 
 （临时目录名由 `tempfile.mkdtemp` 生成，每次运行不同。）
@@ -118,7 +118,7 @@ PYTHONUTF8=1 python -m unittest discover -s Models/Qwen3 -p 'test_*.py' -v
 实际输出（末尾）：
 
 ```text
-Ran 12 tests in 5.060s
+Ran 12 tests in 6.416s
 
 OK
 ```
@@ -127,22 +127,22 @@ OK
 1 output、310 个常量、tied embedding、Transformer 权重形状、
 596,049,920 参数与 1,192,099,840 字节 BF16 常量，以及 IR 稳定性。
 
-### 2.6 Graph_Fixed C++ 测试
+### 2.6 Graph C++ 测试
 
 命令：
 
 ```bash
-cd Build/graph_fixed && ./graph_fixed_test.exe
+cd Build/graph && ./graph_test.exe
 ```
 
 实际输出：
 
 ```text
-graph_fixed_test: ALL TESTS PASSED
+graph_test: ALL TESTS PASSED
 ```
 
 结论：通过。确认图构造、SortOp、常量为依赖叶子、I/O op、
-dump_ir 等 Graph_Fixed 基础行为未回归。
+dump_ir 等 Graph 基础行为未回归。
 
 ### 2.7 Qwen3-0.6B 模型包生成
 
@@ -233,7 +233,7 @@ PYTHONUTF8=1 python -m compileall -q Build Models/Qwen3
 | `Build.serializer.test_serializer` | 13 | UT-SER-001 ~ 012 |
 | `Build.test_pipeline` | 6 | 端到端、确定性、复用开关、CLI |
 | `Models/Qwen3/test_qwen3_graph.py` | 12 | 组图结构、权重形状、配置、IR 稳定性 |
-| `graph_fixed_test.exe` | C++ 全量 | Graph/SortOp/I/O/dump_ir |
+| `graph_test.exe` | C++ 全量 | Graph/SortOp/I/O/dump_ir |
 
 ## 4. 未覆盖项与风险
 

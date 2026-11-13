@@ -9,16 +9,16 @@
 | 模块目录 | `Build/serializer/` |
 | 上游依赖 | `Build/converter`、`Build/optimizer` |
 | 下游消费 | Runtime Loader（后续实现）、本模块 Loader（校验用） |
-| 权威图设计 | [Graph_Fixed/Graph设计文档.md](../../Graph_Fixed/Graph设计文档.md) |
+| 权威图设计 | [Graph/Graph设计文档.md](../../Graph/Graph设计文档.md) |
 
 ## 1. 背景与目标
 
 ### 1.1 背景
 
-`Graph_Fixed` 不提供序列化能力，也不定义文件格式；项目没有 `protoc`，
+`Graph` 不提供序列化能力，也不定义文件格式；项目没有 `protoc`，
 `Proto/` 目录为空。因此不能沿用原架构文档中的 Protobuf `model.pb` 方案。
 Serializer 需要定义一个自描述、可版本化、可确定性生成、并能重建
-Graph_Fixed 图的模型包格式。
+Graph的模型包格式。
 
 ### 1.2 目标
 
@@ -27,7 +27,7 @@ Graph_Fixed 图的模型包格式。
 3. 把可用权重按 256 B 对齐打包为 `weights.bin`，记录逐权重 SHA-256。
 4. 生成 `compile_report.json`，供人工与 Agent 审查。
 5. 实现 Loader：校验文件头、版本与哈希，解析 manifest，并按 manifest
-   重建 Graph_Fixed 图；重建结果支持 `dump_ir()` 校验。
+   重建 Graph；重建结果支持 `dump_ir()` 校验。
 6. 保证无权重时也能生成 metadata-only 模型包。
 
 ### 1.3 非目标
@@ -72,7 +72,7 @@ Graph_Fixed 图的模型包格式。
 - manifest 不包含时间戳，保证确定性；时间戳只写入 `compile_report.json`。
 - 重建必须使用记录时的 op 创建顺序，不能使用拓扑序替代。
 - 输入/输出张量的 `data_ptr` 不序列化；重建时固定为 0。
-- Graph_Fixed 的 `create_constant` 要求 `dims`、`pitch` 为整数列表。
+- Graph 的 `create_constant` 要求 `dims`、`pitch` 为整数列表。
 
 ### 2.4 验收标准
 
@@ -95,7 +95,7 @@ OptimizeResult ──▶ Serializer ──▶ model.mgf
                         │            ├─ manifest（canonical JSON）
                         │            └─ weights.bin（可选）
                         ├──▶ compile_report.json
-                        └──▶ Loader ──▶ Graph_Fixed.Graph + ModelGraph
+                        └──▶ Loader ──▶ Graph.Graph + ModelGraph
 ```
 
 ### 3.2 模块划分
@@ -141,7 +141,7 @@ model.mgf
 | manifest 编码 | canonical JSON | 确定性、易审查 | 需固定 key 排序与分隔符 |
 | 权重文件 | 独立 `weights.bin` | 便于分片与校验 | 多一个文件 |
 | 权重读取 | 自实现 safetensors 头解析 | 不依赖 torch/numpy，支持 BF16 | 需维护 8 字节头部逻辑 |
-| 图重建 | 按 manifest 重放构图 API | 唯一可行路径；Graph_Fixed 无反序列化 | 需保证属性类型往返一致 |
+| 图重建 | 按 manifest 重放构图 API | 唯一可行路径；Graph 无反序列化 | 需保证属性类型往返一致 |
 
 ## 4. 详细设计
 
@@ -248,7 +248,7 @@ Loader 自校验闭环。
    - 所有 activation 形状无符号维；
    - 显存计划存在。
 2. 深拷贝 `ModelGraph.to_dict()`，写入 manifest 的 `graph` 字段。
-3. 用 `rebuild_graph_from_model` 在内存中重建 Graph_Fixed 图，计算
+3. 用 `rebuild_graph_from_model` 在内存中重建 Graph，计算
    `dump_ir()` 的 SHA-256 与行数，写入 `graph.ir_sha256` /
    `graph.ir_line_count`。
 4. 扫描 `weights_path`（safetensors 文件或目录），按 constant 的
@@ -379,7 +379,7 @@ dtype 映射：
 ### 6.3 测试环境
 
 - Windows 11 / Linux，Python 3.10+；
-- Graph_Fixed 原生扩展已构建；
+- Graph 原生扩展已构建；
 - 不需要 GPU/torch；合成 safetensors 由测试代码生成；
 - 命令：`PYTHONUTF8=1 python -m unittest Build.serializer.test_serializer -v`。
 

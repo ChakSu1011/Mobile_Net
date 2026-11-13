@@ -2,11 +2,11 @@
 //
 // 职责：
 //   定义 Runtime 后端必须实现的最小能力集合：主机/设备拷贝、Kernel 创建与
-//   销毁、流同步。RuntimeGraph 只依赖本接口，不感知 CUDA/OpenCL/Vulkan 细节。
+//   销毁、流同步。Graph/OpEnv 只依赖本接口，不感知 CUDA/OpenCL/Vulkan 细节。
 //
 // 边界：
 //   - 不定义 MemoryPlan、权重加载或模型语义；
-//   - 不拥有 RuntimeGraph 的 arena 内存；arena 由 Loader/Destroy 管理。
+//   - 不拥有 Graph 的 arena 内存；arena 由 Loader/Destroy 管理。
 //
 // 依赖：
 //   Runtime/common/status.h、Runtime/kernel/kernel.h。
@@ -27,7 +27,7 @@ namespace mobilenet {
 //   表示异步拷贝/计算使用的流；具体实现由后端定义。
 //
 // 边界：
-//   基类不包含任何状态；RuntimeGraph 只持有指针。
+//   基类不包含任何状态；Graph/OpEnv 只持有指针。
 class Stream {
  public:
   virtual ~Stream() = default;
@@ -36,7 +36,7 @@ class Stream {
 // Runtime 后端抽象接口。
 //
 // 功能：
-//   提供 RuntimeGraph 所需的最小设备能力。
+//   提供 Graph/OpEnv 所需的最小设备能力。
 //
 // 边界：
 //   - 不负责图构建、校验或拓扑排序；

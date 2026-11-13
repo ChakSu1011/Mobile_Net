@@ -5,7 +5,7 @@
   权重映射、JSON 往返与错误路径。
 
 边界：
-  依赖 Graph_Fixed 原生扩展与 Qwen3 config.json；
+  依赖 Graph 原生扩展与 Qwen3 config.json；
   不依赖真实权重、GPU、torch 或 transformers。
 """
 
@@ -34,7 +34,7 @@ def _build_demo_graph(graph, api) -> None:
 
     参数：
       graph：原生 Graph 或 RecordingGraph；
-      api：Graph_Fixed 模块，提供枚举。
+      api：Graph 模块，提供枚举。
 
     返回：
       无。
@@ -70,7 +70,7 @@ class RecordingGraphTest(unittest.TestCase):
     """代理记录行为测试。"""
 
     def setUp(self) -> None:
-        """创建 Graph_Fixed 模块与原生图。"""
+        """创建 Graph 模块与原生图。"""
         self.api = load_graph_api()
         self.native = self.api.Graph("demo")
         _build_demo_graph(self.native, self.api)

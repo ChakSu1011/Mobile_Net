@@ -1,7 +1,7 @@
-"""模块：Graph_Fixed 构图代理与元数据记录。
+"""模块：Graph 构图代理与元数据记录。
 
 职责：
-  以透明代理方式包装 ``Graph_Fixed.Graph`` 的构图接口，在保持图语义
+  以透明代理方式包装 ``Graph.Graph`` 的构图接口，在保持图语义
   不变的前提下旁路记录 ``ModelGraph`` 所需的输入、常量、激活、算子与
   输出绑定元数据。
 
@@ -34,14 +34,14 @@ from Build.common.model_ir import (
 
 
 class RecordingGraph:
-    """Graph_Fixed 图的记录代理。
+    """Graph的记录代理。
 
     功能：
       每个构图方法先转发到真实 Graph，成功后再记录元数据；``finish()``
       汇总为 ``ModelGraph`` 并执行自校验。
 
     边界：
-      - 只支持 Graph_Fixed Python 绑定公开的构图方法；
+      - 只支持 Graph Python 绑定公开的构图方法；
       - Tensor 句柄仍由 Graph 持有，代理不延长其生命周期；
       - 同一实例只应构建一张图。
     """
@@ -76,7 +76,7 @@ class RecordingGraph:
 
     @property
     def adapted_graph(self) -> Any:
-        """返回被包装的 Graph_Fixed 图。"""
+        """返回被包装的 Graph。"""
         return self._graph
 
     def create_input(
@@ -89,15 +89,15 @@ class RecordingGraph:
 
         参数：
           name：输入张量名；
-          precision：可选 Precision 枚举；省略时由 Graph_Fixed 使用
+          precision：可选 Precision 枚举；省略时由 Graph 使用
             unknown 精度；
           layout：可选 Layout 枚举。
 
         返回：
-          Graph_Fixed Tensor 句柄。
+          Graph Tensor 句柄。
 
         异常：
-          RuntimeError：Graph_Fixed 拒绝创建；
+          RuntimeError：Graph 拒绝创建；
           BuildError：返回张量名与预期不符或名称重复。
         """
         if precision is None and layout is None:
@@ -148,10 +148,10 @@ class RecordingGraph:
           data_ptr：主机数据地址；0 表示无数据。
 
         返回：
-          Graph_Fixed Tensor 句柄。
+          Graph Tensor 句柄。
 
         异常：
-          RuntimeError：Graph_Fixed 拒绝创建；
+          RuntimeError：Graph 拒绝创建；
           BuildError：名称重复或元数据非法。
         """
         tensor = self._graph.create_constant(
@@ -197,10 +197,10 @@ class RecordingGraph:
           attr：属性字典，必须可 JSON 序列化。
 
         返回：
-          Graph_Fixed 输出 Tensor 列表。
+          Graph 输出 Tensor 列表。
 
         异常：
-          RuntimeError：Graph_Fixed 拒绝创建；
+          RuntimeError：Graph 拒绝创建；
           BuildError：out_cnt 非法、属性非法、输入未登记或输出名不符。
         """
         if out_cnt <= 0:
@@ -278,7 +278,7 @@ class RecordingGraph:
           tensor：被输出的 Tensor 句柄。
 
         异常：
-          RuntimeError：Graph_Fixed 拒绝创建；
+          RuntimeError：Graph 拒绝创建；
           BuildError：张量未登记或输出名重复。
         """
         tensor_name = tensor.name
@@ -296,12 +296,12 @@ class RecordingGraph:
         self._outputs.append(IOBinding(name=name, tensor=tensor_name))
 
     def sort_op(self) -> None:
-        """调用 Graph_Fixed 拓扑排序并标记已排序。"""
+        """调用 Graph 拓扑排序并标记已排序。"""
         self._graph.sort_op()
         self._sorted = True
 
     def dump_ir(self) -> str:
-        """返回 Graph_Fixed 的 IR 文本。"""
+        """返回 Graph 的 IR 文本。"""
         return self._graph.dump_ir()
 
     def finish(self) -> ModelGraph:
@@ -382,7 +382,7 @@ class RecordingGraph:
 
     @staticmethod
     def _output_names(name: str, out_cnt: int) -> list[str]:
-        """按 Graph_Fixed 规则生成输出张量名。
+        """按 Graph 规则生成输出张量名。
 
         参数：
           name：op 名称；

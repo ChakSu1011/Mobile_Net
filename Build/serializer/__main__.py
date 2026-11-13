@@ -47,7 +47,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Print the full manifest JSON.")
 
     rebuild_parser = subparsers.add_parser(
-        "rebuild", help="Rebuild Graph_Fixed graph from package.")
+        "rebuild", help="Rebuild Graph graph from package.")
     rebuild_parser.add_argument(
         "--package", type=Path, required=True,
         help="Directory containing model.mgf.")

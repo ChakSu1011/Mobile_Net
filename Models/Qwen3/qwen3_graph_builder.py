@@ -2,7 +2,7 @@
 
 职责：
   依据 Qwen3-0.6B 配置和 Transformers Qwen3 源码的层结构，使用
-  Graph_Fixed 的 Python 绑定构造 runtime 静态图；图只描述 op、tensor、
+  Graph 的 Python 绑定构造 runtime 静态图；图只描述 op、tensor、
   constant 和连接关系，不加载真实权重、不执行推理。
 
 边界：
@@ -34,16 +34,16 @@ from qwen3_config import Qwen3Config
 
 
 def _load_graph_api() -> Any:
-    """加载 Graph_Fixed 的 Python 公共包。
+    """加载 Graph 的 Python 公共包。
 
-    优先使用当前 ``sys.path``；失败时把仓库的 ``Graph_Fixed/python``
+    优先使用当前 ``sys.path``；失败时把仓库的 ``Graph/python``
     加入 ``sys.path`` 后重试。
 
     返回：
       ``mobilenet_runtime_graph`` 模块对象。
 
     异常：
-      ModuleNotFoundError：公共包或 ``_graph_fixed`` 扩展不可用时抛出。
+      ModuleNotFoundError：公共包或 ``_graph`` 扩展不可用时抛出。
     """
     try:
         import mobilenet_runtime_graph as graph_api
@@ -51,7 +51,7 @@ def _load_graph_api() -> Any:
     except ModuleNotFoundError:
         repository_root = Path(__file__).resolve().parents[2]
         sys.path.insert(
-            0, str(repository_root / "Graph_Fixed" / "python"))
+            0, str(repository_root / "Graph" / "python"))
         import mobilenet_runtime_graph as graph_api
         return graph_api
 
@@ -78,7 +78,7 @@ _DTYPE_BYTES = {
 
 
 class Qwen3GraphBuilder:
-    """按 Qwen3 层结构构造 Graph_Fixed 静态图。
+    """按 Qwen3 层结构构造 Graph 静态图。
 
     功能：
       从 Qwen3Config 生成完整 prefill 图：embedding、N 个 Decoder Layer、
@@ -106,7 +106,7 @@ class Qwen3GraphBuilder:
         参数：
           config：Qwen3 配置；必须通过 validate()；
           graph_factory：可选图工厂，接收图名并返回 Graph 兼容对象；
-            为 None 时直接创建 Graph_Fixed 的 Graph。Build 阶段用它
+            为 None 时直接创建 Graph。Build 阶段用它
             注入 RecordingGraph，不改变默认行为。
 
         异常：
@@ -139,7 +139,7 @@ class Qwen3GraphBuilder:
           已调用 ``sort_op()`` 的 Graph 对象；Tensor 句柄由 Graph 持有。
 
         异常：
-          RuntimeError：Graph_Fixed 命名冲突、tensor 归属错误或排序失败。
+          RuntimeError：Graph 命名冲突、tensor 归属错误或排序失败。
         """
         self._graph = (
             Graph(GRAPH_NAME)
@@ -442,7 +442,7 @@ class Qwen3GraphBuilder:
           dims：逻辑形状，采用 Transformers 权重布局。
 
         返回：
-          constant Tensor；其 ``reusable`` 被 Graph_Fixed 强制为 false。
+          constant Tensor；其 ``reusable`` 被 Graph 强制为 false。
 
         主要逻辑：
           pitch 与 dims 相同，layout 固定 RowMajor，data_ptr 固定 0，
@@ -475,7 +475,7 @@ class Qwen3GraphBuilder:
         参数：
           name：op 名称；
           src_tensors：输入 tensor 列表；
-          op_type：Graph_Fixed OpType；
+          op_type：Graph OpType；
           attrs：算子属性字典。
 
         返回：
@@ -716,7 +716,7 @@ def build_qwen3_graph(config: Qwen3Config | None = None) -> Graph:
 
     异常：
       ValueError：配置非法；
-      RuntimeError：Graph_Fixed 构图或排序失败。
+      RuntimeError：Graph 构图或排序失败。
     """
     if config is None:
         config = Qwen3Config()
@@ -752,11 +752,11 @@ def main(argv: list[str] | None = None) -> int:
 
     异常：
       ValueError：配置非法；
-      RuntimeError：Graph_Fixed 构图失败；
+      RuntimeError：Graph 构图失败；
       OSError：配置文件或输出文件不可读写。
     """
     parser = argparse.ArgumentParser(
-        description="Build the Qwen3-0.6B Graph_Fixed static graph")
+        description="Build the Qwen3-0.6B Graph static graph")
     parser.add_argument(
         "--config",
         type=Path,

@@ -1,7 +1,7 @@
 // 模块：Kernel 公共枚举与分类
 //
 // 职责：
-//   定义 Graph/RuntimeGraph 与 Kernel 共享的算子类型、I/O 拷贝方向、
+//   定义 Graph 与 Kernel 共享的算子类型、I/O 拷贝方向、
 //   Decoder Block 融合阶段与 RoPE 布局枚举。
 //
 // 边界：

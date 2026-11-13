@@ -7,7 +7,7 @@
 边界：
   - 不执行真实计算，不做数值校验；
   - 只支持首期 Qwen3 使用的算子集合；
-  - 不修改 Graph_Fixed 图对象，只修改 ``ModelGraph``。
+  - 不修改 Graph对象，只修改 ``ModelGraph``。
 """
 
 from __future__ import annotations

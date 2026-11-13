@@ -1,0 +1,40 @@
+{
+  "files": {
+    "model.mgf": {
+      "sha256": "86c051668628e7dfc5ed338f7e21ea9047939dd8047d933aebf52f462c10a6c9",
+      "size": 430153
+    }
+  },
+  "format": "MobileNet.ModelPackage",
+  "format_version": 1,
+  "generated_at": "2026-11-13T00:07:04.606725+00:00",
+  "graph": {
+    "activation_tensors": 423,
+    "constants": 310,
+    "ir_line_count": 744,
+    "ir_sha256": "3578cbfd1ed37776f8f6384c5b84d5c1ea24589bac5eed39a381376d0a94da20",
+    "ops": 423,
+    "tensors": 735
+  },
+  "memory": {
+    "alignment": 256,
+    "arena_bytes": 81985536,
+    "constants_bytes": 1192099840,
+    "entries": 423,
+    "peak_bytes": 78315520
+  },
+  "model": {
+    "adapter": "qwen3",
+    "name": "qwen3_0_6b"
+  },
+  "verification": {
+    "manifest_sha256": "5f62384fe1fa14b0002b616c51309e9bf7e2b742ad41303d32ef4dd6a203f1df",
+    "package_reloaded": true
+  },
+  "weights": {
+    "available": 0,
+    "sha256": null,
+    "total_bytes": 0,
+    "unavailable": 310
+  }
+}

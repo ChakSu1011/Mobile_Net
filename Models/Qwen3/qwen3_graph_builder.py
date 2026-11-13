@@ -28,7 +28,7 @@ import argparse
 import math
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from qwen3_config import Qwen3Config
 
@@ -96,17 +96,25 @@ class Qwen3GraphBuilder:
       4. 调用 sort_op()，保证执行序列从输入到输出连续。
     """
 
-    def __init__(self, config: Qwen3Config) -> None:
+    def __init__(
+        self,
+        config: Qwen3Config,
+        graph_factory: Callable[[str], Any] | None = None,
+    ) -> None:
         """保存配置并校验。
 
         参数：
-          config：Qwen3 配置；必须通过 validate()。
+          config：Qwen3 配置；必须通过 validate()；
+          graph_factory：可选图工厂，接收图名并返回 Graph 兼容对象；
+            为 None 时直接创建 Graph_Fixed 的 Graph。Build 阶段用它
+            注入 RecordingGraph，不改变默认行为。
 
         异常：
           ValueError：配置超出当前实现范围。
         """
         config.validate()
         self._config = config
+        self._graph_factory = graph_factory
         self._precision = _DTYPE_TO_PRECISION[config.dtype]
         self._element_bytes = _DTYPE_BYTES[config.dtype]
         self._graph: Graph | None = None
@@ -133,7 +141,11 @@ class Qwen3GraphBuilder:
         异常：
           RuntimeError：Graph_Fixed 命名冲突、tensor 归属错误或排序失败。
         """
-        self._graph = Graph(GRAPH_NAME)
+        self._graph = (
+            Graph(GRAPH_NAME)
+            if self._graph_factory is None
+            else self._graph_factory(GRAPH_NAME)
+        )
         self._constants = {}
         self._weight_shapes = {}
         self._constant_shapes = {}

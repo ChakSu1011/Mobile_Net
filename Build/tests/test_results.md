@@ -114,20 +114,20 @@ weights_available 0
 weights_total_bytes 0
 ir_sha256 3578cbfd1ed37776f8f6384c5b84d5c1ea24589bac5eed39a381376d0a94da20
 manifest_sha256 5f62384fe1fa14b0002b616c51309e9bf7e2b742ad41303d32ef4dd6a203f1df
-package D:\Mobile_Net\Build\artifacts\qwen3_0_6b
-work_dir D:\Mobile_Net\Build\artifacts\qwen3_0_6b_work
+package D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b
+work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
 ```
 
 产物：
 
 | 路径 | 大小 | 说明 |
 | --- | --- | --- |
-| `Build/artifacts/qwen3_0_6b/model.mgf` | 430,153 B | 112 B 头 + 规范化 JSON manifest，无权重区 |
-| `Build/artifacts/qwen3_0_6b/compile_report.json` | 992 B | 构建摘要、IR 哈希、显存计划、验证结果 |
-| `Build/artifacts/qwen3_0_6b_work/converter/model_graph.json` | 480,582 B | 转换后元数据 |
-| `Build/artifacts/qwen3_0_6b_work/converter/conversion_report.json` | 83,948 B | 权重映射与转换摘要 |
-| `Build/artifacts/qwen3_0_6b_work/optimizer/model_graph.json` | 518,748 B | 优化后元数据 |
-| `Build/artifacts/qwen3_0_6b_work/optimizer/optimize_report.json` | 1,611 B | 精度/形状/显存与不变量报告 |
+| `Models/Qwen3/artifacts/qwen3_0_6b/model.mgf` | 430,153 B | 112 B 头 + 规范化 JSON manifest，无权重区 |
+| `Models/Qwen3/artifacts/qwen3_0_6b/compile_report.json` | 992 B | 构建摘要、IR 哈希、显存计划、验证结果 |
+| `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/model_graph.json` | 480,582 B | 转换后元数据 |
+| `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/conversion_report.json` | 83,948 B | 权重映射与转换摘要 |
+| `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/model_graph.json` | 518,748 B | 优化后元数据 |
+| `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/optimize_report.json` | 1,611 B | 精度/形状/显存与不变量报告 |
 
 `compile_report.json` 关键字段：
 

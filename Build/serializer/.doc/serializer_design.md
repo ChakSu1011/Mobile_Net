@@ -83,7 +83,7 @@ Graph的模型包格式。
 | AC-SER-03 | 重建一致 | 未优化图重建后 `dump_ir()` 逐字节一致 |
 | AC-SER-04 | 权重正确 | 合成权重包解包后字节与源一致 |
 | AC-SER-05 | 错误路径 | 截断、坏 magic、坏版本、坏 hash 均抛 `BuildError` |
-| AC-SER-06 | Qwen3 包 | `Build/artifacts/qwen3_0_6b/` 可加载并重建图 |
+| AC-SER-06 | Qwen3 包 | `Models/Qwen3/artifacts/qwen3_0_6b/` 可加载并重建图 |
 
 ## 3. 概要设计
 
@@ -339,7 +339,7 @@ dtype 映射：
 | P3 | 实现 Serializer 与 metadata-only 包 | P1 | `serializer.py` |
 | P4 | 实现 Loader 与图重建 | P1、converter | `loader.py` |
 | P5 | 实现权重打包与合成权重测试 | P2、P3 | 权重测试 |
-| P6 | CLI 与 Qwen3 模型包生成 | P3、P4 | `Build/artifacts/qwen3_0_6b/` |
+| P6 | CLI 与 Qwen3 模型包生成 | P3、P4 | `Models/Qwen3/artifacts/qwen3_0_6b/` |
 | P7 | 测试结果与风险记录 | P6 | `tests/test_results.md` |
 
 风险与应对：

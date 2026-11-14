@@ -41,7 +41,7 @@ from Build.serializer import (
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_CONFIG = _REPOSITORY_ROOT / "Models" / "Qwen3" / "config.json"
 _DEFAULT_ARTIFACT = (
-    _REPOSITORY_ROOT / "Build" / "artifacts" / "qwen3_0_6b")
+    _REPOSITORY_ROOT / "Models" / "Qwen3" / "artifacts" / "qwen3_0_6b")
 
 
 @dataclass(frozen=True)

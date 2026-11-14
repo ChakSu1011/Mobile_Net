@@ -1,6 +1,6 @@
 # 构建产物（Build 源码与模型包仍需入库，只忽略编译输出与中间文件）
 Build/graph/
-Build/artifacts/*_work/
+Models/*/artifacts/*_work/
 Build/*.log
 
 # Python 缓存

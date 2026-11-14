@@ -248,13 +248,13 @@ MobileNet/
 │   │   ├── .doc/          # serializer_design.md
 │   │   ├── .skill/        # serializer skill
 │   │   └── tests/         # 模块测试结果
-│   ├── artifacts/         # Qwen3 模型包产物
 │   ├── pipeline.py        # convert→optimize→serialize 串联入口
 │   └── testing.py         # 测试用小型图与合成权重
 ├── Models/                # 模型组图设计与 Qwen3 配置/权重映射
 │   ├── .doc/Models_design.md
 │   ├── .skill/model-graph/SKILL.md
 │   └── Qwen3/
+│       ├── artifacts/     # Qwen3 模型包产物
 │       └── tests/test_results.md
 ├── Runtime/               # 在线运行时（C++）
 │   ├── loader/

@@ -119,6 +119,15 @@
 - 不得放在模块根目录或其他非 `tests/` 目录。
 - 测试结果必须记录实际执行的命令、输出与结论，满足第 3 节要求。
 
+### 5.4 构建产物
+
+- 模型构建产物（artifacts）必须放在对应模型目录下，例如
+  `Models/Qwen3/artifacts/`；不得放在 `Build/artifacts/`、仓库根目录或
+  其他模块目录中。
+- 模型包目录为 `Models/<模型目录>/artifacts/<model-name>/`，中间 work
+  目录为同级的 `<model-name>_work/`。
+- Build 阶段负责生成产物，但不得在 `Build/` 下保留 artifacts 目录。
+
 ---
 
 ## 规则冲突与例外

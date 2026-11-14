@@ -52,6 +52,11 @@ description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer 
 
 模型包产物：
 
+- 输出目录固定为 `Models/<模型目录>/artifacts/<model-name>/`，例如
+  `Models/Qwen3/artifacts/qwen3_0_6b/`；
+- work 目录固定为同级的 `<model-name>_work/`，例如
+  `Models/Qwen3/artifacts/qwen3_0_6b_work/`；
+- 不得把 artifacts 写入 `Build/artifacts/` 或仓库根目录；
 - `model.mgf`：112 字节固定头 `<8sIIQQ32sQQ32s>` + 规范化 JSON manifest；
 - `weights.bin`：可选，按 256 B 对齐，独立 SHA-256；
 - `compile_report.json`：构建摘要、IR 哈希、显存计划与自检结果；
@@ -141,8 +146,8 @@ PYTHONUTF8=1 python -m Build.pipeline
 ```bash
 PYTHONUTF8=1 python -m Build.pipeline \
   --config Models/Qwen3/config.json \
-  --output Build/artifacts/qwen3_0_6b \
-  --work-dir Build/artifacts/qwen3_0_6b_work \
+  --output Models/Qwen3/artifacts/qwen3_0_6b \
+  --work-dir Models/Qwen3/artifacts/qwen3_0_6b_work \
   --weights /path/to/safetensors \
   --target-precision bfloat16 \
   --max-num-tokens 256 \
@@ -177,6 +182,8 @@ PYTHONUTF8=1 python -m unittest discover -s Models/Qwen3 -p 'test_*.py' -v
 - [ ] 重建图 IR SHA-256 与行数和 manifest 一致。
 - [ ] 无权重时生成 metadata-only 包且不残留 `weights.bin`。
 - [ ] 包目录只含 `model.mgf` 与 `compile_report.json`，中间产物在 work 目录。
+- [ ] 模型包与 work 目录位于 `Models/<模型目录>/artifacts/`，而非
+      `Build/artifacts/`。
 - [ ] 全部代码通过 Google Style 与中文注释要求。
 
 ## 常见陷阱
@@ -203,3 +210,5 @@ PYTHONUTF8=1 python -m unittest discover -s Models/Qwen3 -p 'test_*.py' -v
    统一再导出；新增公共符号时同步更新，避免循环导入。
 10. **Windows 编码**：含中文的 JSON/日志统一 `PYTHONUTF8=1`，manifest
     使用 UTF-8 canonical JSON。
+11. **把产物写进 `Build/artifacts`**：模型包与 work 目录属于对应模型目录，
+    应写入 `Models/<模型目录>/artifacts/`；`Build/` 只保留工具链与构建输出。

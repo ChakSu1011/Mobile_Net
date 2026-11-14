@@ -16,7 +16,7 @@
 ### 1.1 背景
 
 `Graph` 不提供序列化能力，也不定义文件格式；项目没有 `protoc`，
-`Proto/` 目录为空。因此不能沿用原架构文档中的 Protobuf `model.pb` 方案。
+也没有 Protobuf schema。因此不能沿用原架构文档中的 Protobuf `model.pb` 方案。
 Serializer 需要定义一个自描述、可版本化、可确定性生成、并能重建
 Graph的模型包格式。
 

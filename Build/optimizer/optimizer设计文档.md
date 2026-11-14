@@ -9,7 +9,7 @@
 | 模块目录 | `Build/optimizer/` |
 | 上游依赖 | `Build/converter` 输出的 `ModelGraph` |
 | 下游模块 | `Build/serializer` |
-| 权威图设计 | [Graph/Graph设计文档.md](../../Graph/Graph设计文档.md) |
+| 权威图设计 | [Graph/.doc/Graph设计文档.md](../../Graph/.doc/Graph设计文档.md) |
 
 ## 1. 背景与目标
 

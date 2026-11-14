@@ -79,7 +79,7 @@ description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer 
 
 ### 1. 确认图契约
 
-- 阅读 `Graph/Graph设计文档.md`，确认 `create_input`、
+- 阅读 `Graph/.doc/Graph设计文档.md`，确认 `create_input`、
   `create_constant`、`create_op`、`create_output`、`sort_op`、
   `GetOrderlyOPList()` 的签名与语义。
 - 确认输出命名规则：`out_cnt == 1` 为 `<op>.out`，否则为

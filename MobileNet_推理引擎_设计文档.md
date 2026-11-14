@@ -354,7 +354,7 @@ APP          Tokenizer        Scheduler        Executor          GPU
 
 | 序号 | 设计文档 | 覆盖模块 | 主要依赖 | 建议顺序 |
 | --- | --- | --- | --- | --- |
-| 1 | [Graph 设计文档](Graph/Graph设计文档.md) | C++17 runtime IR（Graph/Op/Tensor/Storage/GraphEnv/OpEnv）、Input/Output op、SortOp、pybind11 最小构图接口、dump_ir | 无 | 1 |
+| 1 | [Graph 设计文档](Graph/.doc/Graph设计文档.md) | C++17 runtime IR（Graph/Op/Tensor/Storage/GraphEnv/OpEnv）、Input/Output op、SortOp、pybind11 最小构图接口、dump_ir | 无 | 1 |
 | 2 | [Converter 设计文档](Build/converter/converter设计文档.md) | Qwen3 Adapter、RecordingGraph、ModelGraph sidecar、权重映射 | 1 | 2 |
 | 3 | [Optimizer 设计文档](Build/optimizer/optimizer设计文档.md) | Precision/Shape/Memory Pass、显存复用、优化报告 | 1、2 | 3 |
 | 4 | [Serializer 设计文档](Build/serializer/serializer设计文档.md) | model.mgf 格式、manifest、权重打包、图重建校验 | 1、3 | 4 |
@@ -1137,7 +1137,7 @@ Graph ──▶ Converter ──▶ Optimizer ──▶ Serializer ──▶ Loa
 1. Qwen3 模型卡与技术报告（Alibaba Qwen 团队）。
 2. vLLM: Efficient Memory Management for Large Language Model Serving with PagedAttention（SOSP 2023）。
 3. OpenCL Specification（Khronos Group）。
-4. Graph 设计文档（`Graph/Graph设计文档.md`，项目内）。
+4. Graph 设计文档（`Graph/.doc/Graph设计文档.md`，项目内）。
 5. safetensors 格式规范（Hugging Face）。
 6. Google C++ Style Guide 与 Google Python Style Guide（中文版）。
 7. pybind11 官方文档。

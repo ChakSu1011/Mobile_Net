@@ -6,10 +6,10 @@ description: 为推理引擎构建“Graph IR（torch/at::Tensor）+ RuntimeGrap
 # Graph 双表示构建与双端一致性校验
 
 > **已废弃（2026-11-13）**：本 skill 描述的 torch/LibTorch Graph IR +
-> RuntimeGraph/TensorDesc 双表示已被 `Graph/Graph设计文档.md` 的
+> RuntimeGraph/TensorDesc 双表示已被 `Graph/.doc/Graph设计文档.md` 的
 > 单一 C++17 runtime 静态图取代。当前项目请使用
 > `Skills/build-stage-pipeline/SKILL.md` 与
-> `Skills/runtime-static-graph-cpp-pybind/SKILL.md`。以下内容仅作历史参考。
+> `Graph/.skill/runtime-static-graph-cpp-pybind/SKILL.md`。以下内容仅作历史参考。
 
 ## 适用场景
 
@@ -155,8 +155,8 @@ description: 为推理引擎构建“Graph IR（torch/at::Tensor）+ RuntimeGrap
 双表示图模块（`at::Tensor` Graph IR + `TensorDesc` RuntimeGraph）、
 对应构建脚本与测试已从仓库删除，仅保留本文作为迁移记录。当前实现见：
 
-- 设计：`Graph/Graph设计文档.md`
+- 设计：`Graph/.doc/Graph设计文档.md`
 - 代码：`Graph/include/runtime_graph/`、`Graph/src/`
 - Python 绑定：`Graph/python/graph_python.cc`
 - 测试：`Graph/tests/graph_test.cc`、`Graph/tests/test_graph.py`
-- 当前 skill：`Skills/runtime-static-graph-cpp-pybind/SKILL.md`
+- 当前 skill：`Graph/.skill/runtime-static-graph-cpp-pybind/SKILL.md`

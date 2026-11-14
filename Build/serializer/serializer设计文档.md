@@ -9,7 +9,7 @@
 | 模块目录 | `Build/serializer/` |
 | 上游依赖 | `Build/converter`、`Build/optimizer` |
 | 下游消费 | Runtime Loader（后续实现）、本模块 Loader（校验用） |
-| 权威图设计 | [Graph/Graph设计文档.md](../../Graph/Graph设计文档.md) |
+| 权威图设计 | [Graph/.doc/Graph设计文档.md](../../Graph/.doc/Graph设计文档.md) |
 
 ## 1. 背景与目标
 

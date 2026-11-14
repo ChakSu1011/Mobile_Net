@@ -9,7 +9,7 @@
 | 模块目录 | `Build/converter/` |
 | 上游依赖 | `Graph`（图对象模型）、`Models/Qwen3`（Qwen3 Adapter） |
 | 下游模块 | `Build/optimizer`、`Build/serializer` |
-| 权威图设计 | [Graph/Graph设计文档.md](../../Graph/Graph设计文档.md) |
+| 权威图设计 | [Graph/.doc/Graph设计文档.md](../../Graph/.doc/Graph设计文档.md) |
 
 ## 1. 背景与目标
 

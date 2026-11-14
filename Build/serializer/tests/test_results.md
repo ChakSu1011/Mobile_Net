@@ -4,8 +4,8 @@
 |------|------|
 | 报告日期 | 2026-11-14 |
 | 测试对象 | `Build.serializer` |
-| 设计文档 | [serializer_Design.md](../.doc/serializer_Design.md) |
-| 完整阶段测试 | [Build/tests/TestResults.md](../../tests/TestResults.md) |
+| 设计文档 | [serializer_design.md](../.doc/serializer_design.md) |
+| 完整阶段测试 | [Build/tests/test_results.md](../../tests/test_results.md) |
 
 ## 1. 测试环境
 

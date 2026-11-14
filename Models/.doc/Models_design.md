@@ -6,10 +6,10 @@
 | 日期 | 2026-11-13 |
 | 适用范围 | `Models/` 下基于 `Graph` Python 绑定的模型静态图构建 |
 | 首个实例 | Qwen3-0.6B |
-| 基础 IR | [Graph/.doc/Graph设计文档.md](../Graph/.doc/Graph设计文档.md) |
+| 基础 IR | [Graph/.doc/Graph_design.md](../../Graph/.doc/Graph_design.md) |
 | 代码目录 | `Models/Qwen3/` |
-| 测试结果 | [Models/Qwen3/TestResults.md](Qwen3/TestResults.md) |
-| 交付范围 | 设计文档、代码、测试结果三件套；按用户要求不生成 skill |
+| 测试结果 | [Models/Qwen3/tests/test_results.md](../Qwen3/tests/test_results.md) |
+| 交付范围 | 设计文档、代码、测试结果、skill 四件套 |
 
 本文档先给出通用的“模型源码到 Graph 静态图”设计方法，再以
 Qwen3-0.6B 为例说明具体落地。通用部分描述可复用的流程、命名、权重登记、
@@ -44,7 +44,7 @@ constant、输入输出，它们如何连接，按什么顺序执行”。它不
 | G-03 | 以 Qwen3-0.6B 为首个实例，依据 Transformers `modeling_qwen3.py` 生成完整静态图。 |
 | G-04 | 图必须可被 `Graph` 的 `sort_op()` 排序，并能通过 `dump_ir()` 稳定输出。 |
 | G-05 | 提供可复现的 Python 测试，验证图规模、拓扑、权重形状和错误路径。 |
-| G-06 | 交付设计文档、代码、测试结果三件套。 |
+| G-06 | 交付设计文档、代码、测试结果与 skill 四件套。 |
 
 ### 1.3 非目标
 
@@ -61,11 +61,12 @@ constant、输入输出，它们如何连接，按什么顺序执行”。它不
 
 | 交付物 | 位置 | 状态 |
 |--------|------|------|
-| 设计文档 | `Models/模型组图设计文档.md` | 本文件 |
+| 设计文档 | `Models/.doc/Models_design.md` | 本文件 |
 | 代码 | `Models/Qwen3/qwen3_config.py`、`Models/Qwen3/qwen3_graph_builder.py` | 随任务提交 |
 | 配置文件 | `Models/Qwen3/config.json` | 随任务提交 |
 | 测试代码 | `Models/Qwen3/test_qwen3_graph.py` | 随任务提交 |
-| 测试结果 | `Models/Qwen3/TestResults.md` | 随任务提交 |
+| 测试结果 | `Models/Qwen3/tests/test_results.md` | 随任务提交 |
+| skill | `Models/.skill/model-graph/SKILL.md` | 随任务提交 |
 
 ## 2. 需求分析
 
@@ -116,7 +117,7 @@ constant、输入输出，它们如何连接，按什么顺序执行”。它不
 | AC-03 | 权重形状与 Transformers 5.9.0 `Qwen3ForCausalLM` meta 模型逐项一致。 |
 | AC-04 | 逻辑权重参数总量为 596,049,920，bfloat16 constant 字节数为 1,192,099,840。 |
 | AC-05 | Python 测试全部通过，命令行可输出图摘要和 IR。 |
-| AC-06 | 设计文档、代码、测试结果三件套齐全且互相可追溯。 |
+| AC-06 | 设计文档、代码、测试结果与 skill 四件套齐全且互相可追溯。 |
 
 ## 3. 概要设计
 
@@ -145,7 +146,7 @@ constant、输入输出，它们如何连接，按什么顺序执行”。它不
 | `Models/Qwen3/qwen3_config.py` | 配置数据类、JSON 读取、字段校验、dtype 映射。 |
 | `Models/Qwen3/qwen3_graph_builder.py` | 权重登记、op 创建、图连接、排序和命令行。 |
 | `Models/Qwen3/test_qwen3_graph.py` | 图结构、权重形状、错误路径测试。 |
-| `Models/模型组图设计文档.md` | 通用组图方法和 Qwen3 实例说明。 |
+| `Models/.doc/Models_design.md` | 通用组图方法和 Qwen3 实例说明。 |
 
 ### 3.2 通用组图流程
 
@@ -421,7 +422,7 @@ Qwen3-0.6B 默认配置（28 层、tie=true）：
 | P-03 | 实现 `Qwen3Config` 和 `config.json` | 配置解析与校验 |
 | P-04 | 实现 `Qwen3GraphBuilder` | 完整静态图 |
 | P-05 | 编写单元测试和 Transformers 形状对照 | 测试代码 |
-| P-06 | 执行测试、记录实际输出 | TestResults.md |
+| P-06 | 执行测试、记录实际输出 | test_results.md |
 | P-07 | 自检命名、注释、80 列和确定性 | 交付检查 |
 
 ### 5.2 依赖关系
@@ -444,7 +445,7 @@ Graph 构建产物
 | M-01 | 设计文档完成，Qwen3 映射表可追溯。 |
 | M-02 | 命令行能构建图并输出 `inputs/constants/ops/outputs` 计数。 |
 | M-03 | Python 测试全部通过，形状与 Transformers 一致。 |
-| M-04 | TestResults.md 记录真实命令和输出。 |
+| M-04 | test_results.md 记录真实命令和输出。 |
 
 | 风险 | 影响 | 应对 |
 |------|------|------|
@@ -509,7 +510,7 @@ Graph 构建产物
 
 ## 附录 A 参考资料
 
-1. `Graph/.doc/Graph设计文档.md`：Runtime Graph IR 的类、OpType、
+1. `Graph/.doc/Graph_design.md`：Runtime Graph IR 的类、OpType、
    Storage/Shape 定义，以及 Python 绑定、构建和测试现状。
 2. Transformers 5.9.0
    `transformers/models/qwen3/modeling_qwen3.py`：Qwen3 RMSNorm、MLP、

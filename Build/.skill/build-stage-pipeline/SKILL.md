@@ -38,16 +38,16 @@ description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer 
 ## 输出（四件套）
 
 1. 设计文档：主设计文档对应章节，以及
-   `Build/converter/.doc/converter_Design.md`、
-   `Build/optimizer/.doc/optimizer_Design.md`、
-   `Build/serializer/.doc/serializer_Design.md`。
+   `Build/converter/.doc/converter_design.md`、
+   `Build/optimizer/.doc/optimizer_design.md`、
+   `Build/serializer/.doc/serializer_design.md`。
 2. 代码：`Build/common`、`Build/converter`、`Build/optimizer`、
    `Build/serializer`、`Build/pipeline.py`。
-3. 测试报告：`Build/tests/TestResults.md`，含环境、命令、实际输出、
+3. 测试报告：`Build/tests/test_results.md`，含环境、命令、实际输出、
    结论、未覆盖项与风险；模块级结果见
-   `Build/converter/tests/TestResults.md`、
-   `Build/optimizer/tests/TestResults.md`、
-   `Build/serializer/tests/TestResults.md`。
+   `Build/converter/tests/test_results.md`、
+   `Build/optimizer/tests/test_results.md`、
+   `Build/serializer/tests/test_results.md`。
 4. 本 skill。
 
 模型包产物：
@@ -85,7 +85,7 @@ description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer 
 
 ### 1. 确认图契约
 
-- 阅读 `Graph/.doc/Graph设计文档.md`，确认 `create_input`、
+- 阅读 `Graph/.doc/Graph_design.md`，确认 `create_input`、
   `create_constant`、`create_op`、`create_output`、`sort_op`、
   `GetOrderlyOPList()` 的签名与语义。
 - 确认输出命名规则：`out_cnt == 1` 为 `<op>.out`，否则为

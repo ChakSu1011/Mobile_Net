@@ -18,9 +18,9 @@
 
 | 模块 | 结果文档 |
 |------|----------|
-| Converter | [converter/tests/TestResults.md](../converter/tests/TestResults.md) |
-| Optimizer | [optimizer/tests/TestResults.md](../optimizer/tests/TestResults.md) |
-| Serializer | [serializer/tests/TestResults.md](../serializer/tests/TestResults.md) |
+| Converter | [converter/tests/test_results.md](../converter/tests/test_results.md) |
+| Optimizer | [optimizer/tests/test_results.md](../optimizer/tests/test_results.md) |
+| Serializer | [serializer/tests/test_results.md](../serializer/tests/test_results.md) |
 
 以下为阶段级测试。
 

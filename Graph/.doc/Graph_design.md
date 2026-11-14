@@ -7,7 +7,7 @@
 | 文档性质 | Graph 模块设计文档（含实施与测试） |
 | 代码目录 | `Graph/` |
 | 验证目录 | `Build/graph/` |
-| 测试报告 | [TestResults.md](../TestResults.md) |
+| 测试报告 | [test_results.md](../tests/test_results.md) |
 | 配套 skill | [SKILL.md](../.skill/runtime-static-graph-cpp-pybind/SKILL.md) |
 
 本文档是 `Graph` 模块的唯一设计文档，覆盖 IR 设计、C++ 实现、Python
@@ -69,7 +69,7 @@ Runtime 端在端侧 Device 上加载并执行静态图。`Graph` 是 Runtime �
 | C++ 代码 | `Graph/include/`、`Graph/src/` | 已交付 |
 | Python 绑定 | `Graph/python/graph_python.cc`、`Graph/python/mobilenet_runtime_graph.py` | 已交付 |
 | 测试 | `Graph/tests/graph_test.cc`、`Graph/tests/test_graph.py` | 已交付并通过 |
-| 测试结果 | `Graph/TestResults.md` | 已交付 |
+| 测试结果 | `Graph/tests/test_results.md` | 已交付 |
 | skill | `Graph/.skill/runtime-static-graph-cpp-pybind/SKILL.md` | 已交付 |
 
 ## 2. 需求分析
@@ -1100,8 +1100,8 @@ outputs <count>
 | S3 | 实现 `Graph` 构图和 post DFS 排序 | `graph.h`、`graph.cc` | 完成 |
 | S4 | 实现 pybind11 绑定和公共 Python 模块 | `graph_python.cc`、`mobilenet_runtime_graph` | 完成 |
 | S5 | 建立 CMake 构建和 CTest | `CMakeLists.txt`、`tools/` | 完成 |
-| S6 | 编写并运行 C++/Python 测试 | `tests/`、`TestResults.md` | 完成 |
-| S7 | 补齐设计文档、测试报告和 skill | 本文件、`TestResults.md`、skill | 完成 |
+| S6 | 编写并运行 C++/Python 测试 | `tests/`、`test_results.md` | 完成 |
+| S7 | 补齐设计文档、测试报告和 skill | 本文件、`test_results.md`、skill | 完成 |
 
 ### 5.2 依赖关系
 
@@ -1263,5 +1263,5 @@ bash Graph/tools/build_with_zig.sh
 ### 6.9 测试结果
 
 真实环境、命令、输出、结论和风险记录见
-[TestResults.md](../TestResults.md)。该文件只记录实际执行结果，不复制本文件的
+[test_results.md](../tests/test_results.md)。该文件只记录实际执行结果，不复制本文件的
 设计性描述。

@@ -9,7 +9,7 @@
 | 模块目录 | `Build/converter/` |
 | 上游依赖 | `Graph`（图对象模型）、`Models/Qwen3`（Qwen3 Adapter） |
 | 下游模块 | `Build/optimizer`、`Build/serializer` |
-| 权威图设计 | [Graph/.doc/Graph设计文档.md](../../../Graph/.doc/Graph设计文档.md) |
+| 权威图设计 | [Graph/.doc/Graph_design.md](../../../Graph/.doc/Graph_design.md) |
 
 ## 1. 背景与目标
 
@@ -306,7 +306,7 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 | P4 | 实现 Qwen3 Adapter 与权重映射 | P2、P3 | `qwen3_adapter.py` |
 | P5 | 实现转换编排与 CLI | P4 | `converter.py`、`__main__.py` |
 | P6 | 编写单元测试并修复问题 | P5 | `test_converter.py` |
-| P7 | 输出转换报告与测试结果 | P6 | `tests/TestResults.md` |
+| P7 | 输出转换报告与测试结果 | P6 | `tests/test_results.md` |
 
 风险与应对：
 

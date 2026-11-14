@@ -9,7 +9,7 @@
 | 模块目录 | `Build/serializer/` |
 | 上游依赖 | `Build/converter`、`Build/optimizer` |
 | 下游消费 | Runtime Loader（后续实现）、本模块 Loader（校验用） |
-| 权威图设计 | [Graph/.doc/Graph设计文档.md](../../../Graph/.doc/Graph设计文档.md) |
+| 权威图设计 | [Graph/.doc/Graph_design.md](../../../Graph/.doc/Graph_design.md) |
 
 ## 1. 背景与目标
 
@@ -340,7 +340,7 @@ dtype 映射：
 | P4 | 实现 Loader 与图重建 | P1、converter | `loader.py` |
 | P5 | 实现权重打包与合成权重测试 | P2、P3 | 权重测试 |
 | P6 | CLI 与 Qwen3 模型包生成 | P3、P4 | `Build/artifacts/qwen3_0_6b/` |
-| P7 | 测试结果与风险记录 | P6 | `tests/TestResults.md` |
+| P7 | 测试结果与风险记录 | P6 | `tests/test_results.md` |
 
 风险与应对：
 

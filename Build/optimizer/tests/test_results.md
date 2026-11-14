@@ -4,8 +4,8 @@
 |------|------|
 | 报告日期 | 2026-11-14 |
 | 测试对象 | `Build.optimizer` |
-| 设计文档 | [optimizer_Design.md](../.doc/optimizer_Design.md) |
-| 完整阶段测试 | [Build/tests/TestResults.md](../../tests/TestResults.md) |
+| 设计文档 | [optimizer_design.md](../.doc/optimizer_design.md) |
+| 完整阶段测试 | [Build/tests/test_results.md](../../tests/test_results.md) |
 
 ## 1. 测试环境
 

@@ -6,7 +6,7 @@
 | 日期 | 2026-11-13 |
 | 被测代码 | `Models/Qwen3/qwen3_config.py`、`Models/Qwen3/qwen3_graph_builder.py` |
 | 测试代码 | `Models/Qwen3/test_qwen3_graph.py` |
-| 设计文档 | [Models/模型组图设计文档.md](../模型组图设计文档.md) |
+| 设计文档 | [Models_design.md](../../.doc/Models_design.md) |
 | 结论 | 12 个用例全部通过；图计数、权重形状和错误路径符合设计 |
 
 ## 1. 测试环境

@@ -214,7 +214,7 @@ ctest --test-dir Build/graph --output-on-failure
 
 ## 参考实现
 
-- 设计、实施与测试：`Graph/.doc/Graph设计文档.md`
+- 设计、实施与测试：`Graph/.doc/Graph_design.md`
 - 公共类型：`Graph/include/types.h`、`shape.h`、
   `storage.h`、`attr.h`
 - IR 对象：`Graph/include/tensor.h`、`op.h`、
@@ -224,4 +224,4 @@ ctest --test-dir Build/graph --output-on-failure
 - Python 公共模块：`Graph/python/mobilenet_runtime_graph.py`
 - 测试：`Graph/tests/graph_test.cc`、
   `Graph/tests/test_graph.py`
-- 测试报告：`Graph/TestResults.md`
+- 测试报告：`Graph/tests/test_results.md`

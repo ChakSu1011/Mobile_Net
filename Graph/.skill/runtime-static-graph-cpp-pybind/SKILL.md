@@ -214,7 +214,7 @@ ctest --test-dir Build/graph --output-on-failure
 
 ## 参考实现
 
-- 设计、实施与测试：`Graph/.doc/Graph设计文档.md`（合并版）
+- 设计、实施与测试：`Graph/.doc/Graph设计文档.md`
 - 公共类型：`Graph/include/runtime_graph/types.h`、`shape.h`、
   `storage.h`、`attr.h`
 - IR 对象：`Graph/include/runtime_graph/tensor.h`、`op.h`、

@@ -4,22 +4,15 @@
 |------|------|
 | 文档版本 | v1.1 |
 | 日期 | 2026-11-14 |
-| 文档性质 | 基础设计 + 实施 + 测试合并版 |
-| 来源 | 原 `Graph设计文档.md`（IR/类设计）+ `Graph模块实施与测试设计.md`（落地/测试） |
+| 文档性质 | Graph 模块设计文档（含实施与测试） |
 | 代码目录 | `Graph/` |
 | 验证目录 | `Build/graph/` |
 | 测试报告 | [TestResults.md](../TestResults.md) |
 | 配套 skill | [SKILL.md](../.skill/runtime-static-graph-cpp-pybind/SKILL.md) |
 
-> 合并说明：本文档由 `Graph设计文档.md` 的 IR/类设计与
-> `Graph模块实施与测试设计.md` 的实施/测试内容合并整理而成。
-> 原基础设计已备份为 [Graph设计文档_Bak.md](Graph设计文档_Bak.md)；
-> 原实施与测试文档已并入本文档。
-
-本文档记录 `Graph` 从 IR 设计到 C++ 实现、Python 绑定、构建测试和
-交付验证的完整设计。前半部分描述 IR 抽象结构与类接口，后续章节描述当前
-代码实际提供的接口、约束、错误路径和验证方式，并显式列出与早期基础设计的
-差异。
+本文档是 `Graph` 模块的唯一设计文档，覆盖 IR 设计、C++ 实现、Python
+绑定、构建与测试。第 3、4 章描述 IR 抽象结构与类接口，后续章节描述当前
+实现提供的接口、约束、错误路径和验证方式。
 
 ## 1. 背景与目标
 
@@ -36,17 +29,15 @@ Runtime 端在端侧 Device 上加载并执行静态图。`Graph` 是 Runtime �
 静态图 IR，负责回答“图里有哪些 op、tensor、常量和输入输出，它们如何连接，
 按什么顺序执行”，不负责算子实现、显存分配、精度/Shape 推导或序列化。
 
-仓库历史上曾有一套依赖 torch/ATen、以 `at::Tensor` 表达图 IR 的工具链
-Graph 模块；该实现已被本模块取代并从仓库删除。当前 `Graph/` 是唯一的图
-模块：
+`Graph/` 是仓库唯一的图模块：
 
 - 同时服务于 Python 工具链构图（经 pybind11）与 Runtime 端静态图执行；
 - 头文件和目标中不得出现 torch/ATen/c10，也不得依赖 GPU/OCL 算子库；
 - 只与 `Runtime/common/status.h` 共享错误码与 `Status` 类型。
 
-本文档第 3、4 章已定义 `Graph`、`Op`、
-`Tensor`、`Storage`、`Shape`、`GraphEnv`、`OpEnv` 和 `OpType`。本任务要求
-按该文档生成 C++ 代码，并把图构建接口通过 pybind11 暴露给 Python。
+本文档第 3、4 章定义 `Graph`、`Op`、`Tensor`、`Storage`、`Shape`、
+`GraphEnv`、`OpEnv` 和 `OpType`；C++ 实现与 pybind11 构图接口均以本文档
+为准。
 
 ### 1.2 目标
 
@@ -74,7 +65,7 @@ Graph 模块；该实现已被本模块取代并从仓库删除。当前 `Graph/
 
 | 交付物 | 位置 | 状态 |
 |--------|------|------|
-| 设计文档 | 本文档（合并版） | 已交付 |
+| 设计文档 | 本文档 | 已交付 |
 | C++ 代码 | `Graph/include/runtime_graph/`、`Graph/src/` | 已交付 |
 | Python 绑定 | `Graph/python/graph_python.cc`、`Graph/python/mobilenet_runtime_graph/` | 已交付 |
 | 测试 | `Graph/tests/graph_test.cc`、`Graph/tests/test_graph.py` | 已交付并通过 |
@@ -374,20 +365,6 @@ Python 调用 graph.create_op(...)
 | Python 公共包 | 薄加载器 | 兼容源码树和构建目录，不复制图逻辑 | 安装到 site-packages 时默认路径失效 |
 | 构建 | CMake + Ninja | 跨平台，易注册 CTest | 无 MSVC 时需 Zig 包装和归档器覆盖 |
 | 错误模型 | 复用 `Status` | 与 Runtime 其他模块一致 | Python 只保留消息，错误码未单独暴露 |
-
-### 3.7 与早期基础设计的落地差异
-
-| 编号 | 差异 | 原因 | 影响 |
-|------|------|------|------|
-| D-01 | `OpType` 增加 `kLinearRmsNorm`、`kLinearRmsNormRope`、`kLinearRmsNormRopeQuantPagedKVStore`、`kLinearRopeRotateQuant`、`kLinearMul`、`kLinearApe`、`kRmsNormRopeQuantPagedKVStore`、`kRopeQuantLinear`。 | 早期基础设计的 OpType 表中引用了这些值，但枚举片段遗漏；已同步补入早期基础设计和代码。 | Python 枚举、`OpTypeToStr` 与文档表一致。 |
-| D-02 | 新增 C++ 重载 `CreateInput(name, precision, layout, output)`。 | 早期基础设计的接口表描述了显式 precision/layout 声明，但 C++ 片段只有 legacy 版本。 | Python `create_input(name, precision, layout)` 可直接使用。 |
-| D-03 | 输出 tensor 固定命名为 `<op>.out`（单输出）或 `<op>.out.<index>`（多输出）。 | 早期基础设计未规定命名；固定规则保证 dump 和测试可重复。 | 外部加载器需遵循该命名，或改为显式传入名称。 |
-| D-04 | `GraphEnv` 当前只提供共享 Storage 的注册/查询；`OpEnv` 只提供接口与 MegaAttention 占位。 | 本次范围是 IR 与绑定，不含 Engine、Manager 和真实 kernel。 | Engine 接入前需扩展初始化、workspace 回填和具体 OpEnv。 |
-| D-05 | Python 不暴露 `Op`、`Storage`、`Shape` 对象；`create_constant` 用散装参数组装 Storage。 | 保持绑定面最小，避免 Python 侧依赖 C++ 内部布局。 | 无法从 Python 直接读取/修改 Storage；调试依赖 `dump_ir`。 |
-| D-06 | 未实现早期基础设计提到的 `Tensor(..., dtype=..., is_input=True)` / `mark_input(name, dtype)` 对象式包装。 | 原生 pybind 已提供等价的 `create_input(name, precision, layout)`；对象式构造需要额外的图归属和生命周期设计。 | 当前 Python 侧使用 `graph.create_input(...)`；后续可在薄包装层补充，不改变 C++ IR。 |
-| D-07 | `MegaAttentionOpEnv::Forward()` 返回 `UNSUPPORTED_OP`，`NeedTempData()` 返回 `true`。 | 真实 MegaAttention kernel 不在本模块范围。 | 只能验证接口和生命周期，不能验证 attention 数值结果。 |
-| D-08 | 新增 `mobilenet_runtime_graph` Python 公共包。 | 统一导出原生类型，并支持源码树/环境变量两种加载路径。 | 属于便利层，不改变 `_graph` 的行为。 |
-| D-09 | `Graph` 析构函数不再使用 `= default`，而是先对所有 op 调用 `ClearOpEnv()`。 | `graph_env_` 是最后一个成员，默认析构会先释放 GraphEnv，再析构 OpEnv；派生 OpEnv 若在析构中访问 GraphEnv 会悬空。 | 析构顺序安全；单测新增 `CountingOpEnv` 覆盖析构清理。 |
 
 ## 4. 详细设计
 
@@ -1157,10 +1134,9 @@ S1 -> S2 -> S3 -> S4 -> S5 -> S6 -> S7
 | R-03 | `.cmd` 包装脚本含中文注释时，cmd.exe 按本地代码页解析导致命令错乱。 | 全部改为 ASCII `rem` 注释和 CRLF 行尾。 |
 | R-04 | CTest 使用 `python -I`，忽略 `PYTHONUTF8`，中文输出在 GBK 控制台乱码。 | 测试本身仍通过；报告记录该现象，展示可读输出时使用 `PYTHONUTF8=1` 且不使用 `-I`。 |
 | R-05 | Python Tensor 是非拥有句柄，Graph 先析构会悬空。 | 绑定使用 `reference` 策略；模块 docstring、公共包 docstring、测试和本文档均明确生命周期。 |
-| R-06 | 早期基础设计的 OpType 表与枚举片段不一致。 | 补齐 8 个枚举值，并同步更新早期基础设计、代码、Python 绑定和测试。 |
-| R-07 | 公共包的默认构建目录只适用于源码树。 | 优先 `sys.path`，其次 `GRAPH_PYTHON_DIR`，最后源码树默认路径；安装场景需设置环境变量或安装扩展。 |
-| R-08 | 公开构图接口无法构造依赖环，环检测分支缺少正向测试。 | 保留防御性实现并在测试报告中列为未覆盖项，后续通过内部构建器或反序列化夹具补充。 |
-| R-09 | `.cmd` 与 `.sh` 传入的编译器路径斜杠/盘符大小写不一致，CMake 会重建缓存并丢失归档器覆盖。 | 两个脚本统一使用正斜杠，`.sh` 将盘符首字母转小写；交替执行验证为 `ninja: no work to do`。 |
+| R-06 | 公共包的默认构建目录只适用于源码树。 | 优先 `sys.path`，其次 `GRAPH_PYTHON_DIR`，最后源码树默认路径；安装场景需设置环境变量或安装扩展。 |
+| R-07 | 公开构图接口无法构造依赖环，环检测分支缺少正向测试。 | 保留防御性实现并在测试报告中列为未覆盖项，后续通过内部构建器或反序列化夹具补充。 |
+| R-08 | `.cmd` 与 `.sh` 传入的编译器路径斜杠/盘符大小写不一致，CMake 会重建缓存并丢失归档器覆盖。 | 两个脚本统一使用正斜杠，`.sh` 将盘符首字母转小写；交替执行验证为 `ninja: no work to do`。 |
 
 ### 5.5 后续工作
 
@@ -1281,9 +1257,8 @@ bash Graph/tools/build_with_zig.sh
 | U-07 | Python 错误码区分 | 只抛 `RuntimeError`/`ValueError`，不暴露 `ErrorCode` | 需要程序化处理时增加异常属性 |
 | U-08 | 常量数据内容校验 | 只验证元信息和指针标记，不读取权重 | 权重加载接入后增加数值校验 |
 | U-09 | Linux/macOS 原生构建 | 仅在 Windows + Zig 验证 | 增加 CI 矩阵 |
-| U-10 | 对象式 `mark_input` 包装 | 早期基础设计提到但未实现 | 在 Python 薄包装层补充并测试 |
-| U-11 | `byte_size` 与 shape/precision 的交叉校验 | 当前信任调用方，常量元信息可能不一致 | 在权重加载或 Finalizer 阶段校验 |
-| U-12 | `SetGraphEnv` / `SetOpEnv` 重复设置或清理顺序 | 替换/清理会让既有 OpEnv 的 `graph_env_` 悬空；当前依赖调用方前置条件 | Engine 接入时增加状态检查或调试断言 |
+| U-10 | `byte_size` 与 shape/precision 的交叉校验 | 当前信任调用方，常量元信息可能不一致 | 在权重加载或 Finalizer 阶段校验 |
+| U-11 | `SetGraphEnv` / `SetOpEnv` 重复设置或清理顺序 | 替换/清理会让既有 OpEnv 的 `graph_env_` 悬空；当前依赖调用方前置条件 | Engine 接入时增加状态检查或调试断言 |
 
 ### 6.9 测试结果
 

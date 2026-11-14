@@ -231,6 +231,7 @@ MobileNet/
 │   ├── src/               # 构图、排序、属性/存储/环境实现
 │   ├── python/            # pybind11 绑定与最小 Python 构图 API
 │   ├── build/             # CMake 构建输出（_graph 原生扩展）
+│   ├── tools/graph_visualizer/  # 静态图 SVG 可视化工具
 │   └── tests/             # Graph C++/Python 测试与 test_results.md
 ├── ToolChain/       # 离线工具链（Python）
 │   ├── .skill/            # 阶段级 skill

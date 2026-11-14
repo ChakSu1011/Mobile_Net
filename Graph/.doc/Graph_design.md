@@ -253,7 +253,7 @@ GPU/OCL。
 | `python/mobilenet_runtime_graph.py` | 公共模块加载器，导出原生类型和枚举。 |
 | `tests/graph_test.cc` | C++ 单元测试。 |
 | `tests/test_graph.py` | Python 单元测试。 |
-| `tools/` | CMake + Zig 本地构建包装脚本。 |
+| `tools/` | CMake + Zig 构建包装脚本；`graph_visualizer/` 为静态图 SVG 可视化工具。 |
 | `CMakeLists.txt` | 静态库、扩展、测试和 CTest 注册。 |
 
 ### 3.4 所有权关系

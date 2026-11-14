@@ -107,7 +107,8 @@
 ### 5.2 skill
 
 - 每个模块在模块根目录下设置独立的 `.skill/`。
-- skill 放在 `.skill/<skill-name>/`，入口文件为 `SKILL.md`。
+- skill 入口文件统一为 `SKILL.md`：单 skill 模块直接使用
+  `.skill/SKILL.md`；多 skill 模块使用 `.skill/<skill-name>/SKILL.md`。
 - skill 必须说明适用场景、输入、步骤、输出与常见陷阱，内容与本模块代码和
   设计文档一致。
 - 不得把模块 skill 放在仓库级 `Skills/` 或其他模块的 skill 目录中。

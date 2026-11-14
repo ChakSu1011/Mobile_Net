@@ -37,7 +37,7 @@ description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer 
 
 ## 输出（四件套）
 
-1. 设计文档：主设计文档对应章节，以及
+1. 设计文档：`.doc/MobileNet_design.md` 对应章节，以及
    `ToolChain/converter/.doc/converter_design.md`、
    `ToolChain/optimizer/.doc/optimizer_design.md`、
    `ToolChain/serializer/.doc/serializer_design.md`。

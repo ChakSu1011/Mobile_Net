@@ -1,7 +1,7 @@
 # 多后端插件架构知识库（NEAT 学习与 MobileNet 设计）
 
 > 本文件是学习沉淀，不是交付设计文档。设计文档见
-> `MobileNet_推理引擎_设计文档.md` 第 4.4 节。
+> [`.doc/MobileNet_design.md`](../../.doc/MobileNet_design.md) 第 4.4 节。
 >
 > 参考工程：`D:\Neat\NEAT_Develop\NEAT_Develop`。仅学习其架构思想，
 > 不复制其专有代码。

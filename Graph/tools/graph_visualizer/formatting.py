@@ -1,8 +1,7 @@
-"""模块：可视化标签、属性和形状格式化。
+"""模块：可视化标签和形状格式化。
 
 职责：
-  提供精度缩写、shape 文本、属性值截断、文本换行与 XML 转义，
-  保证 SVG 输出稳定且可读。
+  提供精度缩写、shape 文本、文本换行与 XML 转义，保证 SVG 输出稳定且可读。
 
 边界：
   - 不读取模型包、不构建视图模型；
@@ -12,9 +11,8 @@
 from __future__ import annotations
 
 import textwrap
+from collections.abc import Iterable
 from html import escape
-from typing import Any
-
 _PRECISION_LABELS = {
     "unknown": "unknown",
     "float64": "fp64",
@@ -44,7 +42,7 @@ def precision_label(precision: str) -> str:
     return _PRECISION_LABELS.get(precision, precision)
 
 
-def format_shape(shape: Any) -> str:
+def format_shape(shape: Iterable[object]) -> str:
     """把 shape 序列格式化为 ``1×256×1024``。
 
     参数：
@@ -86,91 +84,6 @@ def display_width(text: str) -> int:
         else:
             width += 1
     return width
-
-
-def clip_text(text: str, max_width: int) -> str:
-    """按显示宽度截断文本。
-
-    参数：
-      text：原始文本；
-      max_width：最大显示宽度。
-
-    返回：
-      截断后的文本；发生截断时追加 ``...``。
-    """
-    if display_width(text) <= max_width:
-        return text
-    result = []
-    width = 0
-    for char in text:
-        char_width = display_width(char)
-        if width + char_width > max_width - 3:
-            break
-        result.append(char)
-        width += char_width
-    return "".join(result) + "..."
-
-
-def format_attr_value(value: Any, max_items: int) -> str:
-    """把单个属性值格式化为单行文本。
-
-    参数：
-      value：属性值；
-      max_items：列表内联的最大元素数。
-
-    返回：
-      单行文本；长列表/字典会截断。
-    """
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, (int, float)):
-        return str(value)
-    if isinstance(value, str):
-        return clip_text(value, 28)
-    if isinstance(value, (list, tuple)):
-        if len(value) <= max_items:
-            inner = ", ".join(
-                format_attr_value(item, max_items) for item in value)
-        else:
-            inner = f"{len(value)} items"
-        return clip_text(f"[{inner}]", 36)
-    if isinstance(value, dict):
-        parts = []
-        for index, (key, item) in enumerate(value.items()):
-            if index >= 3:
-                parts.append("...")
-                break
-            parts.append(
-                f"{key}: {format_attr_value(item, max_items)}")
-        return clip_text("{" + ", ".join(parts) + "}", 36)
-    return type(value).__name__
-
-
-def format_attrs(
-    attrs: dict[str, Any],
-    max_items: int,
-    max_entries: int = 4,
-) -> str:
-    """把算子属性格式化为一行文本。
-
-    参数：
-      attrs：算子属性字典；
-      max_items：列表内联的最大元素数；
-      max_entries：最多显示的属性个数。
-
-    返回：
-      ``key=value`` 逗号分隔文本；无属性时返回空字符串。
-    """
-    if not attrs:
-        return ""
-    parts = []
-    for index, key in enumerate(sorted(attrs)):
-        if index >= max_entries:
-            parts.append("...")
-            break
-        parts.append(
-            f"{key}={format_attr_value(attrs[key], max_items)}")
-    return ", ".join(parts)
 
 
 def wrap_lines(text: str, width: int = 44) -> list[str]:

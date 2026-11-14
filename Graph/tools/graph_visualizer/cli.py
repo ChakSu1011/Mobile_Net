@@ -66,12 +66,6 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         default=None,
         help="output SVG path (default: <artifacts>/<model>_graph.svg)",
     )
-    parser.add_argument(
-        "--max-label-items",
-        type=int,
-        default=4,
-        help="maximum list items shown in an attribute label",
-    )
     return parser.parse_args(argv)
 
 
@@ -86,14 +80,15 @@ def _run(args: argparse.Namespace) -> int:
     """
     package: LoadedPackage = load_model_package(args.package)
     view = build_view_model(package)
-    layout = layout_view(view, max_label_items=args.max_label_items)
+    layout = layout_view(view)
     output = args.output
     if output is None:
         output = default_output_path(resolve_package_dir(args.package))
     render_svg(view, layout, output)
     print(f"wrote {output}")
     print(f"nodes {len(view.nodes)}")
-    print(f"edges {len(view.edges)}")
+    print(f"tensor_edges {len(view.tensors)}")
+    print(f"links {len(view.links)}")
     for warning in view.warnings:
         print(f"warning: {warning}", file=sys.stderr)
     return 0

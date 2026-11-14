@@ -29,7 +29,7 @@ from ToolChain.common.model_ir import (  # noqa: E402
 from ToolChain.testing import make_tensor  # noqa: E402
 
 from graph_visualizer.composition import describe_op  # noqa: E402
-from graph_visualizer.formatting import format_attrs, format_shape  # noqa: E402
+from graph_visualizer.formatting import format_shape  # noqa: E402
 from graph_visualizer.layout import layout_view  # noqa: E402
 from graph_visualizer.package import (  # noqa: E402
     LoadedPackage,
@@ -171,14 +171,8 @@ class VisualizerTest(unittest.TestCase):
         self.assertEqual(format_shape((1, 256, 1024)), "1×256×1024")
         self.assertEqual(format_shape(()), "[]")
 
-    def test_attr_format(self) -> None:
-        """UT-VIS-009：长属性列表被截断。"""
-        text = format_attrs({"a": [1, 2, 3, 4, 5], "b": True}, 2)
-        self.assertIn("a=[5 items]", text)
-        self.assertIn("b=true", text)
-
     def test_view_model(self) -> None:
-        """UT-VIS-002：Qwen3 视图包含关键节点和参数边。"""
+        """UT-VIS-002：Qwen3 视图包含关键节点和 tensor 菱形。"""
         names = {node.id for node in self.view.nodes}
         self.assertIn("embedding", names)
         self.assertIn("layer.0.mlp_gate_up", names)
@@ -186,22 +180,32 @@ class VisualizerTest(unittest.TestCase):
         self.assertIn("lm_head", names)
         self.assertEqual(len(self.view.runs), 1)
         self.assertEqual(self.view.runs[0].run.repeat_count, 28)
-        parameters = [
-            edge for edge in self.view.edges if edge.kind == "parameter"]
-        self.assertEqual(len(parameters), 14)
+        kinds = [tensor.kind for tensor in self.view.tensors]
+        self.assertEqual(kinds.count("input"), 2)
+        self.assertEqual(kinds.count("output"), 1)
+        self.assertEqual(kinds.count("parameter"), 14)
+        parameter_links = [
+            link for link in self.view.links
+            if link.src.startswith("tensor:") and any(
+                tensor.id == link.src and tensor.kind == "parameter"
+                for tensor in self.view.tensors)
+        ]
+        self.assertEqual(len(parameter_links), 14)
         self.assertFalse(self.view.warnings)
 
     def test_parameter_labels(self) -> None:
-        """UT-VIS-005：参数边不显示权重名称或数值。"""
+        """UT-VIS-005：参数菱形只有精度与 shape。"""
         parameters = [
-            edge for edge in self.view.edges if edge.kind == "parameter"]
+            tensor for tensor in self.view.tensors
+            if tensor.kind == "parameter"]
         self.assertTrue(parameters)
-        for edge in parameters:
-            self.assertEqual(edge.precision, "float16")
-            self.assertTrue(edge.shape)
+        for tensor in parameters:
+            self.assertEqual(tensor.precision, "float16")
+            self.assertTrue(tensor.shape)
+            self.assertIsNone(tensor.caption)
 
     def test_render_deterministic(self) -> None:
-        """UT-VIS-010：两次渲染生成字节一致的 SVG。"""
+        """UT-VIS-009：两次渲染生成字节一致的 SVG。"""
         with tempfile.TemporaryDirectory() as directory:
             first = Path(directory) / "first.svg"
             second = Path(directory) / "second.svg"
@@ -211,7 +215,8 @@ class VisualizerTest(unittest.TestCase):
             text = first.read_text(encoding="utf-8")
             self.assertIn("DecoderLayer ×28", text)
             self.assertIn("kLinearSwiGlu", text)
-            self.assertIn("[fp16, 1024×1024]", text)
+            self.assertIn("1024×1024", text)
+            self.assertIn("fp16", text)
             self.assertNotIn("available", text)
             self.assertNotIn(".weight", text)
 

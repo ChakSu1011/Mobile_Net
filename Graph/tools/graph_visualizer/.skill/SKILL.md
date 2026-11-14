@@ -1,6 +1,6 @@
 ---
 name: graph_visualizer
-description: 把序列化后的 model.mgf 渲染为自上而下的静态 SVG 流程图，节点显示融合算子组成、类别、精度和属性，边显示精度与 shape，并折叠重复 Layer；适用于人工确认静态图结构。
+description: 把序列化后的 model.mgf 渲染为自上而下的静态 SVG 流程图，节点只显示融合算子名称/类型/类别/精度/散算子类别，输入、输出、激活和参数都以圆角菱形边显示精度与 shape，并折叠重复 Layer。
 ---
 
 # Graph 静态图可视化
@@ -8,8 +8,8 @@ description: 把序列化后的 model.mgf 渲染为自上而下的静态 SVG 流
 ## 适用场景
 
 - 已有 Serializer 生成的 `model.mgf`，需要人工确认融合算子图。
-- 需要查看每个融合算子由哪些散算子组成、类别、精度和关键属性。
-- 需要确认激活边与参数边的精度、shape 和方向。
+- 需要查看每个融合算子的类型、类别、精度和散算子类别。
+- 需要确认输入、输出、激活和参数菱形的精度、shape 与串接顺序。
 - 需要折叠重复的 Decoder Layer，并发现与其他层结构不同的差异层。
 
 ## 不适用场景
@@ -29,7 +29,7 @@ description: 把序列化后的 model.mgf 渲染为自上而下的静态 SVG 流
 ## 输出
 
 - 一个自包含 SVG 文件。
-- 终端摘要：节点数、边数、警告信息。
+- 终端摘要：节点数、菱形边数、连接数、警告信息。
 - 默认输出路径：`Models/<模型目录>/artifacts/<model-name>_graph.svg`。
 
 ## 标准流程
@@ -50,16 +50,18 @@ PYTHONUTF8=1 python Graph/tools/visualize_graph.py \
 1. 加载并校验 `model.mgf` 头部与 manifest 哈希。
 2. 从 manifest 构造 `ModelGraph`。
 3. 识别 `layer.<n>.*`，按结构签名合并连续相同层。
-4. 构建显示节点：输入/输出边界、融合算子、参数边。
-5. 计算自上而下 rank、节点尺寸和 Layer 背景框。
+4. 构建显示节点：融合算子、输入/输出/激活/参数 tensor 菱形。
+5. 计算自上而下 rank、节点/菱形尺寸和 Layer 背景框。
 6. 渲染 SVG 并输出警告。
 
 ## 核心规则
 
-- 节点为融合算子，显示名称、`OpType`、类别、精度、散算子组成和属性。
-- 输入、输出、激活边为实线箭头；参数边为虚线，带 `W` 标记。
-- 激活边标签：`tensor [precision, shape]`。
-- 参数边标签：仅 `[precision, shape]`，不显示权重名称、数值或哈希。
+- 节点为融合算子，只显示名称、`OpType`、类别、精度和散算子类别；
+  不显示 `attrs`。
+- 输入、输出、激活、参数全部绘制为串在流程中的圆角菱形。
+- 菱形内只显示精度和 shape；参数菱形使用虚线边框。
+- 输入/输出菱形外部显示 tensor 名；参数菱形不显示权重名称、数值或哈希。
+- shape 元素数 ≤ 1 的常量不绘制参数菱形。
 - 连续相同 Layer 只画一个代表性子图，标注 `×N (layer.a–layer.b)`。
 - 与基准层签名不同的 Layer 单独绘制，红色边框并标记“差异”。
 - 不提供完整展开模式。
@@ -68,9 +70,9 @@ PYTHONUTF8=1 python Graph/tools/visualize_graph.py \
 ## 检查清单
 
 - [ ] SVG 顶部有模型名、manifest/IR 哈希和图例。
-- [ ] 所有节点显示融合算子名称、类别、精度和组成。
-- [ ] 激活边为实线，参数边为虚线。
-- [ ] 参数边只显示精度和 shape。
+- [ ] 节点只显示名称、类型、类别、精度和散算子类别，无 attrs。
+- [ ] 输入/输出/激活/参数都是圆角菱形边。
+- [ ] 菱形只显示精度和 shape；参数菱形为虚线。
 - [ ] 重复 Layer 标注 `×N`，没有重复绘制 N 份。
 - [ ] 差异 Layer 单独显示并标记。
 - [ ] 输出位于模型 artifacts 目录。
@@ -80,13 +82,13 @@ PYTHONUTF8=1 python Graph/tools/visualize_graph.py \
 
 1. **把 `Graph/build` 当成本工具目录**：工具在
    `Graph/tools/graph_visualizer/`，构建输出在 `Graph/build/`。
-2. **读取 `weights.bin`**：可视化不需要权重内容，参数边只用 manifest
+2. **读取 `weights.bin`**：可视化不需要权重内容，参数菱形只用 manifest
    的 shape 和 precision。
 3. **把第一层的 embedding 输入误判为差异**：Layer 签名必须把外部
    activation 归一化为角色占位，而不是比较张量全名。
 4. **用 op 数量判断层是否相同**：必须比较归一化名称、类型、属性、连接
    和对外角色。
-5. **参数边显示权重名称或数值**：当前规则只显示精度和 shape，避免泄露
+5. **参数菱形显示权重名称或数值**：当前规则只显示精度和 shape，避免泄露
    权重内容并保持图面简洁。
 6. **输出到 ToolChain 或仓库根目录**：产物应写入
    `Models/<模型目录>/artifacts/`。

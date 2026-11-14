@@ -1,8 +1,8 @@
 """模块：自包含 SVG 渲染。
 
 职责：
-  把 ViewModel 与 LayoutResult 渲染为离线可打开的 SVG，包含节点、边、
-  参数边、Layer 背景框、图例和哈希信息。
+  把 ViewModel 与 LayoutResult 渲染为离线可打开的 SVG。融合算子为矩形节点，
+  输入/输出/激活/参数为串在数据流中的圆角菱形，菱形只显示精度与 shape。
 
 边界：
   - 不计算布局、不读取模型包；
@@ -12,17 +12,18 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 from graph_visualizer.composition import category_color
-from graph_visualizer.formatting import (
-    clip_text,
-    format_shape,
-    precision_label,
-    xml_escape,
+from graph_visualizer.formatting import xml_escape
+from graph_visualizer.layout import (
+    ComputeBox,
+    LayoutResult,
+    RunBox,
+    TensorBox,
 )
-from graph_visualizer.layout import LayoutResult, NodeBox, RunBox
-from graph_visualizer.view_model import Edge, Node, ViewModel
+from graph_visualizer.view_model import ViewModel
 
 
 def _fmt(value: float) -> str:
@@ -37,88 +38,40 @@ def _fmt(value: float) -> str:
     return f"{value:.1f}"
 
 
-def _node_fill(node: Node) -> str:
-    """返回节点填充色。
+def _tensor_color(tensor_kind: str) -> str:
+    """返回 tensor 菱形和连线的颜色。
 
     参数：
-      node：节点。
+      tensor_kind：input/activation/output/parameter。
 
     返回：
       十六进制颜色。
     """
-    if node.node_type == "input":
-        return "#eff6ff"
-    if node.node_type == "output":
-        return "#ecfdf5"
-    return "#ffffff"
-
-
-def _edge_color(edge: Edge) -> str:
-    """返回边颜色。
-
-    参数：
-      edge：边。
-
-    返回：
-      十六进制颜色。
-    """
-    if edge.kind == "parameter":
-        return "#d97706"
-    if edge.kind == "input":
+    if tensor_kind == "input":
         return "#2563eb"
-    if edge.kind == "output":
+    if tensor_kind == "output":
         return "#16a34a"
+    if tensor_kind == "parameter":
+        return "#d97706"
     return "#334155"
 
 
-def _marker_id(edge: Edge) -> str:
-    """返回边使用的箭头 marker ID。
+def _tensor_marker(tensor_kind: str) -> str:
+    """返回 tensor 连线箭头 marker ID。
 
     参数：
-      edge：边。
+      tensor_kind：tensor 类型。
 
     返回：
       marker ID。
     """
-    if edge.kind == "parameter":
-        return "arrow-param"
-    if edge.kind == "input":
+    if tensor_kind == "input":
         return "arrow-input"
-    if edge.kind == "output":
+    if tensor_kind == "output":
         return "arrow-output"
+    if tensor_kind == "parameter":
+        return "arrow-param"
     return "arrow-activation"
-
-
-def _edge_text(edge: Edge) -> str:
-    """返回边的可见标签。
-
-    参数：
-      edge：边。
-
-    返回：
-      参数边只显示精度与 shape；其他边显示 tensor 名、精度和 shape。
-    """
-    precision = precision_label(edge.precision)
-    shape = format_shape(edge.shape)
-    if edge.kind == "parameter":
-        return f"[{precision}, {shape}]"
-    return f"{edge.tensor} [{precision}, {shape}]"
-
-
-def _text_width(text: str, size: float) -> float:
-    """估算 SVG 文本宽度。
-
-    参数：
-      text：文本；
-      size：字号。
-
-    返回：
-      估算像素宽度。
-    """
-    width = 0.0
-    for char in text:
-        width += size * (1.8 if ord(char) > 0x2E80 else 0.62)
-    return width
 
 
 def _label(
@@ -145,7 +98,7 @@ def _label(
     返回：
       ``<text>`` 字符串。
     """
-    weight = " font-weight=\"600\"" if bold else ""
+    weight = ' font-weight="600"' if bold else ""
     return (
         f'<text x="{_fmt(x)}" y="{_fmt(y)}" font-size="{size}" '
         f'fill="{color}" text-anchor="{anchor}"{weight}>'
@@ -153,26 +106,62 @@ def _label(
     )
 
 
-def _edge_label(x: float, y: float, text: str) -> str:
-    """生成带白色背景的边标签。
+def _diamond_path(
+    cx: float,
+    cy: float,
+    half_width: float,
+    half_height: float,
+    radius: float = 10.0,
+) -> str:
+    """生成圆角菱形路径。
 
     参数：
-      x：中心横坐标；
-      y：中心纵坐标；
-      text：标签文本。
+      cx：中心横坐标；
+      cy：中心纵坐标；
+      half_width：水平半宽；
+      half_height：垂直半高；
+      radius：圆角距离。
 
     返回：
-      SVG 片段。
+      SVG path 的 ``d`` 属性值。
     """
-    clipped = clip_text(text, 52)
-    width = _text_width(clipped, 10.0) + 10.0
-    height = 16.0
+    top = (cx, cy - half_height)
+    right = (cx + half_width, cy)
+    bottom = (cx, cy + half_height)
+    left = (cx - half_width, cy)
+
+    def near(origin: tuple[float, float],
+             target: tuple[float, float]) -> tuple[float, float]:
+        """返回 origin 朝 target 方向 radius 处的点。"""
+        dx = target[0] - origin[0]
+        dy = target[1] - origin[1]
+        length = math.hypot(dx, dy)
+        if length == 0:
+            return origin
+        scale = min(radius, length / 2.0) / length
+        return (origin[0] + dx * scale, origin[1] + dy * scale)
+
+    top_left = near(top, left)
+    top_right = near(top, right)
+    right_top = near(right, top)
+    right_bottom = near(right, bottom)
+    bottom_right = near(bottom, right)
+    bottom_left = near(bottom, left)
+    left_bottom = near(left, bottom)
+    left_top = near(left, top)
     return (
-        f'<rect x="{_fmt(x - width / 2.0)}" '
-        f'y="{_fmt(y - height / 2.0)}" width="{_fmt(width)}" '
-        f'height="{_fmt(height)}" rx="3" fill="#ffffff" '
-        f'fill-opacity="0.92"/>\n'
-        + _label(x, y + 3.5, clipped, 10, "#475569", anchor="middle")
+        f"M {_fmt(top_left[0])} {_fmt(top_left[1])} "
+        f"Q {_fmt(top[0])} {_fmt(top[1])} "
+        f"{_fmt(top_right[0])} {_fmt(top_right[1])} "
+        f"L {_fmt(right_top[0])} {_fmt(right_top[1])} "
+        f"Q {_fmt(right[0])} {_fmt(right[1])} "
+        f"{_fmt(right_bottom[0])} {_fmt(right_bottom[1])} "
+        f"L {_fmt(bottom_right[0])} {_fmt(bottom_right[1])} "
+        f"Q {_fmt(bottom[0])} {_fmt(bottom[1])} "
+        f"{_fmt(bottom_left[0])} {_fmt(bottom_left[1])} "
+        f"L {_fmt(left_bottom[0])} {_fmt(left_bottom[1])} "
+        f"Q {_fmt(left[0])} {_fmt(left[1])} "
+        f"{_fmt(left_top[0])} {_fmt(left_top[1])} Z"
     )
 
 
@@ -185,28 +174,37 @@ def _render_legend(width: float) -> str:
     返回：
       SVG 片段。
     """
-    x = width - 250.0
-    y = 34.0
+    x = width - 290.0
+    y = 36.0
     parts = [
-        f'<rect x="{_fmt(x - 14)}" y="{_fmt(y - 20)}" '
-        f'width="236" height="76" rx="8" fill="#ffffff" '
+        f'<rect x="{_fmt(x - 14)}" y="{_fmt(y - 22)}" '
+        f'width="276" height="96" rx="8" fill="#ffffff" '
         f'stroke="#cbd5e1"/>',
         _label(x, y, "图例", 12, "#0f172a", bold=True),
     ]
     rows = (
-        ("#334155", "", "输入 / 激活 / 输出"),
-        ("#d97706", "5 4", "参数（仅精度与 shape）"),
-        ("#dc2626", "4 3", "差异 Layer"),
+        ("rect", "#475569", "融合算子"),
+        ("diamond", "#334155", "输入/激活/输出边（精度+shape）"),
+        ("diamond-param", "#d97706", "参数边（精度+shape）"),
+        ("box", "#dc2626", "差异 Layer"),
     )
-    for index, (color, dash, text) in enumerate(rows):
+    for index, (shape, color, text) in enumerate(rows):
         row_y = y + 20.0 + index * 18.0
-        dash_attr = f' stroke-dasharray="{dash}"' if dash else ""
-        parts.append(
-            f'<line x1="{_fmt(x)}" y1="{_fmt(row_y - 4)}" '
-            f'x2="{_fmt(x + 38)}" y2="{_fmt(row_y - 4)}" '
-            f'stroke="{color}" stroke-width="2"{dash_attr}/>'
-        )
-        parts.append(_label(x + 48, row_y, text, 10, "#334155"))
+        if shape in ("rect", "box"):
+            dash = ' stroke-dasharray="4 3"' if shape == "box" else ""
+            parts.append(
+                f'<rect x="{_fmt(x)}" y="{_fmt(row_y - 10)}" '
+                f'width="28" height="12" rx="3" fill="#ffffff" '
+                f'stroke="{color}"{dash}/>')
+        else:
+            dash = (
+                ' stroke-dasharray="5 3"'
+                if shape == "diamond-param" else ""
+            )
+            parts.append(
+                f'<path d="{_diamond_path(x + 14, row_y - 4, 15, 9, 4)}" '
+                f'fill="#ffffff" stroke="{color}"{dash}/>')
+        parts.append(_label(x + 40, row_y, text, 10, "#334155"))
     return "\n".join(parts)
 
 
@@ -221,7 +219,6 @@ def _render_run_box(run_box: RunBox) -> str:
     """
     run = run_box.view.run
     color = "#dc2626" if run.is_variant else "#94a3b8"
-    dash = "6 4"
     if run.repeat_count > 1:
         label = (
             f"DecoderLayer ×{run.repeat_count} "
@@ -232,12 +229,11 @@ def _render_run_box(run_box: RunBox) -> str:
         label = f"Layer {run.start}"
         if run.is_variant:
             label += " （差异）"
-    parts = [
+    return "\n".join([
         f'<rect x="{_fmt(run_box.x)}" y="{_fmt(run_box.y)}" '
         f'width="{_fmt(run_box.width)}" height="{_fmt(run_box.height)}" '
         f'rx="14" fill="#f8fafc" fill-opacity="0.72" '
-        f'stroke="{color}" stroke-width="2" '
-        f'stroke-dasharray="{dash}"/>',
+        f'stroke="{color}" stroke-width="2" stroke-dasharray="6 4"/>',
         _label(
             run_box.x + 14,
             run_box.y + 22,
@@ -246,12 +242,11 @@ def _render_run_box(run_box: RunBox) -> str:
             color,
             bold=True,
         ),
-    ]
-    return "\n".join(parts)
+    ])
 
 
-def _render_node(box: NodeBox) -> str:
-    """生成节点框与文本。
+def _render_compute(box: ComputeBox) -> str:
+    """生成融合算子矩形节点。
 
     参数：
       box：节点布局框。
@@ -264,15 +259,12 @@ def _render_node(box: NodeBox) -> str:
     parts = [
         f'<rect x="{_fmt(box.x)}" y="{_fmt(box.y)}" '
         f'width="{_fmt(box.width)}" height="{_fmt(box.height)}" '
-        f'rx="7" fill="{_node_fill(node)}" stroke="{stroke}" '
-        f'stroke-width="1.5"/>',
+        f'rx="7" fill="#ffffff" stroke="{stroke}" stroke-width="1.5"/>',
     ]
-    text_x = box.x + 12.0
-    text_y = box.y + 20.0
     for index, line in enumerate(box.lines):
         parts.append(_label(
-            text_x,
-            text_y + index * 17.0,
+            box.x + 12.0,
+            box.y + 20.0 + index * 17.0,
             line,
             13 if index == 0 else 10.5,
             "#0f172a",
@@ -281,57 +273,63 @@ def _render_node(box: NodeBox) -> str:
     return "\n".join(parts)
 
 
-def _render_parameter_edges(
-    view: ViewModel,
-    layout: LayoutResult,
-) -> str:
-    """生成参数边。
+def _render_tensor(box: TensorBox) -> str:
+    """生成圆角菱形 tensor 边。
 
     参数：
-      view：视图模型；
-      layout：布局结果。
+      box：tensor 菱形布局。
 
     返回：
       SVG 片段。
     """
-    grouped: dict[str, list[Edge]] = {}
-    for edge in view.edges:
-        if edge.kind == "parameter":
-            grouped.setdefault(edge.dst, []).append(edge)
-    parts = []
-    for dst, edges in grouped.items():
-        box = layout.boxes.get(dst)
-        if box is None:
-            continue
-        center_y = box.y + box.height / 2.0
-        count = len(edges)
-        for index, edge in enumerate(edges):
-            y = center_y + (index - (count - 1) / 2.0) * 18.0
-            parts.append(
-                f'<circle cx="{_fmt(box.x - 48)}" cy="{_fmt(y)}" '
-                f'r="9" fill="#fff7ed" stroke="#d97706"/>'
-            )
-            parts.append(_label(
-                box.x - 48, y + 3.5, "W", 9, "#b45309",
-                anchor="middle", bold=True))
-            parts.append(
-                f'<line x1="{_fmt(box.x - 38)}" y1="{_fmt(y)}" '
-                f'x2="{_fmt(box.x - 2)}" y2="{_fmt(y)}" '
-                f'stroke="#d97706" stroke-width="1.4" '
-                f'stroke-dasharray="5 4" '
-                f'marker-end="url(#arrow-param)"/>'
-            )
-            parts.append(_label(
-                box.x - 62, y + 3.5, _edge_text(edge), 9.5,
-                "#92400e", anchor="end"))
+    tensor = box.tensor
+    color = _tensor_color(tensor.kind)
+    dash = (
+        ' stroke-dasharray="6 4"'
+        if tensor.kind == "parameter" else ""
+    )
+    path = _diamond_path(
+        box.cx, box.cy, box.half_width, box.half_height)
+    parts = [
+        f'<path d="{path}" fill="#ffffff" stroke="{color}" '
+        f'stroke-width="1.6"{dash}/>',
+        _label(
+            box.cx,
+            box.cy - 3.0,
+            box.lines[0],
+            10,
+            color,
+            anchor="middle",
+            bold=True,
+        ),
+        _label(
+            box.cx,
+            box.cy + 11.0,
+            box.lines[1],
+            9.5,
+            "#334155",
+            anchor="middle",
+        ),
+    ]
+    if tensor.caption:
+        if tensor.kind == "input":
+            caption_y = box.cy - box.half_height - 12.0
+        else:
+            caption_y = box.cy + box.half_height + 14.0
+        parts.append(_label(
+            box.cx,
+            caption_y,
+            tensor.caption,
+            11,
+            color,
+            anchor="middle",
+            bold=True,
+        ))
     return "\n".join(parts)
 
 
-def _render_flow_edges(
-    view: ViewModel,
-    layout: LayoutResult,
-) -> str:
-    """生成激活/输入/输出边。
+def _render_links(view: ViewModel, layout: LayoutResult) -> str:
+    """生成算子与菱形之间的连线。
 
     参数：
       view：视图模型；
@@ -339,45 +337,42 @@ def _render_flow_edges(
 
     返回：
       SVG 片段。
-
-    主要逻辑：
-      边标签放在目标节点上方，同一目标的多条入边向上错开，避免多条边在
-      中点附近互相覆盖。
     """
-    incoming: dict[str, int] = {}
-    totals: dict[str, int] = {}
-    for edge in view.edges:
-        if edge.kind != "parameter" and edge.src is not None:
-            totals[edge.dst] = totals.get(edge.dst, 0) + 1
-
     parts = []
-    for edge in view.edges:
-        if edge.kind == "parameter" or edge.src is None:
+    for link in view.links:
+        src_compute = layout.computes.get(link.src)
+        dst_compute = layout.computes.get(link.dst)
+        src_tensor = layout.tensors.get(link.src)
+        dst_tensor = layout.tensors.get(link.dst)
+        color = "#334155"
+        marker = "arrow-activation"
+        x1 = y1 = x2 = y2 = 0.0
+        if src_compute is not None and dst_tensor is not None:
+            x1 = src_compute.x + src_compute.width / 2.0
+            y1 = src_compute.y + src_compute.height
+            x2 = dst_tensor.cx
+            y2 = dst_tensor.cy - dst_tensor.half_height
+            color = _tensor_color(dst_tensor.tensor.kind)
+            marker = _tensor_marker(dst_tensor.tensor.kind)
+        elif src_tensor is not None and dst_compute is not None:
+            x1 = src_tensor.cx
+            y1 = src_tensor.cy + src_tensor.half_height
+            x2 = dst_compute.x + dst_compute.width / 2.0
+            y2 = dst_compute.y
+            color = _tensor_color(src_tensor.tensor.kind)
+            marker = _tensor_marker(src_tensor.tensor.kind)
+            if src_tensor.tensor.kind == "parameter":
+                x1 = src_tensor.cx + src_tensor.half_width
+                y1 = src_tensor.cy
+                x2 = dst_compute.x
+                y2 = dst_compute.y + dst_compute.height / 2.0
+        else:
             continue
-        src = layout.boxes.get(edge.src)
-        dst = layout.boxes.get(edge.dst)
-        if src is None or dst is None:
-            continue
-        x1 = src.x + src.width / 2.0
-        y1 = src.y + src.height
-        x2 = dst.x + dst.width / 2.0
-        y2 = dst.y
-        control = max(40.0, abs(y2 - y1) * 0.45)
-        path = (
-            f"M {_fmt(x1)} {_fmt(y1)} C {_fmt(x1)} "
-            f"{_fmt(y1 + control)}, {_fmt(x2)} "
-            f"{_fmt(y2 - control)}, {_fmt(x2)} {_fmt(y2)}"
-        )
-        color = _edge_color(edge)
         parts.append(
-            f'<path d="{path}" fill="none" stroke="{color}" '
-            f'stroke-width="1.6" marker-end="url(#{_marker_id(edge)})"/>'
+            f'<line x1="{_fmt(x1)}" y1="{_fmt(y1)}" '
+            f'x2="{_fmt(x2)}" y2="{_fmt(y2)}" stroke="{color}" '
+            f'stroke-width="1.6" marker-end="url(#{marker})"/>'
         )
-        index = incoming.get(edge.dst, 0)
-        incoming[edge.dst] = index + 1
-        total = totals[edge.dst]
-        label_y = dst.y - 12.0 - (total - 1 - index) * 14.0
-        parts.append(_edge_label(x2, label_y, _edge_text(edge)))
     return "\n".join(parts)
 
 
@@ -435,9 +430,9 @@ def render_svg(
         _render_legend(layout.width),
     ]
     parts.extend(_render_run_box(box) for box in layout.run_boxes)
-    parts.append(_render_flow_edges(view, layout))
-    parts.append(_render_parameter_edges(view, layout))
-    parts.extend(_render_node(box) for box in layout.boxes.values())
+    parts.append(_render_links(view, layout))
+    parts.extend(_render_tensor(box) for box in layout.tensors.values())
+    parts.extend(_render_compute(box) for box in layout.computes.values())
     parts.append(_label(
         28,
         layout.height - 34,

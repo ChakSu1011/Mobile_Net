@@ -1,293 +1,260 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1570.0" height="3045.0" viewBox="0 0 1570.0 3045.0">
+<svg xmlns="http://www.w3.org/2000/svg" width="1430.0" height="4115.0" viewBox="0 0 1430.0 4115.0">
 <defs>
 <marker id="arrow-activation" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#334155"/></marker>
 <marker id="arrow-input" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#2563eb"/></marker>
 <marker id="arrow-output" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#16a34a"/></marker>
 <marker id="arrow-param" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#d97706"/></marker>
 </defs>
-<rect width="1570.0" height="3045.0" fill="#ffffff"/>
+<rect width="1430.0" height="4115.0" fill="#ffffff"/>
 <text x="28.0" y="38.0" font-size="22" fill="#0f172a" text-anchor="start" font-weight="600">qwen3_0_6b Static Graph</text>
 <text x="28.0" y="62.0" font-size="11" fill="#475569" text-anchor="start">model: qwen3_0_6b  |  manifest: 5f62384fe1fa14b0...  |  ir: 3578cbfd1ed37776...</text>
-<rect x="1306.0" y="14.0" width="236" height="76" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
-<text x="1320.0" y="34.0" font-size="12" fill="#0f172a" text-anchor="start" font-weight="600">图例</text>
-<line x1="1320.0" y1="50.0" x2="1358.0" y2="50.0" stroke="#334155" stroke-width="2"/>
-<text x="1368.0" y="54.0" font-size="10" fill="#334155" text-anchor="start">输入 / 激活 / 输出</text>
-<line x1="1320.0" y1="68.0" x2="1358.0" y2="68.0" stroke="#d97706" stroke-width="2" stroke-dasharray="5 4"/>
-<text x="1368.0" y="72.0" font-size="10" fill="#334155" text-anchor="start">参数（仅精度与 shape）</text>
-<line x1="1320.0" y1="86.0" x2="1358.0" y2="86.0" stroke="#dc2626" stroke-width="2" stroke-dasharray="4 3"/>
-<text x="1368.0" y="90.0" font-size="10" fill="#334155" text-anchor="start">差异 Layer</text>
-<rect x="280.0" y="399.0" width="1240.0" height="2037.0" rx="14" fill="#f8fafc" fill-opacity="0.72" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
-<text x="294.0" y="421.0" font-size="13" fill="#94a3b8" text-anchor="start" font-weight="600">DecoderLayer ×28 (layer.0–layer.27)</text>
-<path d="M 700.0 208.0 C 700.0 248.0, 900.0 226.0, 900.0 266.0" fill="none" stroke="#2563eb" stroke-width="1.6" marker-end="url(#arrow-input)"/>
-<rect x="808.2" y="246.0" width="183.6" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="900.0" y="257.5" font-size="10" fill="#475569" text-anchor="middle">input.input_ids [i64, 1×256]</text>
-<path d="M 900.0 375.0 C 900.0 415.0, 900.0 393.0, 900.0 433.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="795.8" y="413.0" width="208.4" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="900.0" y="424.5" font-size="10" fill="#475569" text-anchor="middle">embedding.out [fp16, 1×256×1024]</text>
-<path d="M 900.0 576.0 C 900.0 616.0, 440.0 594.0, 440.0 634.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="311.0" y="614.0" width="258.0" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="440.0" y="625.5" font-size="10" fill="#475569" text-anchor="middle">layer.0.attn_norm.out [fp16, 1×256×1024]</text>
-<path d="M 900.0 576.0 C 900.0 616.0, 900.0 594.0, 900.0 634.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="771.0" y="614.0" width="258.0" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="900.0" y="625.5" font-size="10" fill="#475569" text-anchor="middle">layer.0.attn_norm.out [fp16, 1×256×1024]</text>
-<path d="M 900.0 576.0 C 900.0 616.0, 1360.0 594.0, 1360.0 634.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="1231.0" y="614.0" width="258.0" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="1360.0" y="625.5" font-size="10" fill="#475569" text-anchor="middle">layer.0.attn_norm.out [fp16, 1×256×1024]</text>
-<path d="M 440.0 760.0 C 440.0 800.0, 652.5 778.0, 652.5 818.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="532.8" y="798.0" width="239.4" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="652.5" y="809.5" font-size="10" fill="#475569" text-anchor="middle">layer.0.q_proj.out [fp16, 1×256×2048]</text>
-<path d="M 900.0 760.0 C 900.0 800.0, 1147.5 778.0, 1147.5 818.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="1027.8" y="798.0" width="239.4" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="1147.5" y="809.5" font-size="10" fill="#475569" text-anchor="middle">layer.0.k_proj.out [fp16, 1×256×1024]</text>
-<path d="M 652.5 961.0 C 652.5 1001.0, 659.5 979.0, 659.5 1019.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="539.8" y="985.0" width="239.4" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="659.5" y="996.5" font-size="10" fill="#475569" text-anchor="middle">layer.0.q_norm.out [fp16, 1×256×2048]</text>
-<path d="M 1100.0 208.0 C 1100.0 573.0, 659.5 654.0, 659.5 1019.0" fill="none" stroke="#2563eb" stroke-width="1.6" marker-end="url(#arrow-input)"/>
-<rect x="558.4" y="999.0" width="202.2" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="659.5" y="1010.5" font-size="10" fill="#475569" text-anchor="middle">input.position_ids [i64, 1×256]</text>
-<path d="M 1147.5 961.0 C 1147.5 1001.0, 1140.5 979.0, 1140.5 1019.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="1020.8" y="985.0" width="239.4" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="1140.5" y="996.5" font-size="10" fill="#475569" text-anchor="middle">layer.0.k_norm.out [fp16, 1×256×1024]</text>
-<path d="M 1100.0 208.0 C 1100.0 573.0, 1140.5 654.0, 1140.5 1019.0" fill="none" stroke="#2563eb" stroke-width="1.6" marker-end="url(#arrow-input)"/>
-<rect x="1039.4" y="999.0" width="202.2" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="1140.5" y="1010.5" font-size="10" fill="#475569" text-anchor="middle">input.position_ids [i64, 1×256]</text>
-<path d="M 659.5 1162.0 C 659.5 1202.0, 900.0 1180.0, 900.0 1220.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="780.3" y="1172.0" width="239.4" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="900.0" y="1183.5" font-size="10" fill="#475569" text-anchor="middle">layer.0.q_rope.out [fp16, 1×256×2048]</text>
-<path d="M 1140.5 1162.0 C 1140.5 1202.0, 900.0 1180.0, 900.0 1220.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="780.3" y="1186.0" width="239.4" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="900.0" y="1197.5" font-size="10" fill="#475569" text-anchor="middle">layer.0.k_rope.out [fp16, 1×256×1024]</text>
-<path d="M 1360.0 760.0 C 1360.0 967.0, 900.0 1013.0, 900.0 1220.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="780.3" y="1200.0" width="239.4" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="900.0" y="1211.5" font-size="10" fill="#475569" text-anchor="middle">layer.0.v_proj.out [fp16, 1×256×1024]</text>
-<path d="M 900.0 1363.0 C 900.0 1403.0, 900.0 1381.0, 900.0 1421.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="786.5" y="1401.0" width="227.0" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="900.0" y="1412.5" font-size="10" fill="#475569" text-anchor="middle">layer.0.attn.out [fp16, 1×256×2048]</text>
-<path d="M 900.0 1547.0 C 900.0 1587.0, 900.0 1565.0, 900.0 1605.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="780.3" y="1571.0" width="239.4" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="900.0" y="1582.5" font-size="10" fill="#475569" text-anchor="middle">layer.0.o_proj.out [fp16, 1×256×1024]</text>
-<path d="M 900.0 375.0 C 900.0 928.5, 900.0 1051.5, 900.0 1605.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="795.8" y="1585.0" width="208.4" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="900.0" y="1596.5" font-size="10" fill="#475569" text-anchor="middle">embedding.out [fp16, 1×256×1024]</text>
-<path d="M 900.0 1697.0 C 900.0 1737.0, 900.0 1715.0, 900.0 1755.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="758.6" y="1735.0" width="282.8" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="900.0" y="1746.5" font-size="10" fill="#475569" text-anchor="middle">layer.0.attn_residual.out [fp16, 1×256×1024]</text>
-<path d="M 900.0 1898.0 C 900.0 1938.0, 900.0 1916.0, 900.0 1956.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="774.1" y="1936.0" width="251.8" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="900.0" y="1947.5" font-size="10" fill="#475569" text-anchor="middle">layer.0.mlp_norm.out [fp16, 1×256×1024]</text>
-<path d="M 900.0 2082.0 C 900.0 2122.0, 900.0 2100.0, 900.0 2140.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="764.8" y="2120.0" width="270.4" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="900.0" y="2131.5" font-size="10" fill="#475569" text-anchor="middle">layer.0.mlp_gate_up.out [fp16, 1×256×3072]</text>
-<path d="M 900.0 2266.0 C 900.0 2306.0, 900.0 2284.0, 900.0 2324.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="774.1" y="2290.0" width="251.8" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="900.0" y="2301.5" font-size="10" fill="#475569" text-anchor="middle">layer.0.mlp_down.out [fp16, 1×256×1024]</text>
-<path d="M 900.0 1697.0 C 900.0 1979.2, 900.0 2041.8, 900.0 2324.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="758.6" y="2304.0" width="282.8" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="900.0" y="2315.5" font-size="10" fill="#475569" text-anchor="middle">layer.0.attn_residual.out [fp16, 1×256×1024]</text>
-<path d="M 900.0 2416.0 C 900.0 2456.0, 900.0 2434.0, 900.0 2474.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="761.7" y="2454.0" width="276.6" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="900.0" y="2465.5" font-size="10" fill="#475569" text-anchor="middle">layer.0.mlp_residual.out [fp16, 1×256×1024]</text>
-<path d="M 900.0 2617.0 C 900.0 2657.0, 900.0 2635.0, 900.0 2675.0" fill="none" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<rect x="792.7" y="2655.0" width="214.6" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="900.0" y="2666.5" font-size="10" fill="#475569" text-anchor="middle">final_norm.out [fp16, 1×256×1024]</text>
-<path d="M 900.0 2801.0 C 900.0 2841.0, 900.0 2819.0, 900.0 2859.0" fill="none" stroke="#16a34a" stroke-width="1.6" marker-end="url(#arrow-output)"/>
-<rect x="795.8" y="2839.0" width="208.4" height="16.0" rx="3" fill="#ffffff" fill-opacity="0.92"/>
-<text x="900.0" y="2850.5" font-size="10" fill="#475569" text-anchor="middle">lm_head.out [fp16, 1×256×151936]</text>
-<circle cx="712.0" cy="320.5" r="9" fill="#fff7ed" stroke="#d97706"/>
-<text x="712.0" y="324.0" font-size="9" fill="#b45309" text-anchor="middle" font-weight="600">W</text>
-<line x1="722.0" y1="320.5" x2="758.0" y2="320.5" stroke="#d97706" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrow-param)"/>
-<text x="698.0" y="324.0" font-size="9.5" fill="#92400e" text-anchor="end">[fp16, 151936×1024]</text>
-<circle cx="691.0" cy="504.5" r="9" fill="#fff7ed" stroke="#d97706"/>
-<text x="691.0" y="508.0" font-size="9" fill="#b45309" text-anchor="middle" font-weight="600">W</text>
-<line x1="701.0" y1="504.5" x2="737.0" y2="504.5" stroke="#d97706" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrow-param)"/>
-<text x="677.0" y="508.0" font-size="9.5" fill="#92400e" text-anchor="end">[fp16, 1024]</text>
-<circle cx="252.0" cy="697.0" r="9" fill="#fff7ed" stroke="#d97706"/>
-<text x="252.0" y="700.5" font-size="9" fill="#b45309" text-anchor="middle" font-weight="600">W</text>
-<line x1="262.0" y1="697.0" x2="298.0" y2="697.0" stroke="#d97706" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrow-param)"/>
-<text x="238.0" y="700.5" font-size="9.5" fill="#92400e" text-anchor="end">[fp16, 2048×1024]</text>
-<circle cx="712.0" cy="697.0" r="9" fill="#fff7ed" stroke="#d97706"/>
-<text x="712.0" y="700.5" font-size="9" fill="#b45309" text-anchor="middle" font-weight="600">W</text>
-<line x1="722.0" y1="697.0" x2="758.0" y2="697.0" stroke="#d97706" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrow-param)"/>
-<text x="698.0" y="700.5" font-size="9.5" fill="#92400e" text-anchor="end">[fp16, 1024×1024]</text>
-<circle cx="1172.0" cy="697.0" r="9" fill="#fff7ed" stroke="#d97706"/>
-<text x="1172.0" y="700.5" font-size="9" fill="#b45309" text-anchor="middle" font-weight="600">W</text>
-<line x1="1182.0" y1="697.0" x2="1218.0" y2="697.0" stroke="#d97706" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrow-param)"/>
-<text x="1158.0" y="700.5" font-size="9.5" fill="#92400e" text-anchor="end">[fp16, 1024×1024]</text>
-<circle cx="447.0" cy="889.5" r="9" fill="#fff7ed" stroke="#d97706"/>
-<text x="447.0" y="893.0" font-size="9" fill="#b45309" text-anchor="middle" font-weight="600">W</text>
-<line x1="457.0" y1="889.5" x2="493.0" y2="889.5" stroke="#d97706" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrow-param)"/>
-<text x="433.0" y="893.0" font-size="9.5" fill="#92400e" text-anchor="end">[fp16, 128]</text>
-<circle cx="942.0" cy="889.5" r="9" fill="#fff7ed" stroke="#d97706"/>
-<text x="942.0" y="893.0" font-size="9" fill="#b45309" text-anchor="middle" font-weight="600">W</text>
-<line x1="952.0" y1="889.5" x2="988.0" y2="889.5" stroke="#d97706" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrow-param)"/>
-<text x="928.0" y="893.0" font-size="9.5" fill="#92400e" text-anchor="end">[fp16, 128]</text>
-<circle cx="712.0" cy="1484.0" r="9" fill="#fff7ed" stroke="#d97706"/>
-<text x="712.0" y="1487.5" font-size="9" fill="#b45309" text-anchor="middle" font-weight="600">W</text>
-<line x1="722.0" y1="1484.0" x2="758.0" y2="1484.0" stroke="#d97706" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrow-param)"/>
-<text x="698.0" y="1487.5" font-size="9.5" fill="#92400e" text-anchor="end">[fp16, 1024×2048]</text>
-<circle cx="691.0" cy="1826.5" r="9" fill="#fff7ed" stroke="#d97706"/>
-<text x="691.0" y="1830.0" font-size="9" fill="#b45309" text-anchor="middle" font-weight="600">W</text>
-<line x1="701.0" y1="1826.5" x2="737.0" y2="1826.5" stroke="#d97706" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrow-param)"/>
-<text x="677.0" y="1830.0" font-size="9.5" fill="#92400e" text-anchor="end">[fp16, 1024]</text>
-<circle cx="684.0" cy="2010.0" r="9" fill="#fff7ed" stroke="#d97706"/>
-<text x="684.0" y="2013.5" font-size="9" fill="#b45309" text-anchor="middle" font-weight="600">W</text>
-<line x1="694.0" y1="2010.0" x2="730.0" y2="2010.0" stroke="#d97706" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrow-param)"/>
-<text x="670.0" y="2013.5" font-size="9.5" fill="#92400e" text-anchor="end">[fp16, 3072×1024]</text>
-<circle cx="684.0" cy="2028.0" r="9" fill="#fff7ed" stroke="#d97706"/>
-<text x="684.0" y="2031.5" font-size="9" fill="#b45309" text-anchor="middle" font-weight="600">W</text>
-<line x1="694.0" y1="2028.0" x2="730.0" y2="2028.0" stroke="#d97706" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrow-param)"/>
-<text x="670.0" y="2031.5" font-size="9.5" fill="#92400e" text-anchor="end">[fp16, 3072×1024]</text>
-<circle cx="712.0" cy="2203.0" r="9" fill="#fff7ed" stroke="#d97706"/>
-<text x="712.0" y="2206.5" font-size="9" fill="#b45309" text-anchor="middle" font-weight="600">W</text>
-<line x1="722.0" y1="2203.0" x2="758.0" y2="2203.0" stroke="#d97706" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrow-param)"/>
-<text x="698.0" y="2206.5" font-size="9.5" fill="#92400e" text-anchor="end">[fp16, 1024×3072]</text>
-<circle cx="691.0" cy="2545.5" r="9" fill="#fff7ed" stroke="#d97706"/>
-<text x="691.0" y="2549.0" font-size="9" fill="#b45309" text-anchor="middle" font-weight="600">W</text>
-<line x1="701.0" y1="2545.5" x2="737.0" y2="2545.5" stroke="#d97706" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrow-param)"/>
-<text x="677.0" y="2549.0" font-size="9.5" fill="#92400e" text-anchor="end">[fp16, 1024]</text>
-<circle cx="712.0" cy="2738.0" r="9" fill="#fff7ed" stroke="#d97706"/>
-<text x="712.0" y="2741.5" font-size="9" fill="#b45309" text-anchor="middle" font-weight="600">W</text>
-<line x1="722.0" y1="2738.0" x2="758.0" y2="2738.0" stroke="#d97706" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arrow-param)"/>
-<text x="698.0" y="2741.5" font-size="9.5" fill="#92400e" text-anchor="end">[fp16, 151936×1024]</text>
-<rect x="590.0" y="150.0" width="220.0" height="58.0" rx="7" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
-<text x="602.0" y="170.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">INPUT input.input_ids</text>
-<text x="602.0" y="187.0" font-size="10.5" fill="#0f172a" text-anchor="start">[i64, 1×256]</text>
-<rect x="990.0" y="150.0" width="220.0" height="58.0" rx="7" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
-<text x="1002.0" y="170.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">INPUT input.position_ids</text>
-<text x="1002.0" y="187.0" font-size="10.5" fill="#0f172a" text-anchor="start">[i64, 1×256]</text>
-<rect x="760.0" y="266.0" width="280.0" height="109.0" rx="7" fill="#ffffff" stroke="#0891b2" stroke-width="1.5"/>
-<text x="772.0" y="286.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">embedding</text>
-<text x="772.0" y="303.0" font-size="10.5" fill="#0f172a" text-anchor="start">kGather  [embedding / fp16]</text>
-<text x="772.0" y="320.0" font-size="10.5" fill="#0f172a" text-anchor="start">组成: gather</text>
-<text x="772.0" y="337.0" font-size="10.5" fill="#0f172a" text-anchor="start">attrs: axis=0, hidden_size=1024,</text>
-<text x="772.0" y="354.0" font-size="10.5" fill="#0f172a" text-anchor="start">precision=float16, vocab_size=151936</text>
-<rect x="739.0" y="433.0" width="322.0" height="143.0" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
-<text x="751.0" y="453.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.attn_norm</text>
-<text x="751.0" y="470.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRmsNorm  [norm / fp16]</text>
-<text x="751.0" y="487.0" font-size="10.5" fill="#0f172a" text-anchor="start">组成: pow → mean → add(eps) → rsqrt →</text>
-<text x="751.0" y="504.0" font-size="10.5" fill="#0f172a" text-anchor="start">mul(weight)</text>
-<text x="751.0" y="521.0" font-size="10.5" fill="#0f172a" text-anchor="start">attrs: accumulate_precision=float32,</text>
-<text x="751.0" y="538.0" font-size="10.5" fill="#0f172a" text-anchor="start">axis=-1, eps=1e-06, normalized_shape=1024,</text>
-<text x="751.0" y="555.0" font-size="10.5" fill="#0f172a" text-anchor="start">...</text>
-<rect x="300.0" y="634.0" width="280.0" height="126.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
-<text x="312.0" y="654.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.q_proj</text>
-<text x="312.0" y="671.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
-<text x="312.0" y="688.0" font-size="10.5" fill="#0f172a" text-anchor="start">组成: matmul</text>
-<text x="312.0" y="705.0" font-size="10.5" fill="#0f172a" text-anchor="start">attrs: accumulate_precision=float32,</text>
-<text x="312.0" y="722.0" font-size="10.5" fill="#0f172a" text-anchor="start">bias=false, in_features=1024,</text>
-<text x="312.0" y="739.0" font-size="10.5" fill="#0f172a" text-anchor="start">out_features=2048, ...</text>
-<rect x="760.0" y="634.0" width="280.0" height="126.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
-<text x="772.0" y="654.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.k_proj</text>
-<text x="772.0" y="671.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
-<text x="772.0" y="688.0" font-size="10.5" fill="#0f172a" text-anchor="start">组成: matmul</text>
-<text x="772.0" y="705.0" font-size="10.5" fill="#0f172a" text-anchor="start">attrs: accumulate_precision=float32,</text>
-<text x="772.0" y="722.0" font-size="10.5" fill="#0f172a" text-anchor="start">bias=false, in_features=1024,</text>
-<text x="772.0" y="739.0" font-size="10.5" fill="#0f172a" text-anchor="start">out_features=1024, ...</text>
-<rect x="1220.0" y="634.0" width="280.0" height="126.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
-<text x="1232.0" y="654.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.v_proj</text>
-<text x="1232.0" y="671.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
-<text x="1232.0" y="688.0" font-size="10.5" fill="#0f172a" text-anchor="start">组成: matmul</text>
-<text x="1232.0" y="705.0" font-size="10.5" fill="#0f172a" text-anchor="start">attrs: accumulate_precision=float32,</text>
-<text x="1232.0" y="722.0" font-size="10.5" fill="#0f172a" text-anchor="start">bias=false, in_features=1024,</text>
-<text x="1232.0" y="739.0" font-size="10.5" fill="#0f172a" text-anchor="start">out_features=1024, ...</text>
-<rect x="495.0" y="818.0" width="315.0" height="143.0" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
-<text x="507.0" y="838.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.q_norm</text>
-<text x="507.0" y="855.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRmsNorm  [norm / fp16]</text>
-<text x="507.0" y="872.0" font-size="10.5" fill="#0f172a" text-anchor="start">组成: pow → mean → add(eps) → rsqrt →</text>
-<text x="507.0" y="889.0" font-size="10.5" fill="#0f172a" text-anchor="start">mul(weight)</text>
-<text x="507.0" y="906.0" font-size="10.5" fill="#0f172a" text-anchor="start">attrs: accumulate_precision=float32,</text>
-<text x="507.0" y="923.0" font-size="10.5" fill="#0f172a" text-anchor="start">axis=-1, eps=1e-06, normalized_shape=128,</text>
-<text x="507.0" y="940.0" font-size="10.5" fill="#0f172a" text-anchor="start">...</text>
-<rect x="990.0" y="818.0" width="315.0" height="143.0" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
-<text x="1002.0" y="838.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.k_norm</text>
-<text x="1002.0" y="855.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRmsNorm  [norm / fp16]</text>
-<text x="1002.0" y="872.0" font-size="10.5" fill="#0f172a" text-anchor="start">组成: pow → mean → add(eps) → rsqrt →</text>
-<text x="1002.0" y="889.0" font-size="10.5" fill="#0f172a" text-anchor="start">mul(weight)</text>
-<text x="1002.0" y="906.0" font-size="10.5" fill="#0f172a" text-anchor="start">attrs: accumulate_precision=float32,</text>
-<text x="1002.0" y="923.0" font-size="10.5" fill="#0f172a" text-anchor="start">axis=-1, eps=1e-06, normalized_shape=128,</text>
-<text x="1002.0" y="940.0" font-size="10.5" fill="#0f172a" text-anchor="start">...</text>
-<rect x="509.0" y="1019.0" width="301.0" height="143.0" rx="7" fill="#ffffff" stroke="#c026d3" stroke-width="1.5"/>
-<text x="521.0" y="1039.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.q_rope</text>
-<text x="521.0" y="1056.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRope  [position / fp16]</text>
-<text x="521.0" y="1073.0" font-size="10.5" fill="#0f172a" text-anchor="start">组成: cos/sin → rotate_half → mul → add</text>
-<text x="521.0" y="1090.0" font-size="10.5" fill="#0f172a" text-anchor="start">attrs: accumulate_precision=float32,</text>
-<text x="521.0" y="1107.0" font-size="10.5" fill="#0f172a" text-anchor="start">head_dim=128, num_heads=16,</text>
-<text x="521.0" y="1124.0" font-size="10.5" fill="#0f172a" text-anchor="start">original_max_position_embeddings=40960,</text>
-<text x="521.0" y="1141.0" font-size="10.5" fill="#0f172a" text-anchor="start">...</text>
-<rect x="990.0" y="1019.0" width="301.0" height="143.0" rx="7" fill="#ffffff" stroke="#c026d3" stroke-width="1.5"/>
-<text x="1002.0" y="1039.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.k_rope</text>
-<text x="1002.0" y="1056.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRope  [position / fp16]</text>
-<text x="1002.0" y="1073.0" font-size="10.5" fill="#0f172a" text-anchor="start">组成: cos/sin → rotate_half → mul → add</text>
-<text x="1002.0" y="1090.0" font-size="10.5" fill="#0f172a" text-anchor="start">attrs: accumulate_precision=float32,</text>
-<text x="1002.0" y="1107.0" font-size="10.5" fill="#0f172a" text-anchor="start">head_dim=128, num_heads=8,</text>
-<text x="1002.0" y="1124.0" font-size="10.5" fill="#0f172a" text-anchor="start">original_max_position_embeddings=40960,</text>
-<text x="1002.0" y="1141.0" font-size="10.5" fill="#0f172a" text-anchor="start">...</text>
-<rect x="732.0" y="1220.0" width="336.0" height="143.0" rx="7" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
-<text x="744.0" y="1240.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.attn</text>
-<text x="744.0" y="1257.0" font-size="10.5" fill="#0f172a" text-anchor="start">kMegaAttention  [attention / fp16]</text>
-<text x="744.0" y="1274.0" font-size="10.5" fill="#0f172a" text-anchor="start">组成: repeat_kv → QK^T → scale → causal_mask</text>
-<text x="744.0" y="1291.0" font-size="10.5" fill="#0f172a" text-anchor="start">→ softmax → PV → merge_heads</text>
-<text x="744.0" y="1308.0" font-size="10.5" fill="#0f172a" text-anchor="start">attrs: accumulate_precision=float32,</text>
-<text x="744.0" y="1325.0" font-size="10.5" fill="#0f172a" text-anchor="start">causal=true, gqa_ratio=2,</text>
-<text x="744.0" y="1342.0" font-size="10.5" fill="#0f172a" text-anchor="start">has_output_projection=false, ...</text>
-<rect x="760.0" y="1421.0" width="280.0" height="126.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
-<text x="772.0" y="1441.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.o_proj</text>
-<text x="772.0" y="1458.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
-<text x="772.0" y="1475.0" font-size="10.5" fill="#0f172a" text-anchor="start">组成: matmul</text>
-<text x="772.0" y="1492.0" font-size="10.5" fill="#0f172a" text-anchor="start">attrs: accumulate_precision=float32,</text>
-<text x="772.0" y="1509.0" font-size="10.5" fill="#0f172a" text-anchor="start">bias=false, in_features=2048,</text>
-<text x="772.0" y="1526.0" font-size="10.5" fill="#0f172a" text-anchor="start">out_features=1024, ...</text>
-<rect x="790.0" y="1605.0" width="220.0" height="92.0" rx="7" fill="#ffffff" stroke="#334155" stroke-width="1.5"/>
-<text x="802.0" y="1625.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.attn_residual</text>
-<text x="802.0" y="1642.0" font-size="10.5" fill="#0f172a" text-anchor="start">kAdd  [elementwise / fp16]</text>
-<text x="802.0" y="1659.0" font-size="10.5" fill="#0f172a" text-anchor="start">组成: add</text>
-<text x="802.0" y="1676.0" font-size="10.5" fill="#0f172a" text-anchor="start">attrs: precision=float16</text>
-<rect x="739.0" y="1755.0" width="322.0" height="143.0" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
-<text x="751.0" y="1775.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.mlp_norm</text>
-<text x="751.0" y="1792.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRmsNorm  [norm / fp16]</text>
-<text x="751.0" y="1809.0" font-size="10.5" fill="#0f172a" text-anchor="start">组成: pow → mean → add(eps) → rsqrt →</text>
-<text x="751.0" y="1826.0" font-size="10.5" fill="#0f172a" text-anchor="start">mul(weight)</text>
-<text x="751.0" y="1843.0" font-size="10.5" fill="#0f172a" text-anchor="start">attrs: accumulate_precision=float32,</text>
-<text x="751.0" y="1860.0" font-size="10.5" fill="#0f172a" text-anchor="start">axis=-1, eps=1e-06, normalized_shape=1024,</text>
-<text x="751.0" y="1877.0" font-size="10.5" fill="#0f172a" text-anchor="start">...</text>
-<rect x="732.0" y="1956.0" width="336.0" height="126.0" rx="7" fill="#ffffff" stroke="#b45309" stroke-width="1.5"/>
-<text x="744.0" y="1976.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.mlp_gate_up</text>
-<text x="744.0" y="1993.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinearSwiGlu  [mlp / fp16]</text>
-<text x="744.0" y="2010.0" font-size="10.5" fill="#0f172a" text-anchor="start">组成: linear(gate) → linear(up) → silu → mul</text>
-<text x="744.0" y="2027.0" font-size="10.5" fill="#0f172a" text-anchor="start">attrs: accumulate_precision=float32,</text>
-<text x="744.0" y="2044.0" font-size="10.5" fill="#0f172a" text-anchor="start">activation=silu, bias=false,</text>
-<text x="744.0" y="2061.0" font-size="10.5" fill="#0f172a" text-anchor="start">hidden_size=1024, ...</text>
-<rect x="760.0" y="2140.0" width="280.0" height="126.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
-<text x="772.0" y="2160.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.mlp_down</text>
-<text x="772.0" y="2177.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
-<text x="772.0" y="2194.0" font-size="10.5" fill="#0f172a" text-anchor="start">组成: matmul</text>
-<text x="772.0" y="2211.0" font-size="10.5" fill="#0f172a" text-anchor="start">attrs: accumulate_precision=float32,</text>
-<text x="772.0" y="2228.0" font-size="10.5" fill="#0f172a" text-anchor="start">bias=false, in_features=3072,</text>
-<text x="772.0" y="2245.0" font-size="10.5" fill="#0f172a" text-anchor="start">out_features=1024, ...</text>
-<rect x="790.0" y="2324.0" width="220.0" height="92.0" rx="7" fill="#ffffff" stroke="#334155" stroke-width="1.5"/>
-<text x="802.0" y="2344.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.mlp_residual</text>
-<text x="802.0" y="2361.0" font-size="10.5" fill="#0f172a" text-anchor="start">kAdd  [elementwise / fp16]</text>
-<text x="802.0" y="2378.0" font-size="10.5" fill="#0f172a" text-anchor="start">组成: add</text>
-<text x="802.0" y="2395.0" font-size="10.5" fill="#0f172a" text-anchor="start">attrs: precision=float16</text>
-<rect x="739.0" y="2474.0" width="322.0" height="143.0" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
-<text x="751.0" y="2494.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">final_norm</text>
-<text x="751.0" y="2511.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRmsNorm  [norm / fp16]</text>
-<text x="751.0" y="2528.0" font-size="10.5" fill="#0f172a" text-anchor="start">组成: pow → mean → add(eps) → rsqrt →</text>
-<text x="751.0" y="2545.0" font-size="10.5" fill="#0f172a" text-anchor="start">mul(weight)</text>
-<text x="751.0" y="2562.0" font-size="10.5" fill="#0f172a" text-anchor="start">attrs: accumulate_precision=float32,</text>
-<text x="751.0" y="2579.0" font-size="10.5" fill="#0f172a" text-anchor="start">axis=-1, eps=1e-06, normalized_shape=1024,</text>
-<text x="751.0" y="2596.0" font-size="10.5" fill="#0f172a" text-anchor="start">...</text>
-<rect x="760.0" y="2675.0" width="280.0" height="126.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
-<text x="772.0" y="2695.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">lm_head</text>
-<text x="772.0" y="2712.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
-<text x="772.0" y="2729.0" font-size="10.5" fill="#0f172a" text-anchor="start">组成: matmul</text>
-<text x="772.0" y="2746.0" font-size="10.5" fill="#0f172a" text-anchor="start">attrs: accumulate_precision=float32,</text>
-<text x="772.0" y="2763.0" font-size="10.5" fill="#0f172a" text-anchor="start">bias=false, in_features=1024,</text>
-<text x="772.0" y="2780.0" font-size="10.5" fill="#0f172a" text-anchor="start">logits_to_keep=0, ...</text>
-<rect x="790.0" y="2859.0" width="220.0" height="58.0" rx="7" fill="#ecfdf5" stroke="#2563eb" stroke-width="1.5"/>
-<text x="802.0" y="2879.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">OUTPUT output.logits</text>
-<text x="802.0" y="2896.0" font-size="10.5" fill="#0f172a" text-anchor="start">[fp16, 1×256×151936]</text>
-<text x="28.0" y="3011.0" font-size="9.5" fill="#64748b" text-anchor="start">manifest SHA-256: 5f62384fe1fa14b0002b616c51309e9bf7e2b742ad41303d32ef4dd6a203f1df</text>
-<text x="28.0" y="3027.0" font-size="9.5" fill="#64748b" text-anchor="start">IR SHA-256: 3578cbfd1ed37776f8f6384c5b84d5c1ea24589bac5eed39a381376d0a94da20</text>
+<rect x="1126.0" y="14.0" width="276" height="96" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="1140.0" y="36.0" font-size="12" fill="#0f172a" text-anchor="start" font-weight="600">图例</text>
+<rect x="1140.0" y="46.0" width="28" height="12" rx="3" fill="#ffffff" stroke="#475569"/>
+<text x="1180.0" y="56.0" font-size="10" fill="#334155" text-anchor="start">融合算子</text>
+<path d="M 1150.6 63.1 Q 1154.0 61.0 1157.4 63.1 L 1165.6 67.9 Q 1169.0 70.0 1165.6 72.1 L 1157.4 76.9 Q 1154.0 79.0 1150.6 76.9 L 1142.4 72.1 Q 1139.0 70.0 1142.4 67.9 Z" fill="#ffffff" stroke="#334155"/>
+<text x="1180.0" y="74.0" font-size="10" fill="#334155" text-anchor="start">输入/激活/输出边（精度+shape）</text>
+<path d="M 1150.6 81.1 Q 1154.0 79.0 1157.4 81.1 L 1165.6 85.9 Q 1169.0 88.0 1165.6 90.1 L 1157.4 94.9 Q 1154.0 97.0 1150.6 94.9 L 1142.4 90.1 Q 1139.0 88.0 1142.4 85.9 Z" fill="#ffffff" stroke="#d97706" stroke-dasharray="5 3"/>
+<text x="1180.0" y="92.0" font-size="10" fill="#334155" text-anchor="start">参数边（精度+shape）</text>
+<rect x="1140.0" y="100.0" width="28" height="12" rx="3" fill="#ffffff" stroke="#dc2626" stroke-dasharray="4 3"/>
+<text x="1180.0" y="110.0" font-size="10" fill="#334155" text-anchor="start">差异 Layer</text>
+<rect x="280.0" y="517.0" width="1100.0" height="2832.0" rx="14" fill="#f8fafc" fill-opacity="0.72" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="294.0" y="539.0" font-size="13" fill="#94a3b8" text-anchor="start" font-weight="600">DecoderLayer ×28 (layer.0–layer.27)</text>
+<line x1="681.0" y1="228.0" x2="830.0" y2="290.0" stroke="#2563eb" stroke-width="1.6" marker-end="url(#arrow-input)"/>
+<line x1="654.0" y1="327.5" x2="720.0" y2="327.5" stroke="#d97706" stroke-width="1.6" marker-end="url(#arrow-param)"/>
+<line x1="830.0" y1="365.0" x2="830.0" y2="427.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="830.0" y1="495.0" x2="830.0" y2="557.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="631.0" y1="594.5" x2="697.0" y2="594.5" stroke="#d97706" stroke-width="1.6" marker-end="url(#arrow-param)"/>
+<line x1="830.0" y1="632.0" x2="830.0" y2="694.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="830.0" y1="762.0" x2="420.0" y2="824.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="244.0" y1="861.5" x2="310.0" y2="861.5" stroke="#d97706" stroke-width="1.6" marker-end="url(#arrow-param)"/>
+<line x1="420.0" y1="899.0" x2="532.0" y2="961.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="830.0" y1="762.0" x2="830.0" y2="824.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="654.0" y1="861.5" x2="720.0" y2="861.5" stroke="#d97706" stroke-width="1.6" marker-end="url(#arrow-param)"/>
+<line x1="830.0" y1="899.0" x2="830.0" y2="961.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="830.0" y1="762.0" x2="1240.0" y2="824.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="1064.0" y1="861.5" x2="1130.0" y2="861.5" stroke="#d97706" stroke-width="1.6" marker-end="url(#arrow-param)"/>
+<line x1="1240.0" y1="899.0" x2="1128.0" y2="961.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="532.0" y1="1029.0" x2="602.0" y2="1091.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="403.0" y1="1128.5" x2="469.0" y2="1128.5" stroke="#d97706" stroke-width="1.6" marker-end="url(#arrow-param)"/>
+<line x1="602.0" y1="1166.0" x2="681.0" y2="1228.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="830.0" y1="1029.0" x2="1058.0" y2="1091.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="859.0" y1="1128.5" x2="925.0" y2="1128.5" stroke="#d97706" stroke-width="1.6" marker-end="url(#arrow-param)"/>
+<line x1="1058.0" y1="1166.0" x2="979.0" y2="1228.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="681.0" y1="1296.0" x2="588.0" y2="1358.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="979.0" y1="228.0" x2="588.0" y2="1358.0" stroke="#2563eb" stroke-width="1.6" marker-end="url(#arrow-input)"/>
+<line x1="588.0" y1="1433.0" x2="681.0" y2="1495.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="979.0" y1="1296.0" x2="1072.0" y2="1358.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="979.0" y1="228.0" x2="1072.0" y2="1358.0" stroke="#2563eb" stroke-width="1.6" marker-end="url(#arrow-input)"/>
+<line x1="1072.0" y1="1433.0" x2="979.0" y2="1495.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="681.0" y1="1563.0" x2="830.0" y2="1625.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="979.0" y1="1563.0" x2="830.0" y2="1625.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="1128.0" y1="1029.0" x2="830.0" y2="1625.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="830.0" y1="1717.0" x2="830.0" y2="1779.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="830.0" y1="1847.0" x2="830.0" y2="1909.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="654.0" y1="1946.5" x2="720.0" y2="1946.5" stroke="#d97706" stroke-width="1.6" marker-end="url(#arrow-param)"/>
+<line x1="830.0" y1="1984.0" x2="830.0" y2="2046.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="830.0" y1="2114.0" x2="830.0" y2="2176.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="830.0" y1="495.0" x2="830.0" y2="2176.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="830.0" y1="2251.0" x2="830.0" y2="2313.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="830.0" y1="2381.0" x2="830.0" y2="2443.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="631.0" y1="2480.5" x2="697.0" y2="2480.5" stroke="#d97706" stroke-width="1.6" marker-end="url(#arrow-param)"/>
+<line x1="830.0" y1="2518.0" x2="830.0" y2="2580.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="830.0" y1="2648.0" x2="830.0" y2="2710.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="654.0" y1="2708.5" x2="720.0" y2="2747.5" stroke="#d97706" stroke-width="1.6" marker-end="url(#arrow-param)"/>
+<line x1="654.0" y1="2786.5" x2="720.0" y2="2747.5" stroke="#d97706" stroke-width="1.6" marker-end="url(#arrow-param)"/>
+<line x1="830.0" y1="2785.0" x2="830.0" y2="2847.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="830.0" y1="2915.0" x2="830.0" y2="2977.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="654.0" y1="3014.5" x2="720.0" y2="3014.5" stroke="#d97706" stroke-width="1.6" marker-end="url(#arrow-param)"/>
+<line x1="830.0" y1="3052.0" x2="830.0" y2="3114.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="830.0" y1="3182.0" x2="830.0" y2="3244.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="830.0" y1="2381.0" x2="830.0" y2="3244.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="830.0" y1="3319.0" x2="830.0" y2="3381.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="830.0" y1="3449.0" x2="830.0" y2="3511.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="631.0" y1="3548.5" x2="697.0" y2="3548.5" stroke="#d97706" stroke-width="1.6" marker-end="url(#arrow-param)"/>
+<line x1="830.0" y1="3586.0" x2="830.0" y2="3648.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="830.0" y1="3716.0" x2="830.0" y2="3778.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="654.0" y1="3815.5" x2="720.0" y2="3815.5" stroke="#d97706" stroke-width="1.6" marker-end="url(#arrow-param)"/>
+<line x1="830.0" y1="3853.0" x2="830.0" y2="3915.0" stroke="#16a34a" stroke-width="1.6" marker-end="url(#arrow-output)"/>
+<path d="M 672.5 165.3 Q 681.0 160.0 689.5 165.3 L 726.5 188.7 Q 735.0 194.0 726.5 199.3 L 689.5 222.7 Q 681.0 228.0 672.5 222.7 L 635.5 199.3 Q 627.0 194.0 635.5 188.7 Z" fill="#ffffff" stroke="#2563eb" stroke-width="1.6"/>
+<text x="681.0" y="191.0" font-size="10" fill="#2563eb" text-anchor="middle" font-weight="600">i64</text>
+<text x="681.0" y="205.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256</text>
+<text x="681.0" y="148.0" font-size="11" fill="#2563eb" text-anchor="middle" font-weight="600">input.input_ids</text>
+<path d="M 970.5 165.3 Q 979.0 160.0 987.5 165.3 L 1024.5 188.7 Q 1033.0 194.0 1024.5 199.3 L 987.5 222.7 Q 979.0 228.0 970.5 222.7 L 933.5 199.3 Q 925.0 194.0 933.5 188.7 Z" fill="#ffffff" stroke="#2563eb" stroke-width="1.6"/>
+<text x="979.0" y="191.0" font-size="10" fill="#2563eb" text-anchor="middle" font-weight="600">i64</text>
+<text x="979.0" y="205.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256</text>
+<text x="979.0" y="148.0" font-size="11" fill="#2563eb" text-anchor="middle" font-weight="600">input.position_ids</text>
+<path d="M 821.5 432.3 Q 830.0 427.0 838.5 432.3 L 875.5 455.7 Q 884.0 461.0 875.5 466.3 L 838.5 489.7 Q 830.0 495.0 821.5 489.7 L 784.5 466.3 Q 776.0 461.0 784.5 455.7 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="830.0" y="458.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="830.0" y="472.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 821.5 699.3 Q 830.0 694.0 838.5 699.3 L 875.5 722.7 Q 884.0 728.0 875.5 733.3 L 838.5 756.7 Q 830.0 762.0 821.5 756.7 L 784.5 733.3 Q 776.0 728.0 784.5 722.7 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="830.0" y="725.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="830.0" y="739.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 523.5 966.3 Q 532.0 961.0 540.5 966.3 L 577.5 989.7 Q 586.0 995.0 577.5 1000.3 L 540.5 1023.7 Q 532.0 1029.0 523.5 1023.7 L 486.5 1000.3 Q 478.0 995.0 486.5 989.7 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="532.0" y="992.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="532.0" y="1006.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×2048</text>
+<path d="M 821.5 966.3 Q 830.0 961.0 838.5 966.3 L 875.5 989.7 Q 884.0 995.0 875.5 1000.3 L 838.5 1023.7 Q 830.0 1029.0 821.5 1023.7 L 784.5 1000.3 Q 776.0 995.0 784.5 989.7 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="830.0" y="992.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="830.0" y="1006.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 1119.5 966.3 Q 1128.0 961.0 1136.5 966.3 L 1173.5 989.7 Q 1182.0 995.0 1173.5 1000.3 L 1136.5 1023.7 Q 1128.0 1029.0 1119.5 1023.7 L 1082.5 1000.3 Q 1074.0 995.0 1082.5 989.7 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="1128.0" y="992.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="1128.0" y="1006.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 672.5 1233.3 Q 681.0 1228.0 689.5 1233.3 L 726.5 1256.7 Q 735.0 1262.0 726.5 1267.3 L 689.5 1290.7 Q 681.0 1296.0 672.5 1290.7 L 635.5 1267.3 Q 627.0 1262.0 635.5 1256.7 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="681.0" y="1259.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="681.0" y="1273.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×2048</text>
+<path d="M 970.5 1233.3 Q 979.0 1228.0 987.5 1233.3 L 1024.5 1256.7 Q 1033.0 1262.0 1024.5 1267.3 L 987.5 1290.7 Q 979.0 1296.0 970.5 1290.7 L 933.5 1267.3 Q 925.0 1262.0 933.5 1256.7 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="979.0" y="1259.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="979.0" y="1273.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 672.5 1500.3 Q 681.0 1495.0 689.5 1500.3 L 726.5 1523.7 Q 735.0 1529.0 726.5 1534.3 L 689.5 1557.7 Q 681.0 1563.0 672.5 1557.7 L 635.5 1534.3 Q 627.0 1529.0 635.5 1523.7 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="681.0" y="1526.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="681.0" y="1540.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×2048</text>
+<path d="M 970.5 1500.3 Q 979.0 1495.0 987.5 1500.3 L 1024.5 1523.7 Q 1033.0 1529.0 1024.5 1534.3 L 987.5 1557.7 Q 979.0 1563.0 970.5 1557.7 L 933.5 1534.3 Q 925.0 1529.0 933.5 1523.7 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="979.0" y="1526.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="979.0" y="1540.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 821.5 1784.3 Q 830.0 1779.0 838.5 1784.3 L 875.5 1807.7 Q 884.0 1813.0 875.5 1818.3 L 838.5 1841.7 Q 830.0 1847.0 821.5 1841.7 L 784.5 1818.3 Q 776.0 1813.0 784.5 1807.7 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="830.0" y="1810.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="830.0" y="1824.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×2048</text>
+<path d="M 821.5 2051.3 Q 830.0 2046.0 838.5 2051.3 L 875.5 2074.7 Q 884.0 2080.0 875.5 2085.3 L 838.5 2108.7 Q 830.0 2114.0 821.5 2108.7 L 784.5 2085.3 Q 776.0 2080.0 784.5 2074.7 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="830.0" y="2077.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="830.0" y="2091.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 821.5 2318.3 Q 830.0 2313.0 838.5 2318.3 L 875.5 2341.7 Q 884.0 2347.0 875.5 2352.3 L 838.5 2375.7 Q 830.0 2381.0 821.5 2375.7 L 784.5 2352.3 Q 776.0 2347.0 784.5 2341.7 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="830.0" y="2344.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="830.0" y="2358.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 821.5 2585.3 Q 830.0 2580.0 838.5 2585.3 L 875.5 2608.7 Q 884.0 2614.0 875.5 2619.3 L 838.5 2642.7 Q 830.0 2648.0 821.5 2642.7 L 784.5 2619.3 Q 776.0 2614.0 784.5 2608.7 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="830.0" y="2611.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="830.0" y="2625.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 821.5 2852.3 Q 830.0 2847.0 838.5 2852.3 L 875.5 2875.7 Q 884.0 2881.0 875.5 2886.3 L 838.5 2909.7 Q 830.0 2915.0 821.5 2909.7 L 784.5 2886.3 Q 776.0 2881.0 784.5 2875.7 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="830.0" y="2878.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="830.0" y="2892.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×3072</text>
+<path d="M 821.5 3119.3 Q 830.0 3114.0 838.5 3119.3 L 875.5 3142.7 Q 884.0 3148.0 875.5 3153.3 L 838.5 3176.7 Q 830.0 3182.0 821.5 3176.7 L 784.5 3153.3 Q 776.0 3148.0 784.5 3142.7 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="830.0" y="3145.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="830.0" y="3159.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 821.5 3386.3 Q 830.0 3381.0 838.5 3386.3 L 875.5 3409.7 Q 884.0 3415.0 875.5 3420.3 L 838.5 3443.7 Q 830.0 3449.0 821.5 3443.7 L 784.5 3420.3 Q 776.0 3415.0 784.5 3409.7 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="830.0" y="3412.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="830.0" y="3426.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 821.5 3653.3 Q 830.0 3648.0 838.5 3653.3 L 875.5 3676.7 Q 884.0 3682.0 875.5 3687.3 L 838.5 3710.7 Q 830.0 3716.0 821.5 3710.7 L 784.5 3687.3 Q 776.0 3682.0 784.5 3676.7 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="830.0" y="3679.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="830.0" y="3693.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 821.5 3920.3 Q 830.0 3915.0 838.5 3920.3 L 875.5 3943.7 Q 884.0 3949.0 875.5 3954.3 L 838.5 3977.7 Q 830.0 3983.0 821.5 3977.7 L 784.5 3954.3 Q 776.0 3949.0 784.5 3943.7 Z" fill="#ffffff" stroke="#16a34a" stroke-width="1.6"/>
+<text x="830.0" y="3946.0" font-size="10" fill="#16a34a" text-anchor="middle" font-weight="600">fp16</text>
+<text x="830.0" y="3960.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×151936</text>
+<text x="830.0" y="3997.0" font-size="11" fill="#16a34a" text-anchor="middle" font-weight="600">output.logits</text>
+<path d="M 591.5 298.8 Q 600.0 293.5 608.5 298.8 L 645.5 322.2 Q 654.0 327.5 645.5 332.8 L 608.5 356.2 Q 600.0 361.5 591.5 356.2 L 554.5 332.8 Q 546.0 327.5 554.5 322.2 Z" fill="#ffffff" stroke="#d97706" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="600.0" y="324.5" font-size="10" fill="#d97706" text-anchor="middle" font-weight="600">fp16</text>
+<text x="600.0" y="338.5" font-size="9.5" fill="#334155" text-anchor="middle">151936×1024</text>
+<path d="M 568.5 565.8 Q 577.0 560.5 585.5 565.8 L 622.5 589.2 Q 631.0 594.5 622.5 599.8 L 585.5 623.2 Q 577.0 628.5 568.5 623.2 L 531.5 599.8 Q 523.0 594.5 531.5 589.2 Z" fill="#ffffff" stroke="#d97706" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="577.0" y="591.5" font-size="10" fill="#d97706" text-anchor="middle" font-weight="600">fp16</text>
+<text x="577.0" y="605.5" font-size="9.5" fill="#334155" text-anchor="middle">1024</text>
+<path d="M 181.5 832.8 Q 190.0 827.5 198.5 832.8 L 235.5 856.2 Q 244.0 861.5 235.5 866.8 L 198.5 890.2 Q 190.0 895.5 181.5 890.2 L 144.5 866.8 Q 136.0 861.5 144.5 856.2 Z" fill="#ffffff" stroke="#d97706" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="190.0" y="858.5" font-size="10" fill="#d97706" text-anchor="middle" font-weight="600">fp16</text>
+<text x="190.0" y="872.5" font-size="9.5" fill="#334155" text-anchor="middle">2048×1024</text>
+<path d="M 591.5 832.8 Q 600.0 827.5 608.5 832.8 L 645.5 856.2 Q 654.0 861.5 645.5 866.8 L 608.5 890.2 Q 600.0 895.5 591.5 890.2 L 554.5 866.8 Q 546.0 861.5 554.5 856.2 Z" fill="#ffffff" stroke="#d97706" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="600.0" y="858.5" font-size="10" fill="#d97706" text-anchor="middle" font-weight="600">fp16</text>
+<text x="600.0" y="872.5" font-size="9.5" fill="#334155" text-anchor="middle">1024×1024</text>
+<path d="M 1001.5 832.8 Q 1010.0 827.5 1018.5 832.8 L 1055.5 856.2 Q 1064.0 861.5 1055.5 866.8 L 1018.5 890.2 Q 1010.0 895.5 1001.5 890.2 L 964.5 866.8 Q 956.0 861.5 964.5 856.2 Z" fill="#ffffff" stroke="#d97706" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="1010.0" y="858.5" font-size="10" fill="#d97706" text-anchor="middle" font-weight="600">fp16</text>
+<text x="1010.0" y="872.5" font-size="9.5" fill="#334155" text-anchor="middle">1024×1024</text>
+<path d="M 340.5 1099.8 Q 349.0 1094.5 357.5 1099.8 L 394.5 1123.2 Q 403.0 1128.5 394.5 1133.8 L 357.5 1157.2 Q 349.0 1162.5 340.5 1157.2 L 303.5 1133.8 Q 295.0 1128.5 303.5 1123.2 Z" fill="#ffffff" stroke="#d97706" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="349.0" y="1125.5" font-size="10" fill="#d97706" text-anchor="middle" font-weight="600">fp16</text>
+<text x="349.0" y="1139.5" font-size="9.5" fill="#334155" text-anchor="middle">128</text>
+<path d="M 796.5 1099.8 Q 805.0 1094.5 813.5 1099.8 L 850.5 1123.2 Q 859.0 1128.5 850.5 1133.8 L 813.5 1157.2 Q 805.0 1162.5 796.5 1157.2 L 759.5 1133.8 Q 751.0 1128.5 759.5 1123.2 Z" fill="#ffffff" stroke="#d97706" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="805.0" y="1125.5" font-size="10" fill="#d97706" text-anchor="middle" font-weight="600">fp16</text>
+<text x="805.0" y="1139.5" font-size="9.5" fill="#334155" text-anchor="middle">128</text>
+<path d="M 591.5 1917.8 Q 600.0 1912.5 608.5 1917.8 L 645.5 1941.2 Q 654.0 1946.5 645.5 1951.8 L 608.5 1975.2 Q 600.0 1980.5 591.5 1975.2 L 554.5 1951.8 Q 546.0 1946.5 554.5 1941.2 Z" fill="#ffffff" stroke="#d97706" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="600.0" y="1943.5" font-size="10" fill="#d97706" text-anchor="middle" font-weight="600">fp16</text>
+<text x="600.0" y="1957.5" font-size="9.5" fill="#334155" text-anchor="middle">1024×2048</text>
+<path d="M 568.5 2451.8 Q 577.0 2446.5 585.5 2451.8 L 622.5 2475.2 Q 631.0 2480.5 622.5 2485.8 L 585.5 2509.2 Q 577.0 2514.5 568.5 2509.2 L 531.5 2485.8 Q 523.0 2480.5 531.5 2475.2 Z" fill="#ffffff" stroke="#d97706" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="577.0" y="2477.5" font-size="10" fill="#d97706" text-anchor="middle" font-weight="600">fp16</text>
+<text x="577.0" y="2491.5" font-size="9.5" fill="#334155" text-anchor="middle">1024</text>
+<path d="M 591.5 2679.8 Q 600.0 2674.5 608.5 2679.8 L 645.5 2703.2 Q 654.0 2708.5 645.5 2713.8 L 608.5 2737.2 Q 600.0 2742.5 591.5 2737.2 L 554.5 2713.8 Q 546.0 2708.5 554.5 2703.2 Z" fill="#ffffff" stroke="#d97706" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="600.0" y="2705.5" font-size="10" fill="#d97706" text-anchor="middle" font-weight="600">fp16</text>
+<text x="600.0" y="2719.5" font-size="9.5" fill="#334155" text-anchor="middle">3072×1024</text>
+<path d="M 591.5 2757.8 Q 600.0 2752.5 608.5 2757.8 L 645.5 2781.2 Q 654.0 2786.5 645.5 2791.8 L 608.5 2815.2 Q 600.0 2820.5 591.5 2815.2 L 554.5 2791.8 Q 546.0 2786.5 554.5 2781.2 Z" fill="#ffffff" stroke="#d97706" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="600.0" y="2783.5" font-size="10" fill="#d97706" text-anchor="middle" font-weight="600">fp16</text>
+<text x="600.0" y="2797.5" font-size="9.5" fill="#334155" text-anchor="middle">3072×1024</text>
+<path d="M 591.5 2985.8 Q 600.0 2980.5 608.5 2985.8 L 645.5 3009.2 Q 654.0 3014.5 645.5 3019.8 L 608.5 3043.2 Q 600.0 3048.5 591.5 3043.2 L 554.5 3019.8 Q 546.0 3014.5 554.5 3009.2 Z" fill="#ffffff" stroke="#d97706" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="600.0" y="3011.5" font-size="10" fill="#d97706" text-anchor="middle" font-weight="600">fp16</text>
+<text x="600.0" y="3025.5" font-size="9.5" fill="#334155" text-anchor="middle">1024×3072</text>
+<path d="M 568.5 3519.8 Q 577.0 3514.5 585.5 3519.8 L 622.5 3543.2 Q 631.0 3548.5 622.5 3553.8 L 585.5 3577.2 Q 577.0 3582.5 568.5 3577.2 L 531.5 3553.8 Q 523.0 3548.5 531.5 3543.2 Z" fill="#ffffff" stroke="#d97706" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="577.0" y="3545.5" font-size="10" fill="#d97706" text-anchor="middle" font-weight="600">fp16</text>
+<text x="577.0" y="3559.5" font-size="9.5" fill="#334155" text-anchor="middle">1024</text>
+<path d="M 591.5 3786.8 Q 600.0 3781.5 608.5 3786.8 L 645.5 3810.2 Q 654.0 3815.5 645.5 3820.8 L 608.5 3844.2 Q 600.0 3849.5 591.5 3844.2 L 554.5 3820.8 Q 546.0 3815.5 554.5 3810.2 Z" fill="#ffffff" stroke="#d97706" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="600.0" y="3812.5" font-size="10" fill="#d97706" text-anchor="middle" font-weight="600">fp16</text>
+<text x="600.0" y="3826.5" font-size="9.5" fill="#334155" text-anchor="middle">151936×1024</text>
+<rect x="720.0" y="290.0" width="220.0" height="75.0" rx="7" fill="#ffffff" stroke="#0891b2" stroke-width="1.5"/>
+<text x="732.0" y="310.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">embedding</text>
+<text x="732.0" y="327.0" font-size="10.5" fill="#0f172a" text-anchor="start">kGather  [embedding / fp16]</text>
+<text x="732.0" y="344.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: gather</text>
+<rect x="697.0" y="557.0" width="266.0" height="75.0" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+<text x="709.0" y="577.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.attn_norm</text>
+<text x="709.0" y="594.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRmsNorm  [norm / fp16]</text>
+<text x="709.0" y="611.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: pow, mean, add, rsqrt, mul</text>
+<rect x="310.0" y="824.0" width="220.0" height="75.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+<text x="322.0" y="844.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.q_proj</text>
+<text x="322.0" y="861.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
+<text x="322.0" y="878.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: matmul</text>
+<rect x="720.0" y="824.0" width="220.0" height="75.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+<text x="732.0" y="844.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.k_proj</text>
+<text x="732.0" y="861.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
+<text x="732.0" y="878.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: matmul</text>
+<rect x="1130.0" y="824.0" width="220.0" height="75.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+<text x="1142.0" y="844.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.v_proj</text>
+<text x="1142.0" y="861.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
+<text x="1142.0" y="878.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: matmul</text>
+<rect x="469.0" y="1091.0" width="266.0" height="75.0" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+<text x="481.0" y="1111.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.q_norm</text>
+<text x="481.0" y="1128.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRmsNorm  [norm / fp16]</text>
+<text x="481.0" y="1145.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: pow, mean, add, rsqrt, mul</text>
+<rect x="925.0" y="1091.0" width="266.0" height="75.0" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+<text x="937.0" y="1111.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.k_norm</text>
+<text x="937.0" y="1128.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRmsNorm  [norm / fp16]</text>
+<text x="937.0" y="1145.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: pow, mean, add, rsqrt, mul</text>
+<rect x="441.0" y="1358.0" width="294.0" height="75.0" rx="7" fill="#ffffff" stroke="#c026d3" stroke-width="1.5"/>
+<text x="453.0" y="1378.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.q_rope</text>
+<text x="453.0" y="1395.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRope  [position / fp16]</text>
+<text x="453.0" y="1412.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: cos/sin, rotate_half, mul, add</text>
+<rect x="925.0" y="1358.0" width="294.0" height="75.0" rx="7" fill="#ffffff" stroke="#c026d3" stroke-width="1.5"/>
+<text x="937.0" y="1378.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.k_rope</text>
+<text x="937.0" y="1395.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRope  [position / fp16]</text>
+<text x="937.0" y="1412.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: cos/sin, rotate_half, mul, add</text>
+<rect x="662.0" y="1625.0" width="336.0" height="92.0" rx="7" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="674.0" y="1645.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.attn</text>
+<text x="674.0" y="1662.0" font-size="10.5" fill="#0f172a" text-anchor="start">kMegaAttention  [attention / fp16]</text>
+<text x="674.0" y="1679.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: repeat_kv, QK^T, scale, causal_mask,</text>
+<text x="674.0" y="1696.0" font-size="10.5" fill="#0f172a" text-anchor="start">softmax, PV, merge_heads</text>
+<rect x="720.0" y="1909.0" width="220.0" height="75.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+<text x="732.0" y="1929.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.o_proj</text>
+<text x="732.0" y="1946.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
+<text x="732.0" y="1963.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: matmul</text>
+<rect x="720.0" y="2176.0" width="220.0" height="75.0" rx="7" fill="#ffffff" stroke="#334155" stroke-width="1.5"/>
+<text x="732.0" y="2196.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.attn_residual</text>
+<text x="732.0" y="2213.0" font-size="10.5" fill="#0f172a" text-anchor="start">kAdd  [elementwise / fp16]</text>
+<text x="732.0" y="2230.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: add</text>
+<rect x="697.0" y="2443.0" width="266.0" height="75.0" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+<text x="709.0" y="2463.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.mlp_norm</text>
+<text x="709.0" y="2480.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRmsNorm  [norm / fp16]</text>
+<text x="709.0" y="2497.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: pow, mean, add, rsqrt, mul</text>
+<rect x="720.0" y="2710.0" width="220.0" height="75.0" rx="7" fill="#ffffff" stroke="#b45309" stroke-width="1.5"/>
+<text x="732.0" y="2730.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.mlp_gate_up</text>
+<text x="732.0" y="2747.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinearSwiGlu  [mlp / fp16]</text>
+<text x="732.0" y="2764.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: linear, silu, mul</text>
+<rect x="720.0" y="2977.0" width="220.0" height="75.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+<text x="732.0" y="2997.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.mlp_down</text>
+<text x="732.0" y="3014.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
+<text x="732.0" y="3031.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: matmul</text>
+<rect x="720.0" y="3244.0" width="220.0" height="75.0" rx="7" fill="#ffffff" stroke="#334155" stroke-width="1.5"/>
+<text x="732.0" y="3264.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.mlp_residual</text>
+<text x="732.0" y="3281.0" font-size="10.5" fill="#0f172a" text-anchor="start">kAdd  [elementwise / fp16]</text>
+<text x="732.0" y="3298.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: add</text>
+<rect x="697.0" y="3511.0" width="266.0" height="75.0" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+<text x="709.0" y="3531.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">final_norm</text>
+<text x="709.0" y="3548.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRmsNorm  [norm / fp16]</text>
+<text x="709.0" y="3565.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: pow, mean, add, rsqrt, mul</text>
+<rect x="720.0" y="3778.0" width="220.0" height="75.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+<text x="732.0" y="3798.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">lm_head</text>
+<text x="732.0" y="3815.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
+<text x="732.0" y="3832.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: matmul</text>
+<text x="28.0" y="4081.0" font-size="9.5" fill="#64748b" text-anchor="start">manifest SHA-256: 5f62384fe1fa14b0002b616c51309e9bf7e2b742ad41303d32ef4dd6a203f1df</text>
+<text x="28.0" y="4097.0" font-size="9.5" fill="#64748b" text-anchor="start">IR SHA-256: 3578cbfd1ed37776f8f6384c5b84d5c1ea24589bac5eed39a381376d0a94da20</text>
 </svg>

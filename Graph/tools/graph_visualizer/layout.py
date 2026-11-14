@@ -1,34 +1,39 @@
 """模块：视图模型的至上而下布局。
 
 职责：
-  计算节点文本、尺寸、rank、坐标，以及 Layer 代表子图的背景框。
+  计算融合算子节点、tensor 菱形、参数菱形和 Layer 背景框的坐标。
 
 边界：
   - 不做 SVG 绘制；
-  - 参数边不参与 rank 计算；
-  - 布局失败（如 DAG 异常）时回退到顺序布局。
+  - 参数菱形不参与主数据流 rank，放在消费算子左侧；
+  - 布局失败时回退到顺序布局。
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from graph_visualizer.composition import op_type_label
 from graph_visualizer.formatting import (
     display_width,
-    format_attrs,
     format_shape,
     precision_label,
     wrap_lines,
 )
-from graph_visualizer.composition import op_type_label
-from graph_visualizer.view_model import LayerRunView, Node, ViewModel
+from graph_visualizer.view_model import (
+    LayerRunView,
+    Node,
+    TensorNode,
+    ViewModel,
+)
 
-_NODE_GAP = 180.0
+_NODE_GAP = 190.0
+_DIAMOND_HALF_HEIGHT = 34.0
 
 
 @dataclass(frozen=True)
-class NodeBox:
-    """节点的布局结果。
+class ComputeBox:
+    """融合算子节点的布局结果。
 
     属性：
       node：节点；
@@ -44,6 +49,27 @@ class NodeBox:
     y: float
     width: float
     height: float
+    lines: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class TensorBox:
+    """tensor 菱形布局结果。
+
+    属性：
+      tensor：tensor 节点；
+      cx：中心横坐标；
+      cy：中心纵坐标；
+      half_width：水平半宽；
+      half_height：垂直半高；
+      lines：菱形内文本行。
+    """
+
+    tensor: TensorNode
+    cx: float
+    cy: float
+    half_width: float
+    half_height: float
     lines: tuple[str, ...]
 
 
@@ -73,42 +99,54 @@ class LayoutResult:
     属性：
       width：画布宽度；
       height：画布高度；
-      boxes：节点 ID 到布局框的映射；
-      run_boxes：Layer 区间背景框列表。
+      computes：融合算子框；
+      tensors：tensor 菱形框；
+      run_boxes：Layer 区间背景框。
     """
 
     width: float
     height: float
-    boxes: dict[str, NodeBox]
+    computes: dict[str, ComputeBox]
+    tensors: dict[str, TensorBox]
     run_boxes: tuple[RunBox, ...]
 
 
-def _node_lines(node: Node, max_label_items: int) -> list[str]:
-    """生成节点显示文本行。
+def _scatter_categories(composition: tuple[str, ...]) -> list[str]:
+    """提取散算子类别并去重。
 
     参数：
-      node：节点；
-      max_label_items：属性列表内联上限。
+      composition：融合组成列表，例如 ``linear(gate)``。
 
     返回：
-      文本行列表。
+      去重后的基础类别列表。
     """
-    if node.node_type in ("input", "output"):
-        shape = format_shape(node.shape)
-        precision = precision_label(node.precision)
-        return [node.name, f"[{precision}, {shape}]"]
+    result = []
+    for item in composition:
+        base = item.split("(", 1)[0].strip()
+        if base and base not in result:
+            result.append(base)
+    return result
 
+
+def _node_lines(node: Node) -> list[str]:
+    """生成融合算子节点文本。
+
+    参数：
+      node：融合算子节点。
+
+    返回：
+      文本行列表；不包含属性。
+    """
     lines = wrap_lines(node.name, 40)
     lines.append(
         f"{op_type_label(node.op_type)}  [{node.category} / "
         f"{precision_label(node.precision)}]")
-    composition = " → ".join(node.composition)
-    if not composition:
-        composition = "未登记融合组成"
-    lines.extend(wrap_lines(f"组成: {composition}", 42))
-    attrs = format_attrs(node.attrs, max_label_items)
-    if attrs:
-        lines.extend(wrap_lines(f"attrs: {attrs}", 42))
+    categories = _scatter_categories(node.composition)
+    if categories:
+        scatter = "散算子: " + ", ".join(categories)
+    else:
+        scatter = "散算子: 未登记"
+    lines.extend(wrap_lines(scatter, 42))
     return lines
 
 
@@ -122,114 +160,234 @@ def _node_size(lines: list[str]) -> tuple[float, float]:
       ``(width, height)``。
     """
     text_width = max((display_width(line) for line in lines), default=0)
-    width = min(380.0, max(220.0, text_width * 7.0 + 28.0))
+    width = min(360.0, max(220.0, text_width * 7.0 + 28.0))
     height = 24.0 + len(lines) * 17.0
     return width, height
 
 
-def _ranks(view: ViewModel) -> dict[str, int]:
-    """计算节点的自上而下 rank。
+def _tensor_display(
+    tensor: TensorNode,
+) -> tuple[list[str], float, float]:
+    """计算 tensor 菱形文本与半宽/半高。
+
+    参数：
+      tensor：tensor 节点。
+
+    返回：
+      ``(lines, half_width, half_height)``。
+    """
+    lines = [
+        precision_label(tensor.precision),
+        format_shape(tensor.shape),
+    ]
+    text_width = max(display_width(line) for line in lines) * 6.0
+    half_width = max(54.0, text_width / 2.0 + 16.0)
+    return lines, half_width, _DIAMOND_HALF_HEIGHT
+
+
+def _ranks(view: ViewModel) -> tuple[dict[str, int], set[str]]:
+    """计算主数据流节点的 rank。
 
     参数：
       view：视图模型。
 
     返回：
-      节点 ID 到 rank 的映射。
+      ``(rank 映射, 参数菱形 ID 集合)``；参数菱形不参与 rank。
     """
-    node_ids = {node.id for node in view.nodes}
-    ranks = {node_id: 0 for node_id in node_ids}
-    edges = [
-        edge for edge in view.edges
-        if edge.kind != "parameter"
-        and edge.src is not None
-        and edge.src in node_ids
-        and edge.dst in node_ids
+    parameter_ids = {
+        tensor.id for tensor in view.tensors
+        if tensor.kind == "parameter"
+    }
+    ranks = {}
+    for node in view.nodes:
+        ranks[node.id] = 0
+    for tensor in view.tensors:
+        if tensor.kind != "parameter":
+            ranks[tensor.id] = 0
+            if tensor.kind == "input":
+                ranks[tensor.id] = 0
+    links = [
+        link for link in view.links
+        if link.src in ranks and link.dst in ranks
     ]
-    for _ in range(len(node_ids) + 1):
+    for _ in range(len(ranks) + 1):
         changed = False
-        for edge in edges:
-            candidate = ranks[edge.src] + 1
-            if candidate > ranks[edge.dst]:
-                ranks[edge.dst] = candidate
+        for link in links:
+            candidate = ranks[link.src] + 1
+            if candidate > ranks[link.dst]:
+                ranks[link.dst] = candidate
                 changed = True
         if not changed:
             break
-    return ranks
+    return ranks, parameter_ids
 
 
-def layout_view(
-    view: ViewModel,
-    max_label_items: int = 4,
-) -> LayoutResult:
+def _order_map(view: ViewModel) -> dict[str, int]:
+    """生成同级节点的稳定排序键。
+
+    参数：
+      view：视图模型。
+
+    返回：
+      节点/菱形 ID 到顺序号的映射。
+    """
+    order = {}
+    sequence = 0
+    for tensor in view.tensors:
+        if tensor.kind == "input":
+            order[tensor.id] = sequence
+            sequence += 1
+    for node in view.nodes:
+        order[node.id] = sequence
+        sequence += 1
+    for tensor in view.tensors:
+        if tensor.kind != "input":
+            order[tensor.id] = sequence
+            sequence += 1
+    return order
+
+
+def layout_view(view: ViewModel) -> LayoutResult:
     """计算视图的自上而下布局。
 
     参数：
-      view：视图模型；
-      max_label_items：属性列表内联上限。
+      view：视图模型。
 
     返回：
-      ``LayoutResult``；包含节点框和 Layer 背景框。
+      ``LayoutResult``；包含算子框、tensor 菱形和 Layer 背景框。
     """
-    ranks = _ranks(view)
-    order = {node.id: index for index, node in enumerate(view.nodes)}
-    rows: dict[int, list[Node]] = {}
-    for node in view.nodes:
-        rows.setdefault(ranks[node.id], []).append(node)
-    for row_nodes in rows.values():
-        row_nodes.sort(key=lambda node: order[node.id])
+    ranks, parameter_ids = _ranks(view)
+    order = _order_map(view)
 
-    prepared: dict[str, tuple[list[str], float, float]] = {}
-    for node in view.nodes:
-        lines = _node_lines(node, max_label_items)
-        width, height = _node_size(lines)
-        prepared[node.id] = (lines, width, height)
+    compute_lines = {node.id: _node_lines(node) for node in view.nodes}
+    compute_sizes = {
+        node.id: _node_size(compute_lines[node.id])
+        for node in view.nodes
+    }
+    tensor_lines = {
+        tensor.id: _tensor_display(tensor)
+        for tensor in view.tensors
+    }
+
+    main_ids = [
+        item_id for item_id in ranks
+        if item_id not in parameter_ids
+    ]
+    rows: dict[int, list[str]] = {}
+    for item_id in main_ids:
+        rows.setdefault(ranks[item_id], []).append(item_id)
+    for row in rows.values():
+        row.sort(key=lambda item_id: order.get(item_id, 0))
+
+    def item_size(item_id: str) -> tuple[float, float]:
+        """返回主数据流节点的布局尺寸。"""
+        if item_id in compute_sizes:
+            return compute_sizes[item_id]
+        _, half_width, half_height = tensor_lines[item_id]
+        return half_width * 2.0, half_height * 2.0
 
     row_widths = {}
     row_heights = {}
-    for rank, row_nodes in rows.items():
-        widths = [prepared[node.id][1] for node in row_nodes]
-        heights = [prepared[node.id][2] for node in row_nodes]
+    for rank, row in rows.items():
+        widths = [item_size(item_id)[0] for item_id in row]
+        heights = [item_size(item_id)[1] for item_id in row]
         row_widths[rank] = sum(widths) + _NODE_GAP * (len(widths) - 1)
         row_heights[rank] = max(heights)
 
-    left_margin = 300.0
-    right_margin = 70.0
+    left_margin = 310.0
+    right_margin = 80.0
     max_row_width = max(row_widths.values(), default=0.0)
     width = max(1100.0, max_row_width + left_margin + right_margin)
 
-    boxes: dict[str, NodeBox] = {}
-    y = 150.0
+    computes: dict[str, ComputeBox] = {}
+    tensors: dict[str, TensorBox] = {}
+    y = 160.0
     for rank in sorted(rows):
-        row_nodes = rows[rank]
-        x = left_margin + (width - left_margin - right_margin
-                           - row_widths[rank]) / 2.0
-        for node in row_nodes:
-            lines, node_width, node_height = prepared[node.id]
-            boxes[node.id] = NodeBox(
-                node=node,
-                x=x,
-                y=y + (row_heights[rank] - node_height) / 2.0,
-                width=node_width,
-                height=node_height,
+        row = rows[rank]
+        x = left_margin + (
+            width - left_margin - right_margin - row_widths[rank]
+        ) / 2.0
+        for item_id in row:
+            item_width, item_height = item_size(item_id)
+            if item_id in compute_sizes:
+                node = next(
+                    node for node in view.nodes if node.id == item_id)
+                computes[item_id] = ComputeBox(
+                    node=node,
+                    x=x,
+                    y=y + (row_heights[rank] - item_height) / 2.0,
+                    width=item_width,
+                    height=item_height,
+                    lines=tuple(compute_lines[item_id]),
+                )
+            else:
+                tensor = next(
+                    tensor for tensor in view.tensors
+                    if tensor.id == item_id)
+                lines, half_width, half_height = tensor_lines[item_id]
+                tensors[item_id] = TensorBox(
+                    tensor=tensor,
+                    cx=x + item_width / 2.0,
+                    cy=y + row_heights[rank] / 2.0,
+                    half_width=half_width,
+                    half_height=half_height,
+                    lines=tuple(lines),
+                )
+            x += item_width + _NODE_GAP
+        y += row_heights[rank] + 62.0
+
+    parameter_groups: dict[str, list[TensorNode]] = {}
+    for tensor in view.tensors:
+        if tensor.kind != "parameter":
+            continue
+        consumers = [
+            link.dst for link in view.links
+            if link.src == tensor.id and link.dst in computes
+        ]
+        if not consumers:
+            continue
+        parameter_groups.setdefault(consumers[0], []).append(tensor)
+
+    for consumer_id, group in parameter_groups.items():
+        box = computes.get(consumer_id)
+        if box is None:
+            continue
+        group.sort(key=lambda tensor: order.get(tensor.id, 0))
+        count = len(group)
+        for index, tensor in enumerate(group):
+            lines, half_width, half_height = tensor_lines[tensor.id]
+            offset = (index - (count - 1) / 2.0) * 78.0
+            tensors[tensor.id] = TensorBox(
+                tensor=tensor,
+                cx=box.x - 120.0,
+                cy=box.y + box.height / 2.0 + offset,
+                half_width=half_width,
+                half_height=half_height,
                 lines=tuple(lines),
             )
-            x += node_width + _NODE_GAP
-        y += row_heights[rank] + 58.0
 
     height = max(y + 70.0, 700.0)
 
     run_boxes = []
     for run_view in view.runs:
-        run_node_boxes = [
-            boxes[node_id] for node_id in run_view.node_ids
-            if node_id in boxes
+        run_computes = [
+            computes[node_id] for node_id in run_view.node_ids
+            if node_id in computes
         ]
-        if not run_node_boxes:
+        if not run_computes:
             continue
-        min_x = min(box.x for box in run_node_boxes) - 20.0
-        min_y = min(box.y for box in run_node_boxes) - 34.0
-        max_x = max(box.x + box.width for box in run_node_boxes) + 20.0
-        max_y = max(box.y + box.height for box in run_node_boxes) + 20.0
+        min_x = min(box.x for box in run_computes) - 30.0
+        min_y = min(box.y for box in run_computes) - 40.0
+        max_x = max(box.x + box.width for box in run_computes) + 30.0
+        max_y = max(box.y + box.height for box in run_computes) + 30.0
+        for tensor in tensors.values():
+            if tensor.tensor.kind == "parameter":
+                continue
+            if min_x <= tensor.cx <= max_x and min_y <= tensor.cy <= max_y:
+                min_x = min(min_x, tensor.cx - tensor.half_width - 10.0)
+                max_x = max(max_x, tensor.cx + tensor.half_width + 10.0)
+                min_y = min(min_y, tensor.cy - tensor.half_height - 10.0)
+                max_y = max(max_y, tensor.cy + tensor.half_height + 10.0)
         run_boxes.append(RunBox(
             view=run_view,
             x=min_x,
@@ -241,6 +399,7 @@ def layout_view(
     return LayoutResult(
         width=width,
         height=height,
-        boxes=boxes,
+        computes=computes,
+        tensors=tensors,
         run_boxes=tuple(run_boxes),
     )

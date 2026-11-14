@@ -172,7 +172,7 @@ class VisualizerTest(unittest.TestCase):
         self.assertEqual(format_shape(()), "[]")
 
     def test_view_model(self) -> None:
-        """UT-VIS-002：Qwen3 视图包含关键节点和 tensor 菱形。"""
+        """UT-VIS-002：Qwen3 视图包含关键节点和 tensor 平行四边形。"""
         names = {node.id for node in self.view.nodes}
         self.assertIn("embedding", names)
         self.assertIn("layer.0.mlp_gate_up", names)
@@ -194,7 +194,7 @@ class VisualizerTest(unittest.TestCase):
         self.assertFalse(self.view.warnings)
 
     def test_parameter_labels(self) -> None:
-        """UT-VIS-005：参数菱形只有精度与 shape。"""
+        """UT-VIS-005：参数平行四边形只有精度与 shape。"""
         parameters = [
             tensor for tensor in self.view.tensors
             if tensor.kind == "parameter"]

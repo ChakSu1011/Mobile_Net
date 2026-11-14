@@ -28,7 +28,7 @@ PYTHONUTF8=1 python Graph/tools/graph_visualizer/tests/test_visualizer.py -v
 实际输出（末尾）：
 
 ```text
-Ran 10 tests in 0.080s
+Ran 10 tests in 0.045s
 
 OK
 ```
@@ -40,10 +40,10 @@ OK
 | 编号 | 用例 | 结果 |
 |------|------|------|
 | UT-VIS-001 | Qwen3 包计数（2/310/423/1/735） | 通过 |
-| UT-VIS-002 | 视图模型包含 embedding、Layer ×28、final norm、LM Head，参数菱形 14 个 | 通过 |
+| UT-VIS-002 | 视图模型包含 embedding、Layer ×28、final norm、LM Head，参数平行四边形 14 个 | 通过 |
 | UT-VIS-003 | `linear_swi_glu` 融合组成 | 通过 |
 | UT-VIS-004 | 未知 OpType 不崩溃 | 通过 |
-| UT-VIS-005 | 参数菱形只有精度/shape，无 caption | 通过 |
+| UT-VIS-005 | 参数平行四边形只有精度/shape，无 caption | 通过 |
 | UT-VIS-006 | shape 使用 `×` 连接 | 通过 |
 | UT-VIS-007 | 三层同构折叠为 ×3；Qwen3 折叠为 ×28 | 通过 |
 | UT-VIS-008 | 三层中一层不同，差异层单独标记 | 通过 |
@@ -72,23 +72,23 @@ links 56
 | 项目 | 值 |
 |------|-----|
 | 路径 | `Models/Qwen3/artifacts/qwen3_0_6b_graph.svg` |
-| 大小 | 34 KB |
-| SHA-256 | `c604556ced84af9548078cffcc1304de5f522976689da789a0dde04a20c6b924` |
+| 大小 | 30 KB |
+| SHA-256 | `3036220fe3196e7d45605004c00a780c752aa87b5e60cd0772cc9d3b6f79cbf9` |
 | 画布 | 1430 × 4115 |
 | 融合算子节点 | 18 |
-| tensor 菱形 | 34 |
+| tensor 平行四边形 | 34 |
 | 连接 | 56 |
 | Layer 折叠 | `DecoderLayer ×28 (layer.0–layer.27)` |
-| 参数菱形 | 14 个，仅显示精度与 shape |
+| 参数平行四边形 | 14 个，仅显示精度与 shape |
 
 图中包含：
 
-- 2 个输入菱形：`input.input_ids`、`input.position_ids`；
+- 2 个输入平行四边形：`input.input_ids`、`input.position_ids`；
 - embedding；
 - 一个 Decoder Layer 代表子图，包含 15 个融合算子；
-- final norm、LM Head、1 个输出菱形；
-- 输入、激活、输出、参数全部为圆角菱形；
-- 参数菱形仅显示 `fp16` 与 shape，无权重名称、数值或哈希；
+- final norm、LM Head、1 个输出平行四边形；
+- 输入、激活、输出、参数全部为平行四边形；
+- 参数平行四边形仅显示 `fp16` 与 shape，无权重名称、数值或哈希；
 - 节点无 `attrs`，只显示名称、类型、类别、精度和散算子类别。
 
 ## 4. 人工验收
@@ -96,8 +96,8 @@ links 56
 待用户打开 SVG 后确认：
 
 - [ ] 节点只显示融合算子名称、类型、类别、精度和散算子类别；
-- [ ] 输入、输出、激活、参数都是串在流程中的圆角菱形；
-- [ ] 菱形只显示精度和 shape，参数菱形为虚线；
+- [ ] 输入、输出、激活、参数都是串在流程中的平行四边形；
+- [ ] 平行四边形只显示精度和 shape，参数平行四边形为虚线；
 - [ ] 重复 Layer 只画代表性子图并标注 `×28`；
 - [ ] 自上而下布局，箭头方向清晰；
 - [ ] 图例、标题、manifest/IR 哈希完整。
@@ -111,6 +111,6 @@ links 56
    人工检查，极端模型可能需要调整。
 4. **SVG 字体差异**：使用通用无衬线字体栈，不同浏览器的中文字体宽度可能
    略有差异。
-5. **不验证权重内容**：工具不读取 `weights.bin`，参数菱形只验证 manifest
+5. **不验证权重内容**：工具不读取 `weights.bin`，参数平行四边形只验证 manifest
    的 shape 与 precision。
 6. **不提供完整展开视图**：按需求只显示代表层和差异层。

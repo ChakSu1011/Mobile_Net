@@ -1,11 +1,11 @@
 """模块：视图模型的至上而下布局。
 
 职责：
-  计算融合算子节点、tensor 菱形、参数菱形和 Layer 背景框的坐标。
+  计算融合算子节点、tensor 数据边、参数数据边和 Layer 背景框的坐标。
 
 边界：
   - 不做 SVG 绘制；
-  - 参数菱形不参与主数据流 rank，放在消费算子左侧；
+  - 参数数据边不参与主数据流 rank，放在消费算子左侧；
   - 布局失败时回退到顺序布局。
 """
 
@@ -28,7 +28,7 @@ from graph_visualizer.view_model import (
 )
 
 _NODE_GAP = 190.0
-_DIAMOND_HALF_HEIGHT = 34.0
+_TENSOR_HALF_HEIGHT = 34.0
 
 
 @dataclass(frozen=True)
@@ -54,7 +54,7 @@ class ComputeBox:
 
 @dataclass(frozen=True)
 class TensorBox:
-    """tensor 菱形布局结果。
+    """tensor 数据边布局结果。
 
     属性：
       tensor：tensor 节点；
@@ -62,7 +62,7 @@ class TensorBox:
       cy：中心纵坐标；
       half_width：水平半宽；
       half_height：垂直半高；
-      lines：菱形内文本行。
+      lines：平行四边形内文本行。
     """
 
     tensor: TensorNode
@@ -100,7 +100,7 @@ class LayoutResult:
       width：画布宽度；
       height：画布高度；
       computes：融合算子框；
-      tensors：tensor 菱形框；
+      tensors：tensor 数据边框；
       run_boxes：Layer 区间背景框。
     """
 
@@ -168,7 +168,7 @@ def _node_size(lines: list[str]) -> tuple[float, float]:
 def _tensor_display(
     tensor: TensorNode,
 ) -> tuple[list[str], float, float]:
-    """计算 tensor 菱形文本与半宽/半高。
+    """计算 tensor 数据边文本与半宽/半高。
 
     参数：
       tensor：tensor 节点。
@@ -181,8 +181,8 @@ def _tensor_display(
         format_shape(tensor.shape),
     ]
     text_width = max(display_width(line) for line in lines) * 6.0
-    half_width = max(54.0, text_width / 2.0 + 16.0)
-    return lines, half_width, _DIAMOND_HALF_HEIGHT
+    half_width = max(54.0, text_width / 2.0 + 18.0)
+    return lines, half_width, _TENSOR_HALF_HEIGHT
 
 
 def _ranks(view: ViewModel) -> tuple[dict[str, int], set[str]]:
@@ -192,7 +192,7 @@ def _ranks(view: ViewModel) -> tuple[dict[str, int], set[str]]:
       view：视图模型。
 
     返回：
-      ``(rank 映射, 参数菱形 ID 集合)``；参数菱形不参与 rank。
+      ``(rank 映射, 参数数据边 ID 集合)``；参数数据边不参与 rank。
     """
     parameter_ids = {
         tensor.id for tensor in view.tensors
@@ -229,7 +229,7 @@ def _order_map(view: ViewModel) -> dict[str, int]:
       view：视图模型。
 
     返回：
-      节点/菱形 ID 到顺序号的映射。
+      节点/数据边 ID 到顺序号的映射。
     """
     order = {}
     sequence = 0
@@ -254,7 +254,7 @@ def layout_view(view: ViewModel) -> LayoutResult:
       view：视图模型。
 
     返回：
-      ``LayoutResult``；包含算子框、tensor 菱形和 Layer 背景框。
+      ``LayoutResult``；包含算子框、tensor 数据边和 Layer 背景框。
     """
     ranks, parameter_ids = _ranks(view)
     order = _order_map(view)

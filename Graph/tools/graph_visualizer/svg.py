@@ -2,7 +2,7 @@
 
 职责：
   把 ViewModel 与 LayoutResult 渲染为离线可打开的 SVG。融合算子为矩形节点，
-  输入/输出/激活/参数为串在数据流中的圆角菱形，菱形只显示精度与 shape。
+  输入/输出/激活/参数为串在数据流中的平行四边形，只显示精度与 shape。
 
 边界：
   - 不计算布局、不读取模型包；
@@ -39,7 +39,7 @@ def _fmt(value: float) -> str:
 
 
 def _tensor_color(tensor_kind: str) -> str:
-    """返回 tensor 菱形和连线的颜色。
+    """返回 tensor 数据边和连线的颜色。
 
     参数：
       tensor_kind：input/activation/output/parameter。
@@ -106,62 +106,34 @@ def _label(
     )
 
 
-def _diamond_path(
+def _parallelogram_path(
     cx: float,
     cy: float,
     half_width: float,
     half_height: float,
-    radius: float = 10.0,
+    slant: float = 12.0,
 ) -> str:
-    """生成圆角菱形路径。
+    """生成数据流平行四边形路径。
 
     参数：
       cx：中心横坐标；
       cy：中心纵坐标；
       half_width：水平半宽；
       half_height：垂直半高；
-      radius：圆角距离。
+      slant：上下边的水平偏移量。
 
     返回：
       SVG path 的 ``d`` 属性值。
     """
-    top = (cx, cy - half_height)
-    right = (cx + half_width, cy)
-    bottom = (cx, cy + half_height)
-    left = (cx - half_width, cy)
-
-    def near(origin: tuple[float, float],
-             target: tuple[float, float]) -> tuple[float, float]:
-        """返回 origin 朝 target 方向 radius 处的点。"""
-        dx = target[0] - origin[0]
-        dy = target[1] - origin[1]
-        length = math.hypot(dx, dy)
-        if length == 0:
-            return origin
-        scale = min(radius, length / 2.0) / length
-        return (origin[0] + dx * scale, origin[1] + dy * scale)
-
-    top_left = near(top, left)
-    top_right = near(top, right)
-    right_top = near(right, top)
-    right_bottom = near(right, bottom)
-    bottom_right = near(bottom, right)
-    bottom_left = near(bottom, left)
-    left_bottom = near(left, bottom)
-    left_top = near(left, top)
+    top_left = (cx - half_width + slant, cy - half_height)
+    top_right = (cx + half_width, cy - half_height)
+    bottom_right = (cx + half_width - slant, cy + half_height)
+    bottom_left = (cx - half_width, cy + half_height)
     return (
         f"M {_fmt(top_left[0])} {_fmt(top_left[1])} "
-        f"Q {_fmt(top[0])} {_fmt(top[1])} "
-        f"{_fmt(top_right[0])} {_fmt(top_right[1])} "
-        f"L {_fmt(right_top[0])} {_fmt(right_top[1])} "
-        f"Q {_fmt(right[0])} {_fmt(right[1])} "
-        f"{_fmt(right_bottom[0])} {_fmt(right_bottom[1])} "
+        f"L {_fmt(top_right[0])} {_fmt(top_right[1])} "
         f"L {_fmt(bottom_right[0])} {_fmt(bottom_right[1])} "
-        f"Q {_fmt(bottom[0])} {_fmt(bottom[1])} "
-        f"{_fmt(bottom_left[0])} {_fmt(bottom_left[1])} "
-        f"L {_fmt(left_bottom[0])} {_fmt(left_bottom[1])} "
-        f"Q {_fmt(left[0])} {_fmt(left[1])} "
-        f"{_fmt(left_top[0])} {_fmt(left_top[1])} Z"
+        f"L {_fmt(bottom_left[0])} {_fmt(bottom_left[1])} Z"
     )
 
 
@@ -184,8 +156,8 @@ def _render_legend(width: float) -> str:
     ]
     rows = (
         ("rect", "#475569", "融合算子"),
-        ("diamond", "#334155", "输入/激活/输出边（精度+shape）"),
-        ("diamond-param", "#d97706", "参数边（精度+shape）"),
+        ("data", "#334155", "输入/激活/输出边（精度+shape）"),
+        ("data-param", "#d97706", "参数边（精度+shape）"),
         ("box", "#dc2626", "差异 Layer"),
     )
     for index, (shape, color, text) in enumerate(rows):
@@ -199,10 +171,10 @@ def _render_legend(width: float) -> str:
         else:
             dash = (
                 ' stroke-dasharray="5 3"'
-                if shape == "diamond-param" else ""
+                if shape == "data-param" else ""
             )
             parts.append(
-                f'<path d="{_diamond_path(x + 14, row_y - 4, 15, 9, 4)}" '
+                f'<path d="{_parallelogram_path(x + 14, row_y - 4, 15, 9, 4)}" '
                 f'fill="#ffffff" stroke="{color}"{dash}/>')
         parts.append(_label(x + 40, row_y, text, 10, "#334155"))
     return "\n".join(parts)
@@ -274,10 +246,10 @@ def _render_compute(box: ComputeBox) -> str:
 
 
 def _render_tensor(box: TensorBox) -> str:
-    """生成圆角菱形 tensor 边。
+    """生成平行四边形 tensor 边。
 
     参数：
-      box：tensor 菱形布局。
+      box：tensor 数据边布局。
 
     返回：
       SVG 片段。
@@ -288,7 +260,7 @@ def _render_tensor(box: TensorBox) -> str:
         ' stroke-dasharray="6 4"'
         if tensor.kind == "parameter" else ""
     )
-    path = _diamond_path(
+    path = _parallelogram_path(
         box.cx, box.cy, box.half_width, box.half_height)
     parts = [
         f'<path d="{path}" fill="#ffffff" stroke="{color}" '
@@ -329,7 +301,7 @@ def _render_tensor(box: TensorBox) -> str:
 
 
 def _render_links(view: ViewModel, layout: LayoutResult) -> str:
-    """生成算子与菱形之间的连线。
+    """生成算子与数据边之间的连线。
 
     参数：
       view：视图模型；
@@ -362,7 +334,7 @@ def _render_links(view: ViewModel, layout: LayoutResult) -> str:
             color = _tensor_color(src_tensor.tensor.kind)
             marker = _tensor_marker(src_tensor.tensor.kind)
             if src_tensor.tensor.kind == "parameter":
-                x1 = src_tensor.cx + src_tensor.half_width
+                x1 = src_tensor.cx + src_tensor.half_width - 6.0
                 y1 = src_tensor.cy
                 x2 = dst_compute.x
                 y2 = dst_compute.y + dst_compute.height / 2.0

@@ -1,13 +1,13 @@
 """模块：静态图视图模型构建。
 
 职责：
-  把 ``ModelGraph`` 转换为融合算子节点、数据边菱形和 Layer 区间；折叠连续
-  相同层，为输入/输出/激活/参数生成唯一的 tensor 菱形。
+  把 ``ModelGraph`` 转换为融合算子节点、数据边平行四边形和 Layer 区间；折叠连续
+  相同层，为输入/输出/激活/参数生成唯一的 tensor 平行四边形。
 
 边界：
   - 不读取权重内容、不执行推理；
   - 不负责布局、SVG 绘制或命令行；
-  - 参数菱形只保留精度与 shape，不保留权重名称或数值。
+  - 参数平行四边形只保留精度与 shape，不保留权重名称或数值。
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ class Node:
 
 @dataclass(frozen=True)
 class TensorNode:
-    """数据边菱形节点。
+    """数据边平行四边形节点。
 
     属性：
       id：稳定 ID；
@@ -60,7 +60,7 @@ class TensorNode:
       precision：张量精度；
       shape：张量形状；
       kind：input/activation/output/parameter；
-      caption：输入/输出菱形外部显示的 tensor 名称。
+      caption：输入/输出平行四边形外部显示的 tensor 名称。
     """
 
     id: str
@@ -73,12 +73,12 @@ class TensorNode:
 
 @dataclass(frozen=True)
 class Link:
-    """节点或菱形之间的连接。
+    """节点或数据边之间的连接。
 
     属性：
       id：稳定连接 ID；
-      src：源节点/菱形 ID；
-      dst：目标节点/菱形 ID。
+      src：源节点/数据边 ID；
+      dst：目标节点/数据边 ID。
     """
 
     id: str
@@ -109,7 +109,7 @@ class ViewModel:
       manifest_sha256：manifest 哈希；
       ir_sha256：IR 哈希；
       nodes：融合算子节点；
-      tensors：输入/输出/激活/参数菱形；
+      tensors：输入/输出/激活/参数平行四边形；
       links：连接；
       runs：Layer 区间视图；
       warnings：构建警告。
@@ -310,7 +310,7 @@ def build_view_model(package: LoadedPackage) -> ViewModel:
       package：已校验的模型包。
 
     返回：
-      ``ViewModel``；包含融合算子节点、tensor 菱形和连接。
+      ``ViewModel``；包含融合算子节点、tensor 平行四边形和连接。
     """
     graph = package.model_graph
     runs = analyze_layer_runs(graph.ops, set(graph.constants))
@@ -349,16 +349,16 @@ def build_view_model(package: LoadedPackage) -> ViewModel:
         *,
         key_suffix: str = "",
     ) -> str | None:
-        """创建或更新一个 tensor 菱形。
+        """创建或更新一个 tensor 平行四边形。
 
         参数：
           name：原始张量名；
           kind：input/activation/output/parameter；
-          caption：输入/输出菱形外部说明；
-          key_suffix：参数菱形按消费者去重使用的后缀。
+          caption：输入/输出平行四边形外部说明；
+          key_suffix：参数平行四边形按消费者去重使用的后缀。
 
         返回：
-          tensor 菱形 ID；元数据缺失时返回 None。
+          tensor 平行四边形 ID；元数据缺失时返回 None。
         """
         mapped = _map_tensor_name(name, representative)
         meta = _edge_meta(graph, name, mapped)

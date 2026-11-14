@@ -287,7 +287,7 @@ class Qwen3GraphBuilder:
 
         主要逻辑：
           严格按 Transformers Qwen3DecoderLayer.forward 的顺序创建
-          attention norm、QKV、q/k norm、RoPE、attention、o_proj、
+          attention norm、Q/K 融合路径、V 投影、attention、o_proj、
           residual、MLP norm、SwiGLU、down_proj 和 residual。
         """
         config = self._config
@@ -299,18 +299,22 @@ class Qwen3GraphBuilder:
             self._constants[f"{prefix}.attn_norm.weight"],
             config.hidden_size,
         )
-        q_proj = self._linear(
-            f"{prefix}.q_proj",
+        q_path = self._linear_per_head_rms_norm_rope(
+            f"{prefix}.q_path",
             attn_norm,
             self._constants[f"{prefix}.q_proj.weight"],
-            config.hidden_size,
+            self._constants[f"{prefix}.q_norm.weight"],
+            position_ids,
+            config.num_attention_heads,
             config.q_width,
         )
-        k_proj = self._linear(
-            f"{prefix}.k_proj",
+        k_path = self._linear_per_head_rms_norm_rope(
+            f"{prefix}.k_path",
             attn_norm,
             self._constants[f"{prefix}.k_proj.weight"],
-            config.hidden_size,
+            self._constants[f"{prefix}.k_norm.weight"],
+            position_ids,
+            config.num_key_value_heads,
             config.kv_width,
         )
         v_proj = self._linear(
@@ -320,34 +324,8 @@ class Qwen3GraphBuilder:
             config.hidden_size,
             config.kv_width,
         )
-        q_norm = self._rms_norm(
-            f"{prefix}.q_norm",
-            q_proj,
-            self._constants[f"{prefix}.q_norm.weight"],
-            config.head_dim,
-            num_heads=config.num_attention_heads,
-        )
-        k_norm = self._rms_norm(
-            f"{prefix}.k_norm",
-            k_proj,
-            self._constants[f"{prefix}.k_norm.weight"],
-            config.head_dim,
-            num_kv_heads=config.num_key_value_heads,
-        )
-        q_rope = self._rope(
-            f"{prefix}.q_rope",
-            q_norm,
-            position_ids,
-            config.num_attention_heads,
-        )
-        k_rope = self._rope(
-            f"{prefix}.k_rope",
-            k_norm,
-            position_ids,
-            config.num_key_value_heads,
-        )
         attn = self._attention(
-            f"{prefix}.attn", q_rope, k_rope, v_proj)
+            f"{prefix}.attn", q_path, k_path, v_proj)
         attn_out = self._linear(
             f"{prefix}.o_proj",
             attn,
@@ -561,41 +539,60 @@ class Qwen3GraphBuilder:
             },
         )
 
-    def _rope(
+    def _linear_per_head_rms_norm_rope(
         self,
         name: str,
         input_tensor: Tensor,
+        linear_weight: Tensor,
+        norm_weight: Tensor,
         position_ids: Tensor,
         num_heads: int,
+        out_features: int,
     ) -> Tensor:
-        """创建一个 NeoX RoPE 节点。
+        """创建 Linear + PerHead RMSNorm + RoPE 融合节点。
 
         参数：
           name：op 名称；
-          input_tensor：q 或 k 投影结果；
+          input_tensor：输入 [..., hidden_size]；
+          linear_weight：投影权重 [out_features, hidden_size]；
+          norm_weight：per-head RMSNorm 权重 [head_dim]；
           position_ids：位置输入 [batch, sequence]；
-          num_heads：该 tensor 的 head 数。
+          num_heads：该路径的 head 数；
+          out_features：投影输出宽度，必须等于 num_heads * head_dim。
 
         返回：
-          旋转后的 q 或 k tensor。
+          融合后的 q 或 k tensor。
 
         主要逻辑：
-          kRope 融合 Qwen3RotaryEmbedding.forward 和
-          apply_rotary_pos_emb；rope_layout=neox 对应 rotate_half。
+          kLinearPerHeadRMSNormRope 在一次 op 内完成 linear、按 head 的
+          RMSNorm 和 NeoX RoPE；输出仍为 [..., out_features]。
         """
         return self._create_op(
             name,
-            [input_tensor, position_ids],
-            OpType.kRope,
+            [
+                input_tensor,
+                linear_weight,
+                norm_weight,
+                position_ids,
+            ],
+            OpType.kLinearPerHeadRMSNormRope,
             {
-                "head_dim": self._config.head_dim,
+                "in_features": self._config.hidden_size,
+                "out_features": out_features,
                 "num_heads": num_heads,
+                "head_dim": self._config.head_dim,
+                "normalized_shape": self._config.head_dim,
+                "axis": -1,
+                "norm_eps": self._config.rms_norm_eps,
                 "rope_theta": self._config.rope_theta,
                 "rope_type": self._config.rope_type,
                 "rope_layout": "neox",
                 "scaling_factor": 1.0,
                 "original_max_position_embeddings":
                     self._config.max_position_embeddings,
+                "transpose_weight": True,
+                "bias": False,
+                "accumulate_precision": "float32",
                 "precision": self._config.dtype,
             },
         )

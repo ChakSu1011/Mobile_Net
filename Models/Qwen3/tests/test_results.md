@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 |------|------|
 | 文档版本 | v1.0 |
-| 日期 | 2026-11-13 |
+| 日期 | 2026-11-15 |
 | 被测代码 | `Models/Qwen3/qwen3_config.py`、`Models/Qwen3/qwen3_graph_builder.py` |
 | 测试代码 | `Models/Qwen3/test_qwen3_graph.py` |
 | 设计文档 | [Models_design.md](../../.doc/Models_design.md) |
@@ -48,10 +48,10 @@ PYTHONUTF8=1 python Models/Qwen3/qwen3_graph_builder.py \
 | 编号 | 测试方法 | 验证内容 | 结果 |
 |------|----------|----------|------|
 | UT-QWEN3-001 | `test_config_defaults` | 配置字段、q/kv 宽度、GQA 比例 | 通过 |
-| UT-QWEN3-002 | `test_graph_counts` | 2 inputs、310 constants、426 ops、1 output | 通过 |
+| UT-QWEN3-002 | `test_graph_counts` | 2 inputs、310 constants、314 ops、1 output | 通过 |
 | UT-QWEN3-003 | `test_layer_zero_topology`、`test_final_lm_head_and_output` | 层内数据依赖、final norm、lm_head、output 连接 | 通过 |
-| UT-QWEN3-004 | `test_all_layers_have_fifteen_ops` | 28 层，每层 15 个唯一 op | 通过 |
-| UT-QWEN3-005 | `test_layer_zero_topology` | q/k norm、RoPE、GQA attention 输入连接 | 通过 |
+| UT-QWEN3-004 | `test_all_layers_have_eleven_ops` | 28 层，每层 11 个唯一 op | 通过 |
+| UT-QWEN3-005 | `test_layer_zero_topology` | q/k 融合路径、GQA attention 输入连接 | 通过 |
 | UT-QWEN3-006 | `test_constants_and_tied_weight` | tied LM Head 复用 `embedding.weight` | 通过 |
 | UT-QWEN3-007 | `test_untied_lm_head` | untied 时新增 `lm_head.weight`，constant 数 311 | 通过 |
 | UT-QWEN3-008 | `test_invalid_configs` | 7 类非法配置抛出 `ValueError` | 通过 |
@@ -71,8 +71,8 @@ PYTHONUTF8=1 python Models/Qwen3/qwen3_graph_builder.py \
 ## 4. 实际测试输出
 
 ```text
-test_all_layers_have_fifteen_ops (__main__.Qwen3GraphTest.test_all_layers_have_fifteen_ops)
-28 个 Decoder Layer 各包含 15 个唯一 op。 ... ok
+test_all_layers_have_eleven_ops (__main__.Qwen3GraphTest.test_all_layers_have_eleven_ops)
+28 个 Decoder Layer 各包含 11 个唯一 op。 ... ok
 test_config_defaults (__main__.Qwen3GraphTest.test_config_defaults)
 配置字段与 Qwen3-0.6B 一致，派生宽度正确。 ... ok
 test_config_file_matches_transformers (__main__.Qwen3GraphTest.test_config_file_matches_transformers)
@@ -88,7 +88,7 @@ test_graph_counts (__main__.Qwen3GraphTest.test_graph_counts)
 test_invalid_configs (__main__.Qwen3GraphTest.test_invalid_configs)
 非法配置在 builder 初始化阶段抛出 ValueError。 ... ok
 test_layer_zero_topology (__main__.Qwen3GraphTest.test_layer_zero_topology)
-layer.0 的 15 个 op 顺序和关键连接符合源码结构。 ... ok
+layer.0 的 11 个 op 顺序和关键连接符合源码结构。 ... ok
 test_transformers_weight_shapes (__main__.Qwen3GraphTest.test_transformers_weight_shapes)
 与 Transformers Qwen3ForCausalLM meta 模型的权重形状一致。 ... ok
 test_untied_lm_head (__main__.Qwen3GraphTest.test_untied_lm_head)
@@ -97,7 +97,7 @@ test_weight_shapes_and_parameter_count (__main__.Qwen3GraphTest.test_weight_shap
 权重形状、总参数和 bfloat16 字节数与 Qwen3-0.6B 一致。 ... ok
 
 ----------------------------------------------------------------------
-Ran 12 tests in 6.309s
+Ran 12 tests in 5.196s
 
 OK
 ```
@@ -110,14 +110,14 @@ OK
 graph qwen3_0_6b
 inputs 2
 constants 310
-ops 426
+ops 314
 outputs 1
 ```
 
 完整 IR 实际行数：
 
 ```text
-750
+632
 ```
 
 IR 关键片段（与 `dump_ir()` 实际输出一致）：
@@ -179,8 +179,8 @@ Models/Qwen3/test_qwen3_graph.py
 
 ## 9. 结论
 
-- Qwen3-0.6B 默认图包含 2 个输入、310 个 constant、426 个 op、1 个输出；
-- 28 个 Decoder Layer 每层 15 个 op，连接关系与 Transformers 5.9.0
+- Qwen3-0.6B 默认图包含 2 个输入、310 个 constant、314 个 op、1 个输出；
+- 28 个 Decoder Layer 每层 11 个 op，连接关系与 Transformers 5.9.0
   `modeling_qwen3.py` 一致；
 - 权重形状与 `Qwen3ForCausalLM` meta 模型逐项一致；
 - tied 与 untied LM Head 两条路径均通过测试；

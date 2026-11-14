@@ -7,10 +7,10 @@
 | 操作系统 | Windows 11（10.0.26200） |
 | Python | 3.13.3 |
 | 解释器 | `C:\Users\18626\AppData\Local\Programs\Python\Python313\python.exe` |
-| Graph 扩展 | `Graph/build/python/_graph.pyd`（2026-11-14 构建） |
+| Graph 扩展 | `Graph/build/python/_graph.pyd`（2026-11-15 构建） |
 | 字符编码 | `PYTHONUTF8=1` |
 | 外部依赖 | 无 PyTorch / LibTorch / Protobuf；safetensors 由仓库内解析器读取 |
-| 测试日期 | 2026-11-14 |
+| 测试日期 | 2026-11-15 |
 
 ## 2. 测试命令与结果
 
@@ -35,20 +35,20 @@ PYTHONUTF8=1 python -m unittest ToolChain.test_pipeline -v
 实际输出（末尾）：
 
 ```text
-Ran 6 tests in 0.562s
+Ran 6 tests in 0.513s
 
 OK
 adapter qwen3
 model qwen3_0_6b
-tensors 735
-ops 423
+tensors 623
+ops 311
 constants 310
 weights_available 0
 weights_total_bytes 0
-ir_sha256 3578cbfd1ed37776f8f6384c5b84d5c1ea24589bac5eed39a381376d0a94da20
-manifest_sha256 5f62384fe1fa14b0002b616c51309e9bf7e2b742ad41303d32ef4dd6a203f1df
-package C:\Users\18626\AppData\Local\Temp\pipeline_ucncnwv7\package4
-work_dir C:\Users\18626\AppData\Local\Temp\pipeline_ucncnwv7\work4
+ir_sha256 ebc16228db005814bbb331ab444d1a1ca501243102868ccb063f6463127c3483
+manifest_sha256 0605cd1a754717b0e82bfc214a57d0cdecbe9720f9ff18b6afbdf834315b0b8f
+package C:\Users\18626\AppData\Local\Temp\pipeline_czoxd9rs\package4
+work_dir C:\Users\18626\AppData\Local\Temp\pipeline_czoxd9rs\work4
 ```
 
 （临时目录名由 `tempfile.mkdtemp` 生成，每次运行不同。）
@@ -68,12 +68,12 @@ PYTHONUTF8=1 python -m unittest discover -s Models/Qwen3 -p 'test_*.py' -v
 实际输出（末尾）：
 
 ```text
-Ran 12 tests in 5.183s
+Ran 12 tests in 5.196s
 
 OK
 ```
 
-结论：通过。确认 Qwen3-0.6B 的 2 inputs / 310 constants / 423 ops /
+结论：通过。确认 Qwen3-0.6B 的 2 inputs / 310 constants / 311 ops /
 1 output、310 个常量、tied embedding、Transformer 权重形状、
 596,049,920 参数与 1,192,099,840 字节 BF16 常量，以及 IR 稳定性。
 
@@ -107,13 +107,13 @@ PYTHONUTF8=1 python -m ToolChain.pipeline
 ```text
 adapter qwen3
 model qwen3_0_6b
-tensors 735
-ops 423
+tensors 623
+ops 311
 constants 310
 weights_available 0
 weights_total_bytes 0
-ir_sha256 3578cbfd1ed37776f8f6384c5b84d5c1ea24589bac5eed39a381376d0a94da20
-manifest_sha256 5f62384fe1fa14b0002b616c51309e9bf7e2b742ad41303d32ef4dd6a203f1df
+ir_sha256 ebc16228db005814bbb331ab444d1a1ca501243102868ccb063f6463127c3483
+manifest_sha256 0605cd1a754717b0e82bfc214a57d0cdecbe9720f9ff18b6afbdf834315b0b8f
 package D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b
 work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
 ```
@@ -122,11 +122,11 @@ work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
 
 | 路径 | 大小 | 说明 |
 | --- | --- | --- |
-| `Models/Qwen3/artifacts/qwen3_0_6b/model.mgf` | 430,153 B | 112 B 头 + 规范化 JSON manifest，无权重区 |
+| `Models/Qwen3/artifacts/qwen3_0_6b/model.mgf` | 374,576 B | 112 B 头 + 规范化 JSON manifest，无权重区 |
 | `Models/Qwen3/artifacts/qwen3_0_6b/compile_report.json` | 992 B | 构建摘要、IR 哈希、显存计划、验证结果 |
-| `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/model_graph.json` | 480,582 B | 转换后元数据 |
+| `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/model_graph.json` | 418,862 B | 转换后元数据 |
 | `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/conversion_report.json` | 83,948 B | 权重映射与转换摘要 |
-| `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/model_graph.json` | 518,748 B | 优化后元数据 |
+| `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/model_graph.json` | 443,868 B | 优化后元数据 |
 | `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/optimize_report.json` | 1,611 B | 精度/形状/显存与不变量报告 |
 
 `compile_report.json` 关键字段：
@@ -134,22 +134,22 @@ work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
 ```json
 {
   "graph": {
-    "activation_tensors": 423,
+    "activation_tensors": 311,
     "constants": 310,
-    "ir_line_count": 744,
-    "ir_sha256": "3578cbfd1ed37776f8f6384c5b84d5c1ea24589bac5eed39a381376d0a94da20",
-    "ops": 423,
-    "tensors": 735
+    "ir_line_count": 632,
+    "ir_sha256": "ebc16228db005814bbb331ab444d1a1ca501243102868ccb063f6463127c3483",
+    "ops": 311,
+    "tensors": 623
   },
   "memory": {
     "alignment": 256,
     "arena_bytes": 81985536,
     "constants_bytes": 1192099840,
-    "entries": 423,
+    "entries": 311,
     "peak_bytes": 78315520
   },
   "verification": {
-    "manifest_sha256": "5f62384fe1fa14b0002b616c51309e9bf7e2b742ad41303d32ef4dd6a203f1df",
+    "manifest_sha256": "0605cd1a754717b0e82bfc214a57d0cdecbe9720f9ff18b6afbdf834315b0b8f",
     "package_reloaded": true
   },
   "weights": {

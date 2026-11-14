@@ -107,9 +107,9 @@ class VisualizerTest(unittest.TestCase):
         graph = self.package.model_graph
         self.assertEqual(len(graph.inputs), 2)
         self.assertEqual(len(graph.constants), 310)
-        self.assertEqual(len(graph.ops), 423)
+        self.assertEqual(len(graph.ops), 311)
         self.assertEqual(len(graph.outputs), 1)
-        self.assertEqual(len(graph.tensors), 735)
+        self.assertEqual(len(graph.tensors), 623)
 
     def test_layer_runs(self) -> None:
         """UT-VIS-007：Qwen3 的连续相同层折叠为 ×28。"""
@@ -159,6 +159,9 @@ class VisualizerTest(unittest.TestCase):
         description = describe_op("linear_swi_glu", {})
         self.assertEqual(description.category, "mlp")
         self.assertEqual(len(description.composition), 4)
+        fused = describe_op("linear_per_head_rms_norm_rope", {})
+        self.assertEqual(fused.category, "linear")
+        self.assertEqual(len(fused.composition), 3)
 
     def test_unknown_op(self) -> None:
         """UT-VIS-004：未知 op 类型不崩溃。"""
@@ -214,6 +217,7 @@ class VisualizerTest(unittest.TestCase):
             text = first.read_text(encoding="utf-8")
             self.assertIn("DecoderLayer ×28", text)
             self.assertIn("kLinearSwiGlu", text)
+            self.assertIn("kLinearPerHeadRMSNormRope", text)
             self.assertIn("W: fp16, 3072×1024", text)
             self.assertIn("W: fp16, 1024×3072", text)
             self.assertIn("fp16", text)

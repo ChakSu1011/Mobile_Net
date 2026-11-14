@@ -47,7 +47,7 @@
 | 编号 | 需求 | 验收要点 |
 | --- | --- | --- |
 | FR-OPT-01 | Precision Pass 必须把所有浮点激活与常量的目标精度统一为配置值（默认 `float16`） | 所有 activation/constant 的 `precision` 为目标值；int64 输入保持 `int64` |
-| FR-OPT-02 | Precision Pass 必须在数值敏感算子属性中写入 `accumulate_precision=float32` | `rms_norm`、`linear`、`linear_swi_glu`、`mega_attention`、`rope` 均带该属性 |
+| FR-OPT-02 | Precision Pass 必须在数值敏感算子属性中写入 `accumulate_precision=float32` | `rms_norm`、`linear`、`linear_swi_glu`、`linear_per_head_rms_norm_rope`、`mega_attention`、`rope` 均带该属性 |
 | FR-OPT-03 | 精度转换不得改变张量字节数；源/目标元素大小不同的转换必须报错 | BF16→FP16 字节数不变；FP32→FP16 抛 `BuildError` |
 | FR-OPT-04 | Shape Pass 必须为每个 activation 推导出完整静态形状 | 不存在空 shape 或符号维 |
 | FR-OPT-05 | Shape Pass 必须校验算子形状契约（K 维、GQA 比例、RMSNorm 整除、Add 同形） | 非法形状抛 `BuildError` 并包含 op 名 |
@@ -82,7 +82,7 @@
 | 编号 | 验收项 | 通过条件 |
 | --- | --- | --- |
 | AC-OPT-01 | 精度完整 | 无 `unknown`/源精度残留（`keep` 除外）；int64 输入不变 |
-| AC-OPT-02 | 形状完整 | 423 个 Qwen3 activation 全部有静态形状 |
+| AC-OPT-02 | 形状完整 | 311 个 Qwen3 activation 全部有静态形状 |
 | AC-OPT-03 | 显存安全 | 生命周期重叠张量零字节重叠；峰值与报告一致 |
 | AC-OPT-04 | 可重复 | 连续两次优化结果 `to_dict()` 相等 |
 | AC-OPT-05 | 报告 | JSON 可解析；不变量全部 passed |
@@ -221,6 +221,7 @@ class MemoryPass:
 - `rms_norm`
 - `linear`
 - `linear_swi_glu`
+- `linear_per_head_rms_norm_rope`
 - `mega_attention`
 - `rope`
 
@@ -251,6 +252,7 @@ class MemoryPass:
 | `gather` | indices rank=2，weight rank=2，axis=0 | `indices.shape + weight.shape[1:]` |
 | `linear` | 输入末维 == `in_features`；权重 `[out, in]` | `输入[:-1] + [out_features]` |
 | `linear_swi_glu` | 输入末维 == `hidden_size`；两个权重 `[intermediate, hidden]` | `输入[:-1] + [intermediate_size]` |
+| `linear_per_head_rms_norm_rope` | 输入末维 == `in_features`；linear 权重 `[out, in]`；norm 权重 `[head_dim]`；`out == num_heads*head_dim`；position 形状 == 输入去掉末维 | `输入[:-1] + [out_features]` |
 | `rms_norm` | 输入末维可被 `normalized_shape` 整除 | 与输入同形 |
 | `rope` | 输入末维 == `num_heads * head_dim` | 与输入同形 |
 | `mega_attention` | q 末维 == `num_heads*head_dim`；k/v 末维 == `num_kv_heads*head_dim`；比例匹配 | 与 q 同形 |
@@ -309,9 +311,9 @@ class MemoryPass:
   "bounds": {"batch": 1, "sequence": 256, "context_length": 40960},
   "precision": {"target": "float16", "accumulate": "float32",
                 "converted_tensors": 733, "precision_histogram": {...}},
-  "shape": {"resolved_tensors": 423, "unresolved": []},
+  "shape": {"resolved_tensors": 311, "unresolved": []},
   "memory": {"alignment": 256, "arena_bytes": ..., "peak_bytes": ...,
-             "constants_bytes": 1192099840, "entries": 423},
+             "constants_bytes": 1192099840, "entries": 311},
   "invariants": [{"name": "...", "passed": true, "detail": "..."}]
 }
 ```
@@ -375,7 +377,7 @@ class MemoryPass:
 | UT-OPT-012 | 关闭复用 | `enable_reuse=false` | 偏移单调增长，arena 更大 |
 | UT-OPT-013 | 对齐 | 尺寸非 256 倍数 | 所有 offset % 256 == 0 |
 | UT-OPT-014 | 确定性 | 连续两次运行 | `to_dict()` 相等 |
-| UT-OPT-015 | Qwen3 形状完整性 | Qwen3 图 | 423 个 activation 全部有形状 |
+| UT-OPT-015 | Qwen3 形状完整性 | Qwen3 图 | 311 个 activation 全部有形状 |
 | UT-OPT-016 | 报告 JSON | Qwen3 图 | 可 json 序列化；不变量 passed |
 
 ### 6.3 测试环境

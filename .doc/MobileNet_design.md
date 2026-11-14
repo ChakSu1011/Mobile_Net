@@ -412,7 +412,7 @@ APP          Tokenizer        Scheduler        Executor          GPU
 - **I/O 边界**：`CreateInput(name)` 创建 Input op 并登记图输入；`CreateOutput(name, input)` 创建 Output op 并登记图输出，Output op 不产生新 tensor。Input/Output op 预置 `attr["storage"] = Storage{}`，Engine 在 Init/Forward 时通过 `SetInput()`/`SetOutput()` 覆盖该值，解绑时恢复默认值。
 - **执行环境**：Graph 本身没有 `Forward()`。Engine 初始化阶段创建 `GraphEnv`，按 `OpType` 为每个计算 op 创建 `OpEnv` 并调用 `Op::SetOpEnv()`；Forward 阶段按 `GetOrderlyOPList()` 逐 op 调用 `OpEnv::Forward()`。`OpEnv` 从所属 op 的输入/输出 Tensor 的 `Storage` 读取 shape、precision、layout 与 data_ptr，不拥有 Op/Tensor，也不申请显存。
 - **I/O 执行**：Input/Output op 不产生计算 Kernel；对应的 I/O `OpEnv` 读取 `attr["storage"]` 完成 H2D/D2H。首版 Graph 只提供 `OpEnv` 抽象与 `MegaAttentionOpEnv` 示例，I/O OpEnv 与真实算子 OpEnv 由后续引擎/后端实现接入。
-- **融合表达**：融合体现为 `OpType` 与 `attr`（例如 `kLinearRmsNormRope` 等融合类型）；具体融合规则由模型组图文档与 Converter 决定，Graph 只承载融合结果，不自动识别或改写算子。
+- **融合表达**：融合体现为 `OpType` 与 `attr`（例如 `kLinearRmsNormRope`、`kLinearPerHeadRMSNormRope` 等融合类型）；具体融合规则由模型组图文档与 Converter 决定，Graph 只承载融合结果，不自动识别或改写算子。
 - **Python 绑定最小化**：`Tensor` 仅暴露 `name`、`is_constant`、`reusable`、`set_reusable`；不暴露 `Op`、`Storage`、`Shape` 访问器，也不提供 op 遍历接口。`dump_ir()` 是只读调试接口，输出 graph/inputs/constants/ops/outputs 文本，不作为 runtime 数据交换边界。
 - **Build 元数据旁路**：由于 Python 绑定不暴露 shape/precision/storage，Converter 使用 `RecordingGraph` 代理构图 API，在调用原生 Graph 成功后同步记录 `ModelGraph`（输入、常量、激活、op 属性、权重来源、输出绑定）。`ModelGraph` 是可序列化的 sidecar，不是第二套可执行图；Optimizer 与 Serializer 只消费它，运行时仍以 Graph 重建的图为准。
 - **图校验**：唯一命名、输出 tensor 有生产者、Input/Output 注册合法、constant 不参与执行序列、`SortOp()` 覆盖所有从输出可达的计算 op；非法构图由 Graph 返回错误，Python 侧以异常形式抛出。
@@ -444,7 +444,7 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 - **模型族 Adapter**：首期实现 Qwen3 Dense Decoder-only Adapter；模型结构差异隔离在 Adapter，公共构图逻辑复用。
 - **构图方式**：以模型配置与层结构描述为基础，由 `Qwen3GraphBuilder` 通过注入的 `graph_factory` 显式调用 Graph 构图接口；不执行 PyTorch 模型、不做 TorchScript/图捕获。
 - **RecordingGraph**：对 `create_input/create_constant/create_op/create_output/sort_op/dump_ir` 做透明代理；每个方法先转发原生 Graph，成功后再记录元数据，防止“图已创建但元数据缺失”。`ModelGraph` 不是第二套可执行图。
-- **融合算子表达**：使用 Graph 的 `OpType`（如 `gather`、`linear`、`linear_swi_glu`、`rms_norm`、`rope`、`mega_attention`、`add`）与 `attr` 表达算子；Qwen3 首版以基础 op 组合为主，融合规则在模型组图文档中定义，Graph 只承载结果。
+- **融合算子表达**：使用 Graph 的 `OpType`（如 `gather`、`linear`、`linear_swi_glu`、`rms_norm`、`rope`、`mega_attention`、`add`、`linear_per_head_rms_norm_rope`）与 `attr` 表达算子；Qwen3 的 Q/K path 使用 `linear_per_head_rms_norm_rope` 融合 linear、per-head RMSNorm 与 RoPE，融合规则在模型组图文档中定义，Graph 只承载结果。
 - **权重映射**：逐常量记录图内名称、HF/Transformers 参数名、shape、dtype、byte_size 与是否可用；转换期不读取或变换权重数值。
 - **I/O op**：在模型子图外层统一生成 Input/Output op；Input 记录 `int64`、`row_major` 与符号形状 `[B,S]`，Output 绑定最终 logits 张量；主机指针与设备 storage 由运行时绑定，不进入转换产物。
 - **不静默降级**：不支持的算子、缺失权重映射或非法属性直接报错并列出位置，禁止悄悄换成低效路径。
@@ -461,8 +461,8 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 
 优化 Pass：
 
-1. **Precision Infer**：BF16 转 FP16；为每个激活与常量确定唯一精度，int64 输入保持不变；对 `rms_norm`、`linear`、`linear_swi_glu`、`mega_attention`、`rope` 写入 `accumulate_precision=float32`。拒绝改变元素大小的转换（如 FP32→FP16），因为本阶段不重排权重字节。后续量化能力统一在本阶段扩展，不新增独立 Pass。
-2. **Shape Infer**：以 `B=batch_size`、`S=max_num_tokens` 为规划上界，按拓扑序逐 op 推导输出形状；校验 gather/linear/linear_swi_glu/rms_norm/rope/mega_attention/add 的形状契约与 GQA 比例；未知 op 或未解析符号直接报错。
+1. **Precision Infer**：BF16 转 FP16；为每个激活与常量确定唯一精度，int64 输入保持不变；对 `rms_norm`、`linear`、`linear_swi_glu`、`linear_per_head_rms_norm_rope`、`mega_attention`、`rope` 写入 `accumulate_precision=float32`。拒绝改变元素大小的转换（如 FP32→FP16），因为本阶段不重排权重字节。后续量化能力统一在本阶段扩展，不新增独立 Pass。
+2. **Shape Infer**：以 `B=batch_size`、`S=max_num_tokens` 为规划上界，按拓扑序逐 op 推导输出形状；校验 gather/linear/linear_swi_glu/linear_per_head_rms_norm_rope/rms_norm/rope/mega_attention/add 的形状契约与 GQA 比例；未知 op 或未解析符号直接报错。
 3. **Memory Manage**：基于静态依赖计算每个 Activation 的 `birth` 与 `last_use`，按 256 B 对齐做 first-fit 复用；输出每个张量的 offset、size、生命周期与峰值；图输入不进入 arena，图输出标记为不可复用；不执行 Dummy Run，也不分配真实显存。
 4. **Report**：输出精度、形状、显存偏移与生命周期摘要，并自动检查精度完整、形状完整、生命周期重叠区间不相交、偏移对齐、arena 覆盖峰值、常量字节一致等不变量；报告为 JSON，可被脚本稳定解析。
 

@@ -2,7 +2,7 @@
 
 | 项目 | 内容 |
 |------|------|
-| 报告日期 | 2026-11-14 |
+| 报告日期 | 2026-11-15 |
 | 测试对象 | `ToolChain.converter` |
 | 设计文档 | [converter_design.md](../.doc/converter_design.md) |
 | 完整阶段测试 | [ToolChain/tests/test_results.md](../../tests/test_results.md) |
@@ -14,7 +14,7 @@
 | 操作系统 | Windows 11（10.0.26200） |
 | Python | 3.13.3 |
 | 解释器 | `C:\Users\18626\AppData\Local\Programs\Python\Python313\python.exe` |
-| Graph 扩展 | `Graph/build/python/_graph.pyd`（2026-11-14 构建） |
+| Graph 扩展 | `Graph/build/python/_graph.pyd`（2026-11-15 构建） |
 | 字符编码 | `PYTHONUTF8=1` |
 | 外部依赖 | 无 PyTorch / LibTorch / Protobuf；safetensors 由仓库内解析器读取 |
 
@@ -27,7 +27,7 @@ PYTHONUTF8=1 python -m unittest ToolChain.converter.test_converter -v
 实际输出（末尾）：
 
 ```text
-Ran 13 tests in 0.045s
+Ran 13 tests in 0.041s
 
 OK
 ```
@@ -38,8 +38,8 @@ OK
 
 - `RecordingGraph` 代理图与原生 `Graph` 的 `dump_ir()` 完全一致；
 - 输入、常量、多输出 op 的元数据记录与输出命名；
-- Qwen3 图计数：2 inputs、310 constants、423 compute ops、1 output，
-  IR `ops` 段为 426（含 3 个 I/O op）；
+- Qwen3 图计数：2 inputs、310 constants、311 compute ops、1 output，
+  IR `ops` 段为 314（含 3 个 I/O op）；
 - 310 个常量的 Hugging Face 权重名映射；
 - tied / untied LM Head 处理；
 - `ModelGraph` JSON 往返与权重缺失降级；

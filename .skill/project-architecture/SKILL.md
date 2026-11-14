@@ -92,7 +92,7 @@ Runtime/      Loader / Engine / Scheduler / Kernel 执行静态图
    也是 `ToolChain.*`。
 3. **把模型包放在 ToolChain 下**：产物属于模型目录，应写入
    `Models/<模型目录>/artifacts/`。
-4. **把 IR `ops=426` 当成计算 op 数**：Qwen3 计算 op 是 423，另外 3 个
+4. **把 IR `ops=314` 当成计算 op 数**：Qwen3 计算 op 是 311，另外 3 个
    是 I/O op。
 5. **在 ToolChain 中复制模型层结构**：模型层结构应复用 `Models/Qwen3`
    的 Builder。

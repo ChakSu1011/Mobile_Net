@@ -26,6 +26,7 @@ _SENSITIVE_OPS = frozenset({
     "rms_norm",
     "linear",
     "linear_swi_glu",
+    "linear_per_head_rms_norm_rope",
     "mega_attention",
     "rope",
 })

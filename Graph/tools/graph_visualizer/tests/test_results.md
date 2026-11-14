@@ -2,7 +2,7 @@
 
 | 项目 | 内容 |
 |------|------|
-| 报告日期 | 2026-11-14 |
+| 报告日期 | 2026-11-15 |
 | 测试对象 | `graph_visualizer` |
 | 设计文档 | [graph_visualizer_design.md](../.doc/graph_visualizer_design.md) |
 | skill | [SKILL.md](../.skill/SKILL.md) |
@@ -28,7 +28,7 @@ PYTHONUTF8=1 python Graph/tools/graph_visualizer/tests/test_visualizer.py -v
 实际输出（末尾）：
 
 ```text
-Ran 10 tests in 0.036s
+Ran 10 tests in 0.043s
 
 OK
 ```
@@ -39,9 +39,9 @@ OK
 
 | 编号 | 用例 | 结果 |
 |------|------|------|
-| UT-VIS-001 | Qwen3 包计数（2/310/423/1/735） | 通过 |
+| UT-VIS-001 | Qwen3 包计数（2/310/311/1/623） | 通过 |
 | UT-VIS-002 | 视图模型包含 embedding、Layer ×28、final norm、LM Head，节点内权重行 14 个 | 通过 |
-| UT-VIS-003 | `linear_swi_glu` 融合组成 | 通过 |
+| UT-VIS-003 | `linear_swi_glu`、`linear_per_head_rms_norm_rope` 融合组成 | 通过 |
 | UT-VIS-004 | 未知 OpType 不崩溃 | 通过 |
 | UT-VIS-005 | 权重在节点内显示精度/shape | 通过 |
 | UT-VIS-006 | shape 使用 `×` 连接 | 通过 |
@@ -62,9 +62,9 @@ PYTHONUTF8=1 python Graph/tools/visualize_graph.py \
 
 ```text
 wrote Models\Qwen3\artifacts\qwen3_0_6b_graph.svg
-nodes 18
-tensor_edges 20
-links 42
+nodes 14
+tensor_edges 16
+links 34
 ```
 
 产物：
@@ -72,12 +72,12 @@ links 42
 | 项目 | 值 |
 |------|-----|
 | 路径 | `Models/Qwen3/artifacts/qwen3_0_6b_graph.svg` |
-| 大小 | 24 KB |
-| SHA-256 | `bbae328299fbc22424c2e2e2df24f4052e5214fba6d147133ab642b62c69e53e` |
-| 画布 | 1430 × 4302 |
-| 融合算子节点 | 18 |
-| tensor 平行四边形 | 20 |
-| 连接 | 42 |
+| 大小 | 20 KB |
+| SHA-256 | `3caa797b3e9778a6e5df48a21a65bf78f0fabdf51e1dd94a1af3095f25bed234` |
+| 画布 | 1634 × 3768 |
+| 融合算子节点 | 14 |
+| tensor 平行四边形 | 16 |
+| 连接 | 34 |
 | Layer 折叠 | `DecoderLayer ×28 (layer.0–layer.27)` |
 | 节点内权重行 | 14 行，每行 `W: fp16, shape` |
 
@@ -85,7 +85,7 @@ links 42
 
 - 2 个输入平行四边形：`input.input_ids`、`input.position_ids`；
 - embedding；
-- 一个 Decoder Layer 代表子图，包含 15 个融合算子；
+- 一个 Decoder Layer 代表子图，包含 11 个融合算子；
 - final norm、LM Head、1 个输出平行四边形；
 - 输入、激活、输出为平行四边形；
 - 权重不单独做边，节点内显示 `W: fp16, shape`，无权重名称或数值；

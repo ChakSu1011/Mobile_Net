@@ -829,6 +829,7 @@ enum class OpType {
     kLinear,
     kLinearRmsNorm,
     kLinearRmsNormRope,
+    kLinearPerHeadRMSNormRope,
     kLinearRmsNormRopeQuantPagedKVStore,
     kLinearRopeRotateQuant,
     kLinearMul,
@@ -871,6 +872,7 @@ const char *OpTypeToStr(OpType op_type);
 | `kMegaAttention` | MegaAttention 大粒度融合算子，覆盖 attention / MLA / KV cache 相关路径。 |
 | `kLinear` | linear 算子，对应底层 GEMM 路径。 |
 | `kLinearRmsNorm` / `kLinearRmsNormRope` / `kLinearRmsNormRopeQuantPagedKVStore` | DeepSeek V4 Tcore-Vcore 构图使用的 Q/KV path 通用融合 op。 |
+| `kLinearPerHeadRMSNormRope` | linear + per-head RMSNorm + RoPE 融合 op；Qwen3 Q/K path 使用。 |
 | `kLinearRopeRotateQuant` / `kLinearMul` / `kLinearApe` | DeepSeek V4 Tcore-Vcore indexer / compressor 前段使用的通用融合 op。 |
 | `kRmsNorm` | RMSNorm 算子。 |
 | `kRmsNormRopeQuantPagedKVStore` / `kRopeQuantLinear` | DeepSeek V4 Tcore-Vcore compressor 后段和 output path 使用的通用融合 op。 |

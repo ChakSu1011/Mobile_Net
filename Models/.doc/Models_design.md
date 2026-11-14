@@ -112,8 +112,8 @@ constant、输入输出，它们如何连接，按什么顺序执行”。它不
 
 | 编号 | 验收标准 |
 |------|----------|
-| AC-01 | Qwen3-0.6B 图包含 2 个输入、1 个输出、310 个 constant、426 个 op。 |
-| AC-02 | 28 个 Decoder Layer 每层 15 个 op，拓扑顺序从 embedding 到 lm_head 连续。 |
+| AC-01 | Qwen3-0.6B 图包含 2 个输入、1 个输出、310 个 constant、314 个 IR op。 |
+| AC-02 | 28 个 Decoder Layer 每层 11 个 op，拓扑顺序从 embedding 到 lm_head 连续。 |
 | AC-03 | 权重形状与 Transformers 5.9.0 `Qwen3ForCausalLM` meta 模型逐项一致。 |
 | AC-04 | 逻辑权重参数总量为 596,049,920，bfloat16 constant 字节数为 1,192,099,840。 |
 | AC-05 | Python 测试全部通过，命令行可输出图摘要和 IR。 |
@@ -278,6 +278,7 @@ graph.create_constant(
 | token embedding | `kGather` | input_ids、embedding.weight | hidden | `axis=0`、`vocab_size`、`hidden_size` |
 | RMSNorm | `kRmsNorm` | x、weight | normalized | `eps`、`normalized_shape`、`axis=-1` |
 | Linear | `kLinear` | x、weight | y | `in_features`、`out_features`、`transpose_weight=true` |
+| Linear + PerHead RMSNorm + RoPE | `kLinearPerHeadRMSNormRope` | x、linear_weight、norm_weight、position_ids | rotated | `in_features`、`out_features`、`num_heads`、`head_dim`、`norm_eps`、`rope_*` |
 | RoPE | `kRope` | q/k、position_ids | rotated | `head_dim`、`num_heads`、`rope_theta`、`rope_layout=neox` |
 | causal GQA | `kMegaAttention` | q、k、v | context | `num_heads`、`num_kv_heads`、`head_dim`、`causal=true`、`softmax_scale`、`merge_heads=true`、`has_output_projection=false` |
 | residual add | `kAdd` | x、residual | y | `precision` |
@@ -293,12 +294,9 @@ graph.create_constant(
 |-------------------|------------------|
 | `Qwen3Model.embed_tokens` | `embedding`（`kGather`） |
 | `Qwen3DecoderLayer.input_layernorm` | `layer.i.attn_norm`（`kRmsNorm`） |
-| `Qwen3Attention.q_proj` | `layer.i.q_proj`（`kLinear`） |
-| `Qwen3Attention.k_proj` | `layer.i.k_proj`（`kLinear`） |
+| `Qwen3Attention.q_proj` + `q_norm` + `apply_rotary_pos_emb` | `layer.i.q_path`（`kLinearPerHeadRMSNormRope`，16 heads） |
+| `Qwen3Attention.k_proj` + `k_norm` + `apply_rotary_pos_emb` | `layer.i.k_path`（`kLinearPerHeadRMSNormRope`，8 KV heads） |
 | `Qwen3Attention.v_proj` | `layer.i.v_proj`（`kLinear`） |
-| `Qwen3Attention.q_norm` | `layer.i.q_norm`（`kRmsNorm`，head_dim） |
-| `Qwen3Attention.k_norm` | `layer.i.k_norm`（`kRmsNorm`，head_dim） |
-| `Qwen3RotaryEmbedding` + `apply_rotary_pos_emb` | `layer.i.q_rope`、`layer.i.k_rope`（`kRope`） |
 | `eager_attention_forward`（repeat_kv、QK^T、scale、causal mask、softmax、PV） | `layer.i.attn`（`kMegaAttention`） |
 | `Qwen3Attention.o_proj` | `layer.i.o_proj`（`kLinear`） |
 | 第一个 `residual + hidden_states` | `layer.i.attn_residual`（`kAdd`） |
@@ -328,13 +326,13 @@ input.position_ids ────────────────────�
                                            │
 for i in 0..27:                            │
   attn_norm = RMSNorm(hidden)               │
-  q = Linear(attn_norm, q_proj.weight)      │
-  k = Linear(attn_norm, k_proj.weight)      │
-  v = Linear(attn_norm, v_proj.weight)      │
-  q = RMSNorm(q, q_norm.weight, head_dim)   │
-  k = RMSNorm(k, k_norm.weight, head_dim)   │
-  q = RoPE(q, position_ids) <───────────────┘
-  k = RoPE(k, position_ids)
+  q = LinearPerHeadRMSNormRope(             │
+        attn_norm, q_proj.weight,            │
+        q_norm.weight, position_ids) <───────┘
+  k = LinearPerHeadRMSNormRope(
+        attn_norm, k_proj.weight,
+        k_norm.weight, position_ids)
+  v = Linear(attn_norm, v_proj.weight)
   ctx = MegaAttention(q, k, v)
   attn = Linear(ctx, o_proj.weight)
   hidden_mid = Add(hidden, attn)
@@ -348,12 +346,12 @@ logits = Linear(final, embedding.weight)   # tie_word_embeddings=true
 output.logits = logits
 ```
 
-每层恰好 15 个 op，顺序固定：
+每层恰好 11 个 op，顺序固定：
 
 ```text
-attn_norm -> q_proj -> k_proj -> v_proj -> q_norm -> k_norm
--> q_rope -> k_rope -> attn -> o_proj -> attn_residual
--> mlp_norm -> mlp_gate_up -> mlp_down -> mlp_residual
+attn_norm -> q_path -> k_path -> v_proj -> attn -> o_proj
+-> attn_residual -> mlp_norm -> mlp_gate_up -> mlp_down
+-> mlp_residual
 ```
 
 ### 4.7 图规模与权重统计
@@ -364,8 +362,8 @@ Qwen3-0.6B 默认配置（28 层、tie=true）：
 |------|-----------|----------|
 | 图输入 | 2 | input_ids、position_ids |
 | 图输出 | 1 | logits |
-| 每层 op | 15 | 见 4.6 |
-| 计算 op 总数 | 426 | 2 input + 1 embedding + 28*15 + final_norm + lm_head + output |
+| 每层 op | 11 | 见 4.6 |
+| 计算 op 总数 | 311 | 1 embedding + 28*11 + final_norm + lm_head |
 | constant 总数 | 310 | 1 embedding + 28*11 + 1 final_norm |
 | 逻辑权重参数 | 596,049,920 | 与 Transformers meta 模型一致 |
 | bfloat16 字节数 | 1,192,099,840 | 596,049,920 * 2 |
@@ -401,8 +399,7 @@ Qwen3-0.6B 默认配置（28 层、tie=true）：
    layout 为 `kRowMajor`。
 4. **激活精度**：所有计算 op 的 `precision` 属性写 `bfloat16`，但激活
    tensor 本身没有 storage；精度由后续推导阶段处理。
-5. **RoPE**：`kRope` 融合 `Qwen3RotaryEmbedding.forward` 和
-   `apply_rotary_pos_emb`；`rope_layout=neox` 对应源码的 `rotate_half`。
+5. **Q/K 融合**：`kLinearPerHeadRMSNormRope` 融合 linear、按 head 的 RMSNorm 和 NeoX RoPE；Q/K 各一个节点，`rope_layout=neox` 对应源码的 `rotate_half`。
 6. **Attention**：`kMegaAttention` 的 `has_output_projection=false`，o_proj
    单独成节点，保持与源码一致；`merge_heads=true` 表示输出
    `[batch, seq, q_width]`。
@@ -472,10 +469,10 @@ Graph 构建产物
 | 编号 | 用例 | 预期 |
 |------|------|------|
 | UT-QWEN3-001 | 读取 `config.json` | 字段与 Qwen3-0.6B 一致 |
-| UT-QWEN3-002 | 构建默认图 | 2 inputs、310 constants、426 ops、1 output |
+| UT-QWEN3-002 | 构建默认图 | 2 inputs、310 constants、314 IR ops、1 output |
 | UT-QWEN3-003 | 拓扑顺序 | embedding 在 layer.0 前，layer.27 在 final_norm 前，lm_head 在 output 前 |
-| UT-QWEN3-004 | 层内顺序 | layer.i 的 15 个 op 名称顺序固定 |
-| UT-QWEN3-005 | attention 连接 | q/k 经过 q_norm/k_norm 和 rope；attn 输入为 q_rope/k_rope/v |
+| UT-QWEN3-004 | 层内顺序 | layer.i 的 11 个 op 名称顺序固定 |
+| UT-QWEN3-005 | attention 连接 | q/k 经过融合 q_path/k_path；attn 输入为 q_path/k_path/v_proj |
 | UT-QWEN3-006 | tied weight | 无独立 `lm_head.weight` constant；lm_head 源包含 `embedding.weight` |
 | UT-QWEN3-007 | untied weight | 多一个 `lm_head.weight` constant，常数总数 311 |
 | UT-QWEN3-008 | 非法配置 | 非法 activation/bias/dtype/GQA/sliding 抛 `ValueError` |

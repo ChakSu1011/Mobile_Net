@@ -169,11 +169,11 @@ class Qwen3ConversionTest(unittest.TestCase):
         """UT-CONV-007：图计数与 IR 计数符合预期。"""
         self.assertEqual(len(self.model.inputs), 2)
         self.assertEqual(len(self.model.constants), 310)
-        self.assertEqual(len(self.model.ops), 423)
+        self.assertEqual(len(self.model.ops), 311)
         self.assertEqual(len(self.model.outputs), 1)
-        self.assertEqual(len(self.model.tensors), 735)
+        self.assertEqual(len(self.model.tensors), 623)
         ir_text = self.conversion.ir_text
-        self.assertIn("\nops 426\n", ir_text)
+        self.assertIn("\nops 314\n", ir_text)
 
     def test_weight_mapping(self) -> None:
         """UT-CONV-008：所有常量都有 HF 映射与静态形状。"""

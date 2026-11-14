@@ -38,6 +38,9 @@ _LAYOUT_NAMES = {
     "kColumnMajor": "column_major",
 }
 _CAMEL_BOUNDARY = re.compile(r"(?<!^)(?=[A-Z])")
+_OP_TYPE_NAME_OVERRIDES = {
+    "kLinearPerHeadRMSNormRope": "linear_per_head_rms_norm_rope",
+}
 
 
 def load_graph_api() -> Any:
@@ -140,6 +143,9 @@ def op_type_name(op_type: Any) -> str:
       ``kLinearSwiGlu`` → ``linear_swi_glu``。
     """
     name = op_type.name
+    override = _OP_TYPE_NAME_OVERRIDES.get(name)
+    if override is not None:
+        return override
     if name.startswith("k"):
         name = name[1:]
     return _CAMEL_BOUNDARY.sub("_", name).lower()

@@ -71,8 +71,8 @@ description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer 
   `dump_ir()` 逐字节一致。
 - **常量是叶子**：常量不进入 `SortOp()` 执行序列；Qwen3 的 310 个常量
   在 IR 的 `constants` 段，不在 `ops` 执行序中。
-- **I/O op 计数**：Qwen3 `ModelGraph.ops=423`（计算 op），IR `ops` 段为
-  426（额外 2 个 Input op + 1 个 Output op）；不要混用两个口径。
+- **I/O op 计数**：Qwen3 `ModelGraph.ops=311`（计算 op），IR `ops` 段为
+  314（额外 2 个 Input op + 1 个 Output op）；不要混用两个口径。
 - **精度只做等宽转换**：BF16→FP16 允许（2 B→2 B）；FP32→FP16 改变元素
   大小时必须报错，禁止静默截断。
 - **Shape 先于 Memory**：Memory Pass 入口必须拒绝未解析 activation 形状，
@@ -188,8 +188,8 @@ PYTHONUTF8=1 python -m unittest discover -s Models/Qwen3 -p 'test_*.py' -v
 
 ## 常见陷阱
 
-1. **把 IR `ops=426` 当成计算 op 数**：其中 3 个是 I/O op；
-   `ModelGraph.ops` 是 423。测试断言要写清口径。
+1. **把 IR `ops=314` 当成计算 op 数**：其中 3 个是 I/O op；
+   `ModelGraph.ops` 是 311。测试断言要写清口径。
 2. **用 torch 读 safetensors**：Build 不依赖 torch。用
    `ToolChain/common/safetensors.py` 直接解析头部，否则会在无 PyTorch 环境失败，
    且 BF16 无法用 numpy 直接表达。

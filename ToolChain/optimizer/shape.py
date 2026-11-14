@@ -217,6 +217,9 @@ class ShapePass:
             return self._infer_gather(op, inputs)
         if op.op_type == "linear":
             return self._infer_linear(op, inputs)
+        if op.op_type == "linear_per_head_rms_norm_rope":
+            return self._infer_linear_per_head_rms_norm_rope(
+                op, inputs)
         if op.op_type == "linear_swi_glu":
             return self._infer_linear_swi_glu(op, inputs)
         if op.op_type == "rms_norm":
@@ -323,6 +326,80 @@ class ShapePass:
                 "optimizer",
                 f"linear input last dim {input_shape[-1]} "
                 f"!= in_features {in_features}",
+                target=op.name,
+            )
+        return input_shape[:-1] + (out_features,)
+
+    def _infer_linear_per_head_rms_norm_rope(
+        self,
+        op: OpMeta,
+        inputs: list[tuple[int, ...]],
+    ) -> tuple[int, ...]:
+        """推导 Linear + PerHead RMSNorm + RoPE 融合输出形状。
+
+        参数：
+          op：融合算子；
+          inputs：输入、线性权重、norm 权重、position_ids 形状。
+
+        返回：
+          ``input[:-1] + (out_features,)``。
+
+        异常：
+          BuildError：输入数量、权重形状、head 维度或位置形状不匹配。
+        """
+        if len(inputs) != 4:
+            raise BuildError(
+                "optimizer",
+                "linear_per_head_rms_norm_rope requires four inputs",
+                target=op.name,
+            )
+        input_shape, weight_shape, norm_shape, position_shape = inputs
+        in_features = self._int_attr(op, "in_features")
+        out_features = self._int_attr(op, "out_features")
+        num_heads = self._int_attr(op, "num_heads")
+        head_dim = self._int_attr(op, "head_dim")
+        if not input_shape:
+            raise BuildError(
+                "optimizer",
+                "fused q/k input must have at least one dimension",
+                target=op.name,
+            )
+        transpose = bool(op.attrs.get("transpose_weight", True))
+        expected_weight = (
+            (out_features, in_features)
+            if transpose else (in_features, out_features)
+        )
+        if weight_shape != expected_weight:
+            raise BuildError(
+                "optimizer",
+                f"fused q/k weight {weight_shape} != {expected_weight}",
+                target=op.name,
+            )
+        if norm_shape != (head_dim,):
+            raise BuildError(
+                "optimizer",
+                f"fused q/k norm weight {norm_shape} != ({head_dim},)",
+                target=op.name,
+            )
+        if out_features != num_heads * head_dim:
+            raise BuildError(
+                "optimizer",
+                f"fused q/k out_features {out_features} != "
+                f"{num_heads} * {head_dim}",
+                target=op.name,
+            )
+        if input_shape[-1] != in_features:
+            raise BuildError(
+                "optimizer",
+                f"fused q/k input last dim {input_shape[-1]} "
+                f"!= in_features {in_features}",
+                target=op.name,
+            )
+        if position_shape != input_shape[:-1]:
+            raise BuildError(
+                "optimizer",
+                f"fused q/k position shape {position_shape} != "
+                f"{input_shape[:-1]}",
                 target=op.name,
             )
         return input_shape[:-1] + (out_features,)

@@ -363,6 +363,9 @@ PYBIND11_MODULE(_graph, module) {
       .value("kLinear", OpType::kLinear)
       .value("kLinearRmsNorm", OpType::kLinearRmsNorm)
       .value("kLinearRmsNormRope", OpType::kLinearRmsNormRope)
+      .value(
+          "kLinearPerHeadRMSNormRope",
+          OpType::kLinearPerHeadRMSNormRope)
       .value("kLinearRmsNormRopeQuantPagedKVStore",
              OpType::kLinearRmsNormRopeQuantPagedKVStore)
       .value("kLinearRopeRotateQuant", OpType::kLinearRopeRotateQuant)

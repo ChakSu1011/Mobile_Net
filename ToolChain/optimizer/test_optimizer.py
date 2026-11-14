@@ -222,9 +222,9 @@ class Qwen3OptimizerTest(unittest.TestCase):
             conversion.model_graph)
 
     def test_shape_completeness(self) -> None:
-        """UT-OPT-015：423 个 activation 全部有静态形状。"""
+        """UT-OPT-015：311 个 activation 全部有静态形状。"""
         activations = self.result.model_graph.activation_tensors
-        self.assertEqual(len(activations), 423)
+        self.assertEqual(len(activations), 311)
         for tensor in activations:
             self.assertIsNotNone(tensor.static_shape, tensor.name)
             self.assertTrue(tensor.static_shape, tensor.name)
@@ -240,7 +240,7 @@ class Qwen3OptimizerTest(unittest.TestCase):
             for item in self.result.report["invariants"]
         ))
         self.assertEqual(
-            self.result.report["memory"]["entries"], 423)
+            self.result.report["memory"]["entries"], 311)
         self.assertEqual(
             self.result.report["memory"]["constants_bytes"],
             1192099840,

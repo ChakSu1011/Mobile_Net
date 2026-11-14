@@ -24,6 +24,7 @@ _OP_TYPE_LABELS = {
     "linear_ape": "kLinearApe",
     "linear_rms_norm": "kLinearRmsNorm",
     "linear_rms_norm_rope": "kLinearRmsNormRope",
+    "linear_per_head_rms_norm_rope": "kLinearPerHeadRMSNormRope",
     "linear_rms_norm_rope_quant_paged_kv_store":
         "kLinearRmsNormRopeQuantPagedKVStore",
     "linear_rope_rotate_quant": "kLinearRopeRotateQuant",
@@ -86,6 +87,10 @@ _TABLE = {
     "linear_rms_norm_rope": (
         "linear",
         ("linear", "rms_norm", "rope"),
+    ),
+    "linear_per_head_rms_norm_rope": (
+        "linear",
+        ("linear", "per_head_rms_norm", "rope"),
     ),
     "linear_rms_norm_rope_quant_paged_kv_store": (
         "attention",

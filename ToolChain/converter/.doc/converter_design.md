@@ -54,7 +54,7 @@
 | --- | --- | --- |
 | FR-CONV-01 | `RecordingGraph` 必须完整代理 `create_input`、`create_constant`、`create_op`、`create_output`、`sort_op`、`dump_ir`，调用方无感知 | 使用 RecordingGraph 与直接使用 Graph 构建同一模型，`dump_ir()` 完全一致 |
 | FR-CONV-02 | Converter 输出必须同时包含可执行的 `Graph.Graph` 与 `ModelGraph` 元数据 | 两个对象均非空；`ModelGraph` 通过自校验 |
-| FR-CONV-03 | Qwen3 Adapter 必须按 `Models/Qwen3/qwen3_graph_builder.py` 的结构构图，不得复制或改写层结构 | 图计数与既有 Qwen3 测试一致：2 inputs、310 constants、423 个计算 op、1 output；`dump_ir()` 的 `ops` 段为 426，因为额外包含 2 个 Input op 与 1 个 Output op |
+| FR-CONV-03 | Qwen3 Adapter 必须按 `Models/Qwen3/qwen3_graph_builder.py` 的结构构图，不得复制或改写层结构 | 图计数与既有 Qwen3 测试一致：2 inputs、310 constants、311 个计算 op、1 output；`dump_ir()` 的 `ops` 段为 314，因为额外包含 2 个 Input op 与 1 个 Output op |
 | FR-CONV-04 | 每个 constant 必须记录图内名称、shape、dtype、byte_size 与 Hugging Face 权重名 | 覆盖 embedding、28 层 11 个权重、final norm；tied LM Head 记录别名关系 |
 | FR-CONV-05 | 输入张量必须记录符号形状 `[B, S]` 与 `int64` 精度，并作为 `ModelGraph` 的图输入 | `input_ids`、`position_ids` 均为 `[B, S]`、`int64` |
 | FR-CONV-06 | 支持可选 safetensors 权重目录探测，登记权重可用性与来源文件 | 有真实权重时 `weight_available=true`；缺失时为 false，不报错 |
@@ -86,7 +86,7 @@
 | 编号 | 验收项 | 通过条件 |
 | --- | --- | --- |
 | AC-CONV-01 | 图一致性 | RecordingGraph 与原生 Graph 的 `dump_ir()` 逐字节一致 |
-| AC-CONV-02 | Qwen3 计数 | 2 inputs、310 constants、423 个计算 op、1 output（IR `ops` 段为 426，含 3 个 I/O op） |
+| AC-CONV-02 | Qwen3 计数 | 2 inputs、310 constants、311 个计算 op、1 output（IR `ops` 段为 314，含 3 个 I/O op） |
 | AC-CONV-03 | 元数据完整性 | 每个 op 的输入/输出/attrs 均已记录；每个 tensor 有 kind/precision/layout |
 | AC-CONV-04 | 权重映射 | 310 个 constant 均有 HF 权重名与形状；tied 别名有记录 |
 | AC-CONV-05 | 往返 | `ModelGraph` JSON 保存/加载后 `to_dict()` 相等 |
@@ -292,7 +292,7 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 ### 4.5 性能与内存
 
 - 记录层只保存名字与小型元数据，不复制 Storage。
-- Qwen3 图规模 735 个 tensor、423 个计算 op（IR 中另有 3 个 I/O op）；记录开销为 O(V+E)。
+- Qwen3 图规模 623 个 tensor、311 个计算 op（IR 中另有 3 个 I/O op）；记录开销为 O(V+E)。
 - 权重探测只读 safetensors 头部；不触碰权重数据区。
 - 转换完成后 `ModelGraph` 与 Graph 同时存活；调用方负责释放。
 
@@ -334,7 +334,7 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 | UT-CONV-004 | 多输出命名 | `out_cnt=2` | 记录 `name.out.0`、`name.out.1` |
 | UT-CONV-005 | 非法属性 | 传入 `object()` | 抛 `BuildError` |
 | UT-CONV-006 | 输出绑定 | `create_output` | `ModelGraph.outputs` 正确 |
-| UT-CONV-007 | Qwen3 计数 | Qwen3 配置 | 2/310/423/1（IR `ops` 段 426） |
+| UT-CONV-007 | Qwen3 计数 | Qwen3 配置 | 2/310/311/1（IR `ops` 段 314） |
 | UT-CONV-008 | 权重映射 | Qwen3 配置 | 310 个常量均有 HF 名与形状 |
 | UT-CONV-009 | tied/untied | 两种配置 | tied 记别名；untied 有 `lm_head.weight` |
 | UT-CONV-010 | JSON 往返 | 转换结果 | `to_dict()` 相等 |

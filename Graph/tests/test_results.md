@@ -2,7 +2,7 @@
 
 | 项目 | 内容 |
 |------|------|
-| 报告日期 | 2026-11-14 |
+| 报告日期 | 2026-11-15 |
 | 测试对象 | `Graph` C++ 静态库、`_graph` Python 扩展、公共模块 |
 | 设计文档 | [Graph 设计文档](../.doc/Graph_design.md) |
 | 构建目录 | `Graph/build` |
@@ -128,13 +128,13 @@ CMAKE_RANLIB:FILEPATH=d:/Mobile_Net/Graph/tools/zig_ranlib.cmd
 ```text
 Test project D:/Mobile_Net/Graph/build
     Start 1: graph_unit
-1/2 Test #1: graph_unit .......................   Passed    0.05 sec
+1/2 Test #1: graph_unit .......................   Passed    0.09 sec
     Start 2: graph_python
-2/2 Test #2: graph_python .....................   Passed    0.11 sec
+2/2 Test #2: graph_python .....................   Passed    0.19 sec
 
 100% tests passed out of 2
 
-Total Test time (real) =   0.23 sec
+Total Test time (real) =   0.36 sec
 ```
 
 结论：CTest 2/2 通过，退出码 0。

@@ -30,6 +30,8 @@ const char* OpTypeToStr(OpType op_type) {
       return "linear_rms_norm";
     case OpType::kLinearRmsNormRope:
       return "linear_rms_norm_rope";
+    case OpType::kLinearPerHeadRMSNormRope:
+      return "linear_per_head_rms_norm_rope";
     case OpType::kLinearRmsNormRopeQuantPagedKVStore:
       return "linear_rms_norm_rope_quant_paged_kv_store";
     case OpType::kLinearRopeRotateQuant:

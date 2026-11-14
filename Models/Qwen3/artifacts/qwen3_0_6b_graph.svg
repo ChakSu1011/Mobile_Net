@@ -1,215 +1,179 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1430.0" height="4302.0" viewBox="0 0 1430.0 4302.0">
+<svg xmlns="http://www.w3.org/2000/svg" width="1634.0" height="3768.0" viewBox="0 0 1634.0 3768.0">
 <defs>
 <marker id="arrow-activation" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#334155"/></marker>
 <marker id="arrow-input" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#2563eb"/></marker>
 <marker id="arrow-output" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#16a34a"/></marker>
 </defs>
-<rect width="1430.0" height="4302.0" fill="#ffffff"/>
+<rect width="1634.0" height="3768.0" fill="#ffffff"/>
 <text x="28.0" y="38.0" font-size="22" fill="#0f172a" text-anchor="start" font-weight="600">qwen3_0_6b Static Graph</text>
-<text x="28.0" y="62.0" font-size="11" fill="#475569" text-anchor="start">model: qwen3_0_6b  |  manifest: 5f62384fe1fa14b0...  |  ir: 3578cbfd1ed37776...</text>
-<rect x="1126.0" y="14.0" width="276" height="96" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
-<text x="1140.0" y="36.0" font-size="12" fill="#0f172a" text-anchor="start" font-weight="600">图例</text>
-<rect x="1140.0" y="46.0" width="28" height="12" rx="3" fill="#ffffff" stroke="#475569"/>
-<text x="1180.0" y="56.0" font-size="10" fill="#334155" text-anchor="start">融合算子</text>
-<path d="M 1143.0 61.0 L 1169.0 61.0 L 1165.0 79.0 L 1139.0 79.0 Z" fill="#ffffff" stroke="#334155"/>
-<text x="1180.0" y="74.0" font-size="10" fill="#334155" text-anchor="start">输入/激活/输出边（精度+shape）</text>
-<rect x="1140.0" y="82.0" width="28" height="12" rx="3" fill="#ffffff" stroke="#dc2626" stroke-dasharray="4 3"/>
-<text x="1180.0" y="92.0" font-size="10" fill="#334155" text-anchor="start">差异 Layer</text>
-<rect x="280.0" y="534.0" width="1100.0" height="2968.0" rx="14" fill="#f8fafc" fill-opacity="0.72" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="28.0" y="62.0" font-size="11" fill="#475569" text-anchor="start">model: qwen3_0_6b  |  manifest: 0605cd1a754717b0...  |  ir: ebc16228db005814...</text>
+<rect x="1330.0" y="14.0" width="276" height="96" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+<text x="1344.0" y="36.0" font-size="12" fill="#0f172a" text-anchor="start" font-weight="600">图例</text>
+<rect x="1344.0" y="46.0" width="28" height="12" rx="3" fill="#ffffff" stroke="#475569"/>
+<text x="1384.0" y="56.0" font-size="10" fill="#334155" text-anchor="start">融合算子</text>
+<path d="M 1347.0 61.0 L 1373.0 61.0 L 1369.0 79.0 L 1343.0 79.0 Z" fill="#ffffff" stroke="#334155"/>
+<text x="1384.0" y="74.0" font-size="10" fill="#334155" text-anchor="start">输入/激活/输出边（精度+shape）</text>
+<rect x="1344.0" y="82.0" width="28" height="12" rx="3" fill="#ffffff" stroke="#dc2626" stroke-dasharray="4 3"/>
+<text x="1384.0" y="92.0" font-size="10" fill="#334155" text-anchor="start">差异 Layer</text>
+<rect x="280.0" y="534.0" width="1304.0" height="2434.0" rx="14" fill="#f8fafc" fill-opacity="0.72" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 4"/>
 <text x="294.0" y="556.0" font-size="13" fill="#94a3b8" text-anchor="start" font-weight="600">DecoderLayer ×28 (layer.0–layer.27)</text>
-<line x1="681.0" y1="228.0" x2="830.0" y2="290.0" stroke="#2563eb" stroke-width="1.6" marker-end="url(#arrow-input)"/>
-<line x1="830.0" y1="382.0" x2="830.0" y2="444.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="512.0" x2="830.0" y2="574.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="666.0" x2="830.0" y2="728.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="796.0" x2="420.0" y2="858.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="420.0" y1="950.0" x2="532.0" y2="1012.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="796.0" x2="830.0" y2="858.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="950.0" x2="830.0" y2="1012.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="796.0" x2="1240.0" y2="858.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="1240.0" y1="950.0" x2="1128.0" y2="1012.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="532.0" y1="1080.0" x2="602.0" y2="1142.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="602.0" y1="1234.0" x2="681.0" y2="1296.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="1080.0" x2="1058.0" y2="1142.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="1058.0" y1="1234.0" x2="979.0" y2="1296.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="681.0" y1="1364.0" x2="588.0" y2="1426.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="979.0" y1="228.0" x2="588.0" y2="1426.0" stroke="#2563eb" stroke-width="1.6" marker-end="url(#arrow-input)"/>
-<line x1="588.0" y1="1501.0" x2="681.0" y2="1563.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="979.0" y1="1364.0" x2="1072.0" y2="1426.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="979.0" y1="228.0" x2="1072.0" y2="1426.0" stroke="#2563eb" stroke-width="1.6" marker-end="url(#arrow-input)"/>
-<line x1="1072.0" y1="1501.0" x2="979.0" y2="1563.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="681.0" y1="1631.0" x2="830.0" y2="1693.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="979.0" y1="1631.0" x2="830.0" y2="1693.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="1128.0" y1="1080.0" x2="830.0" y2="1693.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="1785.0" x2="830.0" y2="1847.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="1915.0" x2="830.0" y2="1977.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="2069.0" x2="830.0" y2="2131.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="2199.0" x2="830.0" y2="2261.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="512.0" x2="830.0" y2="2261.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="2336.0" x2="830.0" y2="2398.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="2466.0" x2="830.0" y2="2528.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="2620.0" x2="830.0" y2="2682.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="2750.0" x2="830.0" y2="2812.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="2921.0" x2="830.0" y2="2983.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="3051.0" x2="830.0" y2="3113.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="3205.0" x2="830.0" y2="3267.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="3335.0" x2="830.0" y2="3397.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="2466.0" x2="830.0" y2="3397.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="3472.0" x2="830.0" y2="3534.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="3602.0" x2="830.0" y2="3664.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="3756.0" x2="830.0" y2="3818.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="3886.0" x2="830.0" y2="3948.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
-<line x1="830.0" y1="4040.0" x2="830.0" y2="4102.0" stroke="#16a34a" stroke-width="1.6" marker-end="url(#arrow-output)"/>
-<path d="M 639.0 160.0 L 735.0 160.0 L 723.0 228.0 L 627.0 228.0 Z" fill="#ffffff" stroke="#2563eb" stroke-width="1.6"/>
-<text x="681.0" y="191.0" font-size="10" fill="#2563eb" text-anchor="middle" font-weight="600">i64</text>
-<text x="681.0" y="205.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256</text>
-<text x="681.0" y="148.0" font-size="11" fill="#2563eb" text-anchor="middle" font-weight="600">input.input_ids</text>
-<path d="M 937.0 160.0 L 1033.0 160.0 L 1021.0 228.0 L 925.0 228.0 Z" fill="#ffffff" stroke="#2563eb" stroke-width="1.6"/>
-<text x="979.0" y="191.0" font-size="10" fill="#2563eb" text-anchor="middle" font-weight="600">i64</text>
-<text x="979.0" y="205.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256</text>
-<text x="979.0" y="148.0" font-size="11" fill="#2563eb" text-anchor="middle" font-weight="600">input.position_ids</text>
-<path d="M 788.0 444.0 L 884.0 444.0 L 872.0 512.0 L 776.0 512.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
-<text x="830.0" y="475.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
-<text x="830.0" y="489.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
-<path d="M 788.0 728.0 L 884.0 728.0 L 872.0 796.0 L 776.0 796.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
-<text x="830.0" y="759.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
-<text x="830.0" y="773.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
-<path d="M 490.0 1012.0 L 586.0 1012.0 L 574.0 1080.0 L 478.0 1080.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
-<text x="532.0" y="1043.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
-<text x="532.0" y="1057.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×2048</text>
-<path d="M 788.0 1012.0 L 884.0 1012.0 L 872.0 1080.0 L 776.0 1080.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
-<text x="830.0" y="1043.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
-<text x="830.0" y="1057.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
-<path d="M 1086.0 1012.0 L 1182.0 1012.0 L 1170.0 1080.0 L 1074.0 1080.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
-<text x="1128.0" y="1043.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
-<text x="1128.0" y="1057.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
-<path d="M 639.0 1296.0 L 735.0 1296.0 L 723.0 1364.0 L 627.0 1364.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
-<text x="681.0" y="1327.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
-<text x="681.0" y="1341.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×2048</text>
-<path d="M 937.0 1296.0 L 1033.0 1296.0 L 1021.0 1364.0 L 925.0 1364.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
-<text x="979.0" y="1327.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
-<text x="979.0" y="1341.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
-<path d="M 639.0 1563.0 L 735.0 1563.0 L 723.0 1631.0 L 627.0 1631.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
-<text x="681.0" y="1594.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
-<text x="681.0" y="1608.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×2048</text>
-<path d="M 937.0 1563.0 L 1033.0 1563.0 L 1021.0 1631.0 L 925.0 1631.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
-<text x="979.0" y="1594.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
-<text x="979.0" y="1608.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
-<path d="M 788.0 1847.0 L 884.0 1847.0 L 872.0 1915.0 L 776.0 1915.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
-<text x="830.0" y="1878.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
-<text x="830.0" y="1892.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×2048</text>
-<path d="M 788.0 2131.0 L 884.0 2131.0 L 872.0 2199.0 L 776.0 2199.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
-<text x="830.0" y="2162.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
-<text x="830.0" y="2176.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
-<path d="M 788.0 2398.0 L 884.0 2398.0 L 872.0 2466.0 L 776.0 2466.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
-<text x="830.0" y="2429.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
-<text x="830.0" y="2443.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
-<path d="M 788.0 2682.0 L 884.0 2682.0 L 872.0 2750.0 L 776.0 2750.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
-<text x="830.0" y="2713.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
-<text x="830.0" y="2727.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
-<path d="M 788.0 2983.0 L 884.0 2983.0 L 872.0 3051.0 L 776.0 3051.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
-<text x="830.0" y="3014.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
-<text x="830.0" y="3028.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×3072</text>
-<path d="M 788.0 3267.0 L 884.0 3267.0 L 872.0 3335.0 L 776.0 3335.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
-<text x="830.0" y="3298.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
-<text x="830.0" y="3312.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
-<path d="M 788.0 3534.0 L 884.0 3534.0 L 872.0 3602.0 L 776.0 3602.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
-<text x="830.0" y="3565.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
-<text x="830.0" y="3579.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
-<path d="M 788.0 3818.0 L 884.0 3818.0 L 872.0 3886.0 L 776.0 3886.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
-<text x="830.0" y="3849.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
-<text x="830.0" y="3863.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
-<path d="M 788.0 4102.0 L 884.0 4102.0 L 872.0 4170.0 L 776.0 4170.0 Z" fill="#ffffff" stroke="#16a34a" stroke-width="1.6"/>
-<text x="830.0" y="4133.0" font-size="10" fill="#16a34a" text-anchor="middle" font-weight="600">fp16</text>
-<text x="830.0" y="4147.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×151936</text>
-<text x="830.0" y="4184.0" font-size="11" fill="#16a34a" text-anchor="middle" font-weight="600">output.logits</text>
-<rect x="720.0" y="290.0" width="220.0" height="92.0" rx="7" fill="#ffffff" stroke="#0891b2" stroke-width="1.5"/>
-<text x="732.0" y="310.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">embedding</text>
-<text x="732.0" y="327.0" font-size="10.5" fill="#0f172a" text-anchor="start">kGather  [embedding / fp16]</text>
-<text x="732.0" y="344.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: gather</text>
-<text x="732.0" y="361.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 151936×1024</text>
-<rect x="697.0" y="574.0" width="266.0" height="92.0" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
-<text x="709.0" y="594.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.attn_norm</text>
-<text x="709.0" y="611.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRmsNorm  [norm / fp16]</text>
-<text x="709.0" y="628.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: pow, mean, add, rsqrt, mul</text>
-<text x="709.0" y="645.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 1024</text>
-<rect x="310.0" y="858.0" width="220.0" height="92.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
-<text x="322.0" y="878.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.q_proj</text>
-<text x="322.0" y="895.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
-<text x="322.0" y="912.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: matmul</text>
+<line x1="783.0" y1="228.0" x2="932.0" y2="290.0" stroke="#2563eb" stroke-width="1.6" marker-end="url(#arrow-input)"/>
+<line x1="932.0" y1="382.0" x2="932.0" y2="444.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="512.0" x2="932.0" y2="574.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="666.0" x2="932.0" y2="728.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="796.0" x2="471.0" y2="858.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="1081.0" y1="228.0" x2="471.0" y2="858.0" stroke="#2563eb" stroke-width="1.6" marker-end="url(#arrow-input)"/>
+<line x1="471.0" y1="967.0" x2="634.0" y2="1029.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="796.0" x2="983.0" y2="858.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="1081.0" y1="228.0" x2="983.0" y2="858.0" stroke="#2563eb" stroke-width="1.6" marker-end="url(#arrow-input)"/>
+<line x1="983.0" y1="967.0" x2="932.0" y2="1029.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="796.0" x2="1444.0" y2="866.5" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="1444.0" y1="958.5" x2="1230.0" y2="1029.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="634.0" y1="1097.0" x2="932.0" y2="1159.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="1097.0" x2="932.0" y2="1159.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="1230.0" y1="1097.0" x2="932.0" y2="1159.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="1251.0" x2="932.0" y2="1313.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="1381.0" x2="932.0" y2="1443.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="1535.0" x2="932.0" y2="1597.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="1665.0" x2="932.0" y2="1727.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="512.0" x2="932.0" y2="1727.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="1802.0" x2="932.0" y2="1864.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="1932.0" x2="932.0" y2="1994.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="2086.0" x2="932.0" y2="2148.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="2216.0" x2="932.0" y2="2278.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="2387.0" x2="932.0" y2="2449.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="2517.0" x2="932.0" y2="2579.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="2671.0" x2="932.0" y2="2733.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="2801.0" x2="932.0" y2="2863.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="1932.0" x2="932.0" y2="2863.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="2938.0" x2="932.0" y2="3000.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="3068.0" x2="932.0" y2="3130.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="3222.0" x2="932.0" y2="3284.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="3352.0" x2="932.0" y2="3414.0" stroke="#334155" stroke-width="1.6" marker-end="url(#arrow-activation)"/>
+<line x1="932.0" y1="3506.0" x2="932.0" y2="3568.0" stroke="#16a34a" stroke-width="1.6" marker-end="url(#arrow-output)"/>
+<path d="M 741.0 160.0 L 837.0 160.0 L 825.0 228.0 L 729.0 228.0 Z" fill="#ffffff" stroke="#2563eb" stroke-width="1.6"/>
+<text x="783.0" y="191.0" font-size="10" fill="#2563eb" text-anchor="middle" font-weight="600">i64</text>
+<text x="783.0" y="205.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256</text>
+<text x="783.0" y="148.0" font-size="11" fill="#2563eb" text-anchor="middle" font-weight="600">input.input_ids</text>
+<path d="M 1039.0 160.0 L 1135.0 160.0 L 1123.0 228.0 L 1027.0 228.0 Z" fill="#ffffff" stroke="#2563eb" stroke-width="1.6"/>
+<text x="1081.0" y="191.0" font-size="10" fill="#2563eb" text-anchor="middle" font-weight="600">i64</text>
+<text x="1081.0" y="205.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256</text>
+<text x="1081.0" y="148.0" font-size="11" fill="#2563eb" text-anchor="middle" font-weight="600">input.position_ids</text>
+<path d="M 890.0 444.0 L 986.0 444.0 L 974.0 512.0 L 878.0 512.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="932.0" y="475.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="932.0" y="489.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 890.0 728.0 L 986.0 728.0 L 974.0 796.0 L 878.0 796.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="932.0" y="759.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="932.0" y="773.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 592.0 1029.0 L 688.0 1029.0 L 676.0 1097.0 L 580.0 1097.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="634.0" y="1060.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="634.0" y="1074.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×2048</text>
+<path d="M 890.0 1029.0 L 986.0 1029.0 L 974.0 1097.0 L 878.0 1097.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="932.0" y="1060.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="932.0" y="1074.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 1188.0 1029.0 L 1284.0 1029.0 L 1272.0 1097.0 L 1176.0 1097.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="1230.0" y="1060.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="1230.0" y="1074.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 890.0 1313.0 L 986.0 1313.0 L 974.0 1381.0 L 878.0 1381.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="932.0" y="1344.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="932.0" y="1358.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×2048</text>
+<path d="M 890.0 1597.0 L 986.0 1597.0 L 974.0 1665.0 L 878.0 1665.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="932.0" y="1628.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="932.0" y="1642.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 890.0 1864.0 L 986.0 1864.0 L 974.0 1932.0 L 878.0 1932.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="932.0" y="1895.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="932.0" y="1909.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 890.0 2148.0 L 986.0 2148.0 L 974.0 2216.0 L 878.0 2216.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="932.0" y="2179.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="932.0" y="2193.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 890.0 2449.0 L 986.0 2449.0 L 974.0 2517.0 L 878.0 2517.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="932.0" y="2480.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="932.0" y="2494.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×3072</text>
+<path d="M 890.0 2733.0 L 986.0 2733.0 L 974.0 2801.0 L 878.0 2801.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="932.0" y="2764.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="932.0" y="2778.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 890.0 3000.0 L 986.0 3000.0 L 974.0 3068.0 L 878.0 3068.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="932.0" y="3031.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="932.0" y="3045.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 890.0 3284.0 L 986.0 3284.0 L 974.0 3352.0 L 878.0 3352.0 Z" fill="#ffffff" stroke="#334155" stroke-width="1.6"/>
+<text x="932.0" y="3315.0" font-size="10" fill="#334155" text-anchor="middle" font-weight="600">fp16</text>
+<text x="932.0" y="3329.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×1024</text>
+<path d="M 890.0 3568.0 L 986.0 3568.0 L 974.0 3636.0 L 878.0 3636.0 Z" fill="#ffffff" stroke="#16a34a" stroke-width="1.6"/>
+<text x="932.0" y="3599.0" font-size="10" fill="#16a34a" text-anchor="middle" font-weight="600">fp16</text>
+<text x="932.0" y="3613.0" font-size="9.5" fill="#334155" text-anchor="middle">1×256×151936</text>
+<text x="932.0" y="3650.0" font-size="11" fill="#16a34a" text-anchor="middle" font-weight="600">output.logits</text>
+<rect x="822.0" y="290.0" width="220.0" height="92.0" rx="7" fill="#ffffff" stroke="#0891b2" stroke-width="1.5"/>
+<text x="834.0" y="310.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">embedding</text>
+<text x="834.0" y="327.0" font-size="10.5" fill="#0f172a" text-anchor="start">kGather  [embedding / fp16]</text>
+<text x="834.0" y="344.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: gather</text>
+<text x="834.0" y="361.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 151936×1024</text>
+<rect x="799.0" y="574.0" width="266.0" height="92.0" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+<text x="811.0" y="594.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.attn_norm</text>
+<text x="811.0" y="611.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRmsNorm  [norm / fp16]</text>
+<text x="811.0" y="628.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: pow, mean, add, rsqrt, mul</text>
+<text x="811.0" y="645.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 1024</text>
+<rect x="310.0" y="858.0" width="322.0" height="109.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+<text x="322.0" y="878.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.q_path</text>
+<text x="322.0" y="895.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinearPerHeadRMSNormRope  [linear / fp16]</text>
+<text x="322.0" y="912.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: linear, per_head_rms_norm, rope</text>
 <text x="322.0" y="929.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 2048×1024</text>
-<rect x="720.0" y="858.0" width="220.0" height="92.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
-<text x="732.0" y="878.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.k_proj</text>
-<text x="732.0" y="895.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
-<text x="732.0" y="912.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: matmul</text>
-<text x="732.0" y="929.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 1024×1024</text>
-<rect x="1130.0" y="858.0" width="220.0" height="92.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
-<text x="1142.0" y="878.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.v_proj</text>
-<text x="1142.0" y="895.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
-<text x="1142.0" y="912.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: matmul</text>
-<text x="1142.0" y="929.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 1024×1024</text>
-<rect x="469.0" y="1142.0" width="266.0" height="92.0" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
-<text x="481.0" y="1162.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.q_norm</text>
-<text x="481.0" y="1179.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRmsNorm  [norm / fp16]</text>
-<text x="481.0" y="1196.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: pow, mean, add, rsqrt, mul</text>
-<text x="481.0" y="1213.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 128</text>
-<rect x="925.0" y="1142.0" width="266.0" height="92.0" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
-<text x="937.0" y="1162.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.k_norm</text>
-<text x="937.0" y="1179.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRmsNorm  [norm / fp16]</text>
-<text x="937.0" y="1196.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: pow, mean, add, rsqrt, mul</text>
-<text x="937.0" y="1213.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 128</text>
-<rect x="441.0" y="1426.0" width="294.0" height="75.0" rx="7" fill="#ffffff" stroke="#c026d3" stroke-width="1.5"/>
-<text x="453.0" y="1446.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.q_rope</text>
-<text x="453.0" y="1463.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRope  [position / fp16]</text>
-<text x="453.0" y="1480.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: cos/sin, rotate_half, mul, add</text>
-<rect x="925.0" y="1426.0" width="294.0" height="75.0" rx="7" fill="#ffffff" stroke="#c026d3" stroke-width="1.5"/>
-<text x="937.0" y="1446.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.k_rope</text>
-<text x="937.0" y="1463.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRope  [position / fp16]</text>
-<text x="937.0" y="1480.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: cos/sin, rotate_half, mul, add</text>
-<rect x="662.0" y="1693.0" width="336.0" height="92.0" rx="7" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
-<text x="674.0" y="1713.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.attn</text>
-<text x="674.0" y="1730.0" font-size="10.5" fill="#0f172a" text-anchor="start">kMegaAttention  [attention / fp16]</text>
-<text x="674.0" y="1747.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: repeat_kv, QK^T, scale, causal_mask,</text>
-<text x="674.0" y="1764.0" font-size="10.5" fill="#0f172a" text-anchor="start">softmax, PV, merge_heads</text>
-<rect x="720.0" y="1977.0" width="220.0" height="92.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
-<text x="732.0" y="1997.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.o_proj</text>
-<text x="732.0" y="2014.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
-<text x="732.0" y="2031.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: matmul</text>
-<text x="732.0" y="2048.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 1024×2048</text>
-<rect x="720.0" y="2261.0" width="220.0" height="75.0" rx="7" fill="#ffffff" stroke="#334155" stroke-width="1.5"/>
-<text x="732.0" y="2281.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.attn_residual</text>
-<text x="732.0" y="2298.0" font-size="10.5" fill="#0f172a" text-anchor="start">kAdd  [elementwise / fp16]</text>
-<text x="732.0" y="2315.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: add</text>
-<rect x="697.0" y="2528.0" width="266.0" height="92.0" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
-<text x="709.0" y="2548.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.mlp_norm</text>
-<text x="709.0" y="2565.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRmsNorm  [norm / fp16]</text>
-<text x="709.0" y="2582.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: pow, mean, add, rsqrt, mul</text>
-<text x="709.0" y="2599.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 1024</text>
-<rect x="720.0" y="2812.0" width="220.0" height="109.0" rx="7" fill="#ffffff" stroke="#b45309" stroke-width="1.5"/>
-<text x="732.0" y="2832.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.mlp_gate_up</text>
-<text x="732.0" y="2849.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinearSwiGlu  [mlp / fp16]</text>
-<text x="732.0" y="2866.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: linear, silu, mul</text>
-<text x="732.0" y="2883.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 3072×1024</text>
-<text x="732.0" y="2900.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 3072×1024</text>
-<rect x="720.0" y="3113.0" width="220.0" height="92.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
-<text x="732.0" y="3133.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.mlp_down</text>
-<text x="732.0" y="3150.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
-<text x="732.0" y="3167.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: matmul</text>
-<text x="732.0" y="3184.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 1024×3072</text>
-<rect x="720.0" y="3397.0" width="220.0" height="75.0" rx="7" fill="#ffffff" stroke="#334155" stroke-width="1.5"/>
-<text x="732.0" y="3417.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.mlp_residual</text>
-<text x="732.0" y="3434.0" font-size="10.5" fill="#0f172a" text-anchor="start">kAdd  [elementwise / fp16]</text>
-<text x="732.0" y="3451.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: add</text>
-<rect x="697.0" y="3664.0" width="266.0" height="92.0" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
-<text x="709.0" y="3684.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">final_norm</text>
-<text x="709.0" y="3701.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRmsNorm  [norm / fp16]</text>
-<text x="709.0" y="3718.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: pow, mean, add, rsqrt, mul</text>
-<text x="709.0" y="3735.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 1024</text>
-<rect x="720.0" y="3948.0" width="220.0" height="92.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
-<text x="732.0" y="3968.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">lm_head</text>
-<text x="732.0" y="3985.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
-<text x="732.0" y="4002.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: matmul</text>
-<text x="732.0" y="4019.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 151936×1024</text>
-<text x="28.0" y="4268.0" font-size="9.5" fill="#64748b" text-anchor="start">manifest SHA-256: 5f62384fe1fa14b0002b616c51309e9bf7e2b742ad41303d32ef4dd6a203f1df</text>
-<text x="28.0" y="4284.0" font-size="9.5" fill="#64748b" text-anchor="start">IR SHA-256: 3578cbfd1ed37776f8f6384c5b84d5c1ea24589bac5eed39a381376d0a94da20</text>
+<text x="322.0" y="946.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 128</text>
+<rect x="822.0" y="858.0" width="322.0" height="109.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+<text x="834.0" y="878.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.k_path</text>
+<text x="834.0" y="895.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinearPerHeadRMSNormRope  [linear / fp16]</text>
+<text x="834.0" y="912.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: linear, per_head_rms_norm, rope</text>
+<text x="834.0" y="929.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 1024×1024</text>
+<text x="834.0" y="946.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 128</text>
+<rect x="1334.0" y="866.5" width="220.0" height="92.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+<text x="1346.0" y="886.5" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.v_proj</text>
+<text x="1346.0" y="903.5" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
+<text x="1346.0" y="920.5" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: matmul</text>
+<text x="1346.0" y="937.5" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 1024×1024</text>
+<rect x="764.0" y="1159.0" width="336.0" height="92.0" rx="7" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/>
+<text x="776.0" y="1179.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.attn</text>
+<text x="776.0" y="1196.0" font-size="10.5" fill="#0f172a" text-anchor="start">kMegaAttention  [attention / fp16]</text>
+<text x="776.0" y="1213.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: repeat_kv, QK^T, scale, causal_mask,</text>
+<text x="776.0" y="1230.0" font-size="10.5" fill="#0f172a" text-anchor="start">softmax, PV, merge_heads</text>
+<rect x="822.0" y="1443.0" width="220.0" height="92.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+<text x="834.0" y="1463.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.o_proj</text>
+<text x="834.0" y="1480.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
+<text x="834.0" y="1497.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: matmul</text>
+<text x="834.0" y="1514.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 1024×2048</text>
+<rect x="822.0" y="1727.0" width="220.0" height="75.0" rx="7" fill="#ffffff" stroke="#334155" stroke-width="1.5"/>
+<text x="834.0" y="1747.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.attn_residual</text>
+<text x="834.0" y="1764.0" font-size="10.5" fill="#0f172a" text-anchor="start">kAdd  [elementwise / fp16]</text>
+<text x="834.0" y="1781.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: add</text>
+<rect x="799.0" y="1994.0" width="266.0" height="92.0" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+<text x="811.0" y="2014.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.mlp_norm</text>
+<text x="811.0" y="2031.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRmsNorm  [norm / fp16]</text>
+<text x="811.0" y="2048.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: pow, mean, add, rsqrt, mul</text>
+<text x="811.0" y="2065.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 1024</text>
+<rect x="822.0" y="2278.0" width="220.0" height="109.0" rx="7" fill="#ffffff" stroke="#b45309" stroke-width="1.5"/>
+<text x="834.0" y="2298.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.mlp_gate_up</text>
+<text x="834.0" y="2315.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinearSwiGlu  [mlp / fp16]</text>
+<text x="834.0" y="2332.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: linear, silu, mul</text>
+<text x="834.0" y="2349.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 3072×1024</text>
+<text x="834.0" y="2366.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 3072×1024</text>
+<rect x="822.0" y="2579.0" width="220.0" height="92.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+<text x="834.0" y="2599.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.mlp_down</text>
+<text x="834.0" y="2616.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
+<text x="834.0" y="2633.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: matmul</text>
+<text x="834.0" y="2650.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 1024×3072</text>
+<rect x="822.0" y="2863.0" width="220.0" height="75.0" rx="7" fill="#ffffff" stroke="#334155" stroke-width="1.5"/>
+<text x="834.0" y="2883.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">layer.0.mlp_residual</text>
+<text x="834.0" y="2900.0" font-size="10.5" fill="#0f172a" text-anchor="start">kAdd  [elementwise / fp16]</text>
+<text x="834.0" y="2917.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: add</text>
+<rect x="799.0" y="3130.0" width="266.0" height="92.0" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+<text x="811.0" y="3150.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">final_norm</text>
+<text x="811.0" y="3167.0" font-size="10.5" fill="#0f172a" text-anchor="start">kRmsNorm  [norm / fp16]</text>
+<text x="811.0" y="3184.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: pow, mean, add, rsqrt, mul</text>
+<text x="811.0" y="3201.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 1024</text>
+<rect x="822.0" y="3414.0" width="220.0" height="92.0" rx="7" fill="#ffffff" stroke="#475569" stroke-width="1.5"/>
+<text x="834.0" y="3434.0" font-size="13" fill="#0f172a" text-anchor="start" font-weight="600">lm_head</text>
+<text x="834.0" y="3451.0" font-size="10.5" fill="#0f172a" text-anchor="start">kLinear  [linear / fp16]</text>
+<text x="834.0" y="3468.0" font-size="10.5" fill="#0f172a" text-anchor="start">散算子: matmul</text>
+<text x="834.0" y="3485.0" font-size="10.5" fill="#0f172a" text-anchor="start">W: fp16, 151936×1024</text>
+<text x="28.0" y="3734.0" font-size="9.5" fill="#64748b" text-anchor="start">manifest SHA-256: 0605cd1a754717b0e82bfc214a57d0cdecbe9720f9ff18b6afbdf834315b0b8f</text>
+<text x="28.0" y="3750.0" font-size="9.5" fill="#64748b" text-anchor="start">IR SHA-256: ebc16228db005814bbb331ab444d1a1ca501243102868ccb063f6463127c3483</text>
 </svg>

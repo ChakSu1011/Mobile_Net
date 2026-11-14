@@ -37,7 +37,7 @@ from qwen3_graph_builder import (  # noqa: E402
 )
 
 CONFIG_PATH = MODEL_DIR / "config.json"
-EXPECTED_OPS = 426
+EXPECTED_OPS = 314
 EXPECTED_CONSTANTS = 310
 EXPECTED_INPUTS = 2
 EXPECTED_OUTPUTS = 1
@@ -158,28 +158,24 @@ class Qwen3GraphTest(unittest.TestCase):
         self.assertEqual(total_params * 2, EXPECTED_BYTES)
 
     def test_layer_zero_topology(self) -> None:
-        """layer.0 的 15 个 op 顺序和关键连接符合源码结构。"""
+        """layer.0 的 11 个 op 顺序和关键连接符合源码结构。"""
         names = self._op_names()
         layer_prefix = "layer.0."
         layer_ops = [
             name for name in names if name.startswith(layer_prefix)]
-        self.assertEqual(len(layer_ops), 15)
-        self.assertEqual(len(set(layer_ops)), 15)
+        self.assertEqual(len(layer_ops), 11)
+        self.assertEqual(len(set(layer_ops)), 11)
 
         def index(name: str) -> int:
             """返回 op 在拓扑序中的位置。"""
             return names.index(name)
 
         dependencies = [
-            ("layer.0.attn_norm", "layer.0.q_proj"),
-            ("layer.0.attn_norm", "layer.0.k_proj"),
+            ("layer.0.attn_norm", "layer.0.q_path"),
+            ("layer.0.attn_norm", "layer.0.k_path"),
             ("layer.0.attn_norm", "layer.0.v_proj"),
-            ("layer.0.q_proj", "layer.0.q_norm"),
-            ("layer.0.k_proj", "layer.0.k_norm"),
-            ("layer.0.q_norm", "layer.0.q_rope"),
-            ("layer.0.k_norm", "layer.0.k_rope"),
-            ("layer.0.q_rope", "layer.0.attn"),
-            ("layer.0.k_rope", "layer.0.attn"),
+            ("layer.0.q_path", "layer.0.attn"),
+            ("layer.0.k_path", "layer.0.attn"),
             ("layer.0.v_proj", "layer.0.attn"),
             ("layer.0.attn", "layer.0.o_proj"),
             ("layer.0.o_proj", "layer.0.attn_residual"),
@@ -200,19 +196,17 @@ class Qwen3GraphTest(unittest.TestCase):
             self._op_line("layer.0.attn_norm"),
         )
         self.assertIn(
-            "src=[layer.0.attn_norm.out,layer.0.q_proj.weight]",
-            self._op_line("layer.0.q_proj"),
+            "src=[layer.0.attn_norm.out,layer.0.q_proj.weight,"
+            "layer.0.q_norm.weight,input.position_ids]",
+            self._op_line("layer.0.q_path"),
         )
         self.assertIn(
-            "src=[layer.0.q_proj.out,layer.0.q_norm.weight]",
-            self._op_line("layer.0.q_norm"),
+            "src=[layer.0.attn_norm.out,layer.0.k_proj.weight,"
+            "layer.0.k_norm.weight,input.position_ids]",
+            self._op_line("layer.0.k_path"),
         )
         self.assertIn(
-            "src=[layer.0.q_norm.out,input.position_ids]",
-            self._op_line("layer.0.q_rope"),
-        )
-        self.assertIn(
-            "src=[layer.0.q_rope.out,layer.0.k_rope.out,"
+            "src=[layer.0.q_path.out,layer.0.k_path.out,"
             "layer.0.v_proj.out]",
             self._op_line("layer.0.attn"),
         )
@@ -313,15 +307,15 @@ class Qwen3GraphTest(unittest.TestCase):
         self.assertEqual(self.graph.dump_ir(), self.ir)
         self.assertEqual(len(self._op_names()), EXPECTED_OPS)
 
-    def test_all_layers_have_fifteen_ops(self) -> None:
-        """28 个 Decoder Layer 各包含 15 个唯一 op。"""
+    def test_all_layers_have_eleven_ops(self) -> None:
+        """28 个 Decoder Layer 各包含 11 个唯一 op。"""
         names = self._op_names()
         for layer in range(self.config.num_hidden_layers):
             prefix = f"layer.{layer}."
             layer_ops = [
                 name for name in names if name.startswith(prefix)]
-            self.assertEqual(len(layer_ops), 15, prefix)
-            self.assertEqual(len(set(layer_ops)), 15, prefix)
+            self.assertEqual(len(layer_ops), 11, prefix)
+            self.assertEqual(len(set(layer_ops)), 11, prefix)
 
     def test_config_file_matches_transformers(self) -> None:
         """config.json 可被 Transformers Qwen3Config 直接加载。"""

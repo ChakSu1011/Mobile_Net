@@ -45,10 +45,10 @@ class PipelineTest(unittest.TestCase):
     def test_package_counts(self) -> None:
         """Qwen3 包计数、IR 哈希与重建一致。"""
         summary = self.result.package.manifest["statistics"]
-        self.assertEqual(summary["tensors"], 735)
-        self.assertEqual(summary["ops"], 423)
+        self.assertEqual(summary["tensors"], 623)
+        self.assertEqual(summary["ops"], 311)
         self.assertEqual(summary["constants"], 310)
-        self.assertEqual(summary["activation_tensors"], 423)
+        self.assertEqual(summary["activation_tensors"], 311)
         self.assertEqual(
             self.result.serialization.graph_ir_sha256,
             self.result.package.manifest["graph"]["ir_sha256"],

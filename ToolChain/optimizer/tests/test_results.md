@@ -2,7 +2,7 @@
 
 | 项目 | 内容 |
 |------|------|
-| 报告日期 | 2026-11-14 |
+| 报告日期 | 2026-11-15 |
 | 测试对象 | `ToolChain.optimizer` |
 | 设计文档 | [optimizer_design.md](../.doc/optimizer_design.md) |
 | 完整阶段测试 | [ToolChain/tests/test_results.md](../../tests/test_results.md) |
@@ -14,7 +14,7 @@
 | 操作系统 | Windows 11（10.0.26200） |
 | Python | 3.13.3 |
 | 解释器 | `C:\Users\18626\AppData\Local\Programs\Python\Python313\python.exe` |
-| Graph 扩展 | `Graph/build/python/_graph.pyd`（2026-11-14 构建） |
+| Graph 扩展 | `Graph/build/python/_graph.pyd`（2026-11-15 构建） |
 | 字符编码 | `PYTHONUTF8=1` |
 | 外部依赖 | 无 PyTorch / LibTorch / Protobuf |
 
@@ -27,7 +27,7 @@ PYTHONUTF8=1 python -m unittest ToolChain.optimizer.test_optimizer -v
 实际输出（末尾）：
 
 ```text
-Ran 18 tests in 0.134s
+Ran 18 tests in 0.087s
 
 OK
 ```
@@ -38,7 +38,7 @@ OK
 
 - BF16 → FP16 等宽精度转换、`target_precision=keep`、非法精度转换报错；
 - linear、gather、RMSNorm、Add、GQA 的形状契约；
-- 423 个 activation 张量的静态形状完整性；
+- 311 个 activation 张量的静态形状完整性；
 - 生命周期计算与 256 B 对齐；
 - 复用区间无重叠、关闭复用后 arena 增大；
 - 输入/常量不进入 arena，输出不可复用；

@@ -250,6 +250,7 @@ W: fp16, 3072×1024
 | `kAdd` | `add` |
 | `kLinearRmsNorm` | `linear`、`rms_norm` |
 | `kLinearRmsNormRope` | `linear`、`rms_norm`、`rope` |
+| `kLinearPerHeadRMSNormRope` | `linear`、`per_head_rms_norm`、`rope` |
 | `kLinearRmsNormRopeQuantPagedKVStore` | `linear`、`rms_norm`、`rope`、`quant`、`paged_kv_store` |
 | `kAddRmsNorm` | `add`、`rms_norm` |
 | `kFfn` | `gate/up`、`activation`、`down` |
@@ -376,7 +377,7 @@ render_svg(view, output_path)
 ### 4.10 性能与内存
 
 - 默认视图约 20–40 个节点，不读取权重内容。
-- 不构建完整 423 op 视图；SVG 预估小于 300 KB。
+- 不构建完整 311 op 视图；SVG 预估小于 300 KB。
 
 ### 4.11 输出命名
 
@@ -420,9 +421,9 @@ render_svg(view, output_path)
 
 | 编号 | 用例 | 预期 |
 |------|------|------|
-| UT-VIS-001 | 读取合法 Qwen3 包 | 返回 735 tensor、423 计算 op |
+| UT-VIS-001 | 读取合法 Qwen3 包 | 返回 623 tensor、311 计算 op |
 | UT-VIS-002 | 损坏 manifest | 抛 `BuildError` |
-| UT-VIS-003 | `kLinearSwiGlu` 组成 | 返回 4 个散算子 |
+| UT-VIS-003 | `kLinearSwiGlu` / `kLinearPerHeadRMSNormRope` 组成 | 分别返回 4 / 3 个散算子 |
 | UT-VIS-004 | 未知 OpType | 不崩溃，标注“未登记” |
 | UT-VIS-005 | 权重写入节点 | 节点内显示 W 行，精度/shape 正确 |
 | UT-VIS-006 | 激活平行四边形 | 精度、shape 与 manifest 一致 |

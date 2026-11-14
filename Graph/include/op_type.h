@@ -28,6 +28,7 @@ enum class OpType {
   kLinear,
   kLinearRmsNorm,
   kLinearRmsNormRope,
+  kLinearPerHeadRMSNormRope,
   kLinearRmsNormRopeQuantPagedKVStore,
   kLinearRopeRotateQuant,
   kLinearMul,

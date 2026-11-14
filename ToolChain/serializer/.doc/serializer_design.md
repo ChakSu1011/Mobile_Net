@@ -214,7 +214,7 @@ def rebuild_graph(
     "ops": [],
     "metadata": {},
     "ir_sha256": "...",
-    "ir_line_count": 744
+    "ir_line_count": 632
   },
   "optimization": {
     "config": {"target_precision": "float16", "...": "..."},
@@ -231,8 +231,8 @@ def rebuild_graph(
     ]
   },
   "statistics": {
-    "tensors": 735, "ops": 423, "constants": 310, "outputs": 1,
-    "activation_tensors": 423, "constant_bytes": 1192099840
+    "tensors": 623, "ops": 311, "constants": 310, "outputs": 1,
+    "activation_tensors": 311, "constant_bytes": 1192099840
   }
 }
 ```
@@ -374,7 +374,7 @@ dtype 映射：
 | UT-SER-009 | 合成权重 | 手动写 safetensors | 打包字节与源一致；offset 对齐 |
 | UT-SER-010 | IR 校验失败 | 修改 manifest 图 | 重建后哈希不符抛错 |
 | UT-SER-011 | 未优化图 | 含 unknown 精度 | 抛 `BuildError` |
-| UT-SER-012 | Qwen3 包 | 全流程 | 包可加载；IR 行数 744；统计 735/423/310 |
+| UT-SER-012 | Qwen3 包 | 全流程 | 包可加载；IR 行数 632；统计 623/311/310 |
 
 ### 6.3 测试环境
 

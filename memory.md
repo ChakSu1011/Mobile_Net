@@ -93,7 +93,7 @@
 
 每个模块的设计文档、skill 与测试结果必须集中放在该模块目录内，不得散落在
 模块根目录、仓库根目录或其他模块目录中。模块目录指该模块的根目录；多级模块
-（例如 `Build/converter`）以子模块根目录为准。
+（例如 `ToolChain/converter`）以子模块根目录为准。
 
 ### 5.1 设计文档
 
@@ -122,11 +122,11 @@
 ### 5.4 构建产物
 
 - 模型构建产物（artifacts）必须放在对应模型目录下，例如
-  `Models/Qwen3/artifacts/`；不得放在 `Build/artifacts/`、仓库根目录或
+  `Models/Qwen3/artifacts/`；不得放在 `ToolChain/artifacts/`、仓库根目录或
   其他模块目录中。
 - 模型包目录为 `Models/<模型目录>/artifacts/<model-name>/`，中间 work
   目录为同级的 `<model-name>_work/`。
-- Build 阶段负责生成产物，但不得在 `Build/` 下保留 artifacts 目录。
+- Build 阶段负责生成产物，但不得在 `ToolChain/` 下保留 artifacts 目录。
 
 ---
 

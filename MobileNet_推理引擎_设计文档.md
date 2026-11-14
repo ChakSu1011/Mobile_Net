@@ -202,9 +202,9 @@ Agent 智能体在服务侧的应用部署已经非常广泛，手机端或者�
 | 层次 | 模块 | 主要职责 | 实现与目录 |
 | --- | --- | --- | --- |
 | 图与契约层 | 融合算子图（Graph） | C++17 runtime IR：Graph/Op/Tensor/Storage/GraphEnv/OpEnv；模型无关的 op_type 与 attr、Input/Output op、后序 DFS 拓扑排序、常量依赖叶子；pybind11 最小构图接口与 `dump_ir()` 调试输出 | C++/pybind11，`Graph/` |
-| 离线工具链层 | Converter | 模型源码转换为 Graph，并旁路记录 ModelGraph | Python，`Build/converter/` |
-| 离线工具链层 | Optimizer | 在 ModelGraph 上做精度推导、形状推导、显存编排、优化日志 | Python，`Build/optimizer/` |
-| 离线工具链层 | Serializer | 把优化后的 ModelGraph 与权重序列化为 `model.mgf` 模型包 | Python，`Build/serializer/` |
+| 离线工具链层 | Converter | 模型源码转换为 Graph，并旁路记录 ModelGraph | Python，`ToolChain/converter/` |
+| 离线工具链层 | Optimizer | 在 ModelGraph 上做精度推导、形状推导、显存编排、优化日志 | Python，`ToolChain/optimizer/` |
+| 离线工具链层 | Serializer | 把优化后的 ModelGraph 与权重序列化为 `model.mgf` 模型包 | Python，`ToolChain/serializer/` |
 | 运行时核心层 | Loader | 模型包加载、校验、Graph重建、后端选择与能力校验、GraphEnv/OpEnv 创建、权重转换/上传 | C++，`Runtime/loader/` |
 | 运行时核心层 | Scheduler | 请求队列、Continuous Batching、调度计划 | C++，`Runtime/scheduler/` |
 | 运行时核心层 | KVCache Manager | Paged KV Block 分配、共享与回收 | C++，`Runtime/kvcache/` |
@@ -232,7 +232,7 @@ MobileNet/
 │   ├── python/            # pybind11 绑定与最小 Python 构图 API
 │   ├── build/             # CMake 构建输出（_graph 原生扩展）
 │   └── tests/             # Graph C++/Python 测试与 test_results.md
-├── Build/                 # 离线工具链（Python）
+├── ToolChain/       # 离线工具链（Python）
 │   ├── .skill/            # 阶段级 skill
 │   ├── tests/test_results.md  # 阶段级测试结果
 │   ├── common/            # ModelGraph、safetensors、JSON、错误与哈希工具
@@ -370,9 +370,9 @@ APP          Tokenizer        Scheduler        Executor          GPU
 | 序号 | 设计文档 | 覆盖模块 | 主要依赖 | 建议顺序 |
 | --- | --- | --- | --- | --- |
 | 1 | [Graph 设计文档](Graph/.doc/Graph_design.md) | C++17 runtime IR（Graph/Op/Tensor/Storage/GraphEnv/OpEnv）、Input/Output op、SortOp、pybind11 最小构图接口、dump_ir | 无 | 1 |
-| 2 | [Converter 设计文档](Build/converter/.doc/converter_design.md) | Qwen3 Adapter、RecordingGraph、ModelGraph sidecar、权重映射 | 1 | 2 |
-| 3 | [Optimizer 设计文档](Build/optimizer/.doc/optimizer_design.md) | Precision/Shape/Memory Pass、显存复用、优化报告 | 1、2 | 3 |
-| 4 | [Serializer 设计文档](Build/serializer/.doc/serializer_design.md) | model.mgf 格式、manifest、权重打包、图重建校验 | 1、3 | 4 |
+| 2 | [Converter 设计文档](ToolChain/converter/.doc/converter_design.md) | Qwen3 Adapter、RecordingGraph、ModelGraph sidecar、权重映射 | 1 | 2 |
+| 3 | [Optimizer 设计文档](ToolChain/optimizer/.doc/optimizer_design.md) | Precision/Shape/Memory Pass、显存复用、优化报告 | 1、2 | 3 |
+| 4 | [Serializer 设计文档](ToolChain/serializer/.doc/serializer_design.md) | model.mgf 格式、manifest、权重打包、图重建校验 | 1、3 | 4 |
 | 5 | Loader 与 Backend 框架设计文档 | 模型包校验、Graph 重建、GraphEnv/OpEnv 创建、后端注册与选择、I/O 绑定、能力校验、权重转换与上传、资源所有权 | 4 | 5 |
 | 6 | OCL 后端与 Kernel 设计文档 | Backend 接口实现、Kernel 清单、编译缓存、精度策略、契约测试 | 1、5 | 6 |
 | 7 | Executor 设计文档 | Packing、主机 I/O 绑定、attention metadata、按 GetOrderlyOPList 驱动 OpEnv（H2D/计算/D2H）、采样、回写 | 5、6 | 7 |

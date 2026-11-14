@@ -128,13 +128,13 @@ CMAKE_RANLIB:FILEPATH=d:/Mobile_Net/Graph/tools/zig_ranlib.cmd
 ```text
 Test project D:/Mobile_Net/Graph/build
     Start 1: graph_unit
-1/2 Test #1: graph_unit .......................   Passed    0.18 sec
+1/2 Test #1: graph_unit .......................   Passed    0.05 sec
     Start 2: graph_python
-2/2 Test #2: graph_python .....................   Passed    0.29 sec
+2/2 Test #2: graph_python .....................   Passed    0.11 sec
 
 100% tests passed out of 2
 
-Total Test time (real) =   0.64 sec
+Total Test time (real) =   0.23 sec
 ```
 
 结论：CTest 2/2 通过，退出码 0。

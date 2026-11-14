@@ -50,6 +50,7 @@ Runtime/      Loader / Engine / Scheduler / Kernel 执行静态图
 - 模型构建产物：`Models/<模型目录>/artifacts/`。
 - 根目录设计文档：`.doc/MobileNet_design.md`。
 - Graph 原生构建输出：`Graph/build/`，不是 ToolChain 目录。
+- 外部参考知识库：`Reference/`，只作本地参考，不提交 Git/GitHub。
 
 ## 输入
 

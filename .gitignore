@@ -1,3 +1,6 @@
+# 本地参考知识库（不提交 Git/GitHub）
+Reference/
+
 # 构建产物（ToolChain 源码与模型包仍需入库，只忽略编译输出与中间文件）
 Graph/build/
 Models/*/artifacts/*_work/

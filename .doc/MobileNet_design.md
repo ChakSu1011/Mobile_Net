@@ -275,7 +275,7 @@ MobileNet/
 │   ├── prefix_cache/
 │   └── session/
 ├── Tests/                 # 单元、集成、基准、金标准数据、后端契约测试
-└── Docs/                  # 通用文档、知识库与历史资料
+└── Reference/             # 本地参考知识库（不提交 GitHub）
 ```
 
 ## 3.3 离线工具链流程

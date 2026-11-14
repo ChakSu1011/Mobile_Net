@@ -9,7 +9,7 @@
 | 模块目录 | `Build/optimizer/` |
 | 上游依赖 | `Build/converter` 输出的 `ModelGraph` |
 | 下游模块 | `Build/serializer` |
-| 权威图设计 | [Graph/.doc/Graph设计文档.md](../../Graph/.doc/Graph设计文档.md) |
+| 权威图设计 | [Graph/.doc/Graph设计文档.md](../../../Graph/.doc/Graph设计文档.md) |
 
 ## 1. 背景与目标
 
@@ -340,7 +340,7 @@ class MemoryPass:
 | P4 | 实现 Memory Pass 与重叠校验 | P3 | `memory.py` |
 | P5 | 编排 Optimizer 与 CLI | P2-P4 | `optimizer.py` |
 | P6 | Qwen3 全图优化与报告 | P5 | `optimize_report.json` |
-| P7 | 测试结果与风险记录 | P6 | `TestResults.md` |
+| P7 | 测试结果与风险记录 | P6 | `tests/TestResults.md` |
 
 风险与应对：
 

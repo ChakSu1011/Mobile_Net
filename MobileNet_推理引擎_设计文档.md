@@ -225,16 +225,29 @@ Agent 智能体在服务侧的应用部署已经非常广泛，手机端或者�
 ```text
 MobileNet/
 ├── Graph/           # C++17 runtime 静态图 IR 与 pybind11 构图绑定（权威图实现）
+│   ├── .doc/              # Graph 唯一设计文档
+│   ├── .skill/            # Graph 独立 skill
 │   ├── include/            # Graph/Op/Tensor/Storage/Shape/GraphEnv/OpEnv
 │   ├── src/               # 构图、排序、属性/存储/环境实现
 │   ├── python/            # pybind11 绑定与最小 Python 构图 API
-│   └── tests/             # Graph C++/Python 测试
+│   └── tests/             # Graph C++/Python 测试与 TestResults.md
 ├── Build/                 # 离线工具链（Python）
-│   ├── graph/       # Graph 构建产物（_graph 原生扩展）
+│   ├── .skill/            # 阶段级 skill
+│   ├── tests/TestResults.md  # 阶段级测试结果
+│   ├── graph/             # Graph 构建产物（_graph 原生扩展）
 │   ├── common/            # ModelGraph、safetensors、JSON、错误与哈希工具
 │   ├── converter/         # RecordingGraph、Qwen3 Adapter、转换报告
+│   │   ├── .doc/          # converter_Design.md
+│   │   ├── .skill/        # converter skill
+│   │   └── tests/         # 模块测试结果
 │   ├── optimizer/         # Precision / Shape / Memory Pass
+│   │   ├── .doc/          # optimizer_Design.md
+│   │   ├── .skill/        # optimizer skill
+│   │   └── tests/         # 模块测试结果
 │   ├── serializer/        # model.mgf 格式、序列化与重建 Loader
+│   │   ├── .doc/          # serializer_Design.md
+│   │   ├── .skill/        # serializer skill
+│   │   └── tests/         # 模块测试结果
 │   ├── artifacts/         # Qwen3 模型包产物
 │   ├── pipeline.py        # convert→optimize→serialize 串联入口
 │   └── testing.py         # 测试用小型图与合成权重
@@ -259,8 +272,7 @@ MobileNet/
 │   ├── prefix_cache/
 │   └── session/
 ├── Tests/                 # 单元、集成、基准、金标准数据、后端契约测试
-├── Docs/                  # 各模块设计文档与测试报告
-└── Skills/                # 可复用 skill
+└── Docs/                  # 通用文档、知识库与历史资料
 ```
 
 ## 3.3 离线工具链流程
@@ -355,9 +367,9 @@ APP          Tokenizer        Scheduler        Executor          GPU
 | 序号 | 设计文档 | 覆盖模块 | 主要依赖 | 建议顺序 |
 | --- | --- | --- | --- | --- |
 | 1 | [Graph 设计文档](Graph/.doc/Graph设计文档.md) | C++17 runtime IR（Graph/Op/Tensor/Storage/GraphEnv/OpEnv）、Input/Output op、SortOp、pybind11 最小构图接口、dump_ir | 无 | 1 |
-| 2 | [Converter 设计文档](Build/converter/converter设计文档.md) | Qwen3 Adapter、RecordingGraph、ModelGraph sidecar、权重映射 | 1 | 2 |
-| 3 | [Optimizer 设计文档](Build/optimizer/optimizer设计文档.md) | Precision/Shape/Memory Pass、显存复用、优化报告 | 1、2 | 3 |
-| 4 | [Serializer 设计文档](Build/serializer/serializer设计文档.md) | model.mgf 格式、manifest、权重打包、图重建校验 | 1、3 | 4 |
+| 2 | [Converter 设计文档](Build/converter/.doc/converter_Design.md) | Qwen3 Adapter、RecordingGraph、ModelGraph sidecar、权重映射 | 1 | 2 |
+| 3 | [Optimizer 设计文档](Build/optimizer/.doc/optimizer_Design.md) | Precision/Shape/Memory Pass、显存复用、优化报告 | 1、2 | 3 |
+| 4 | [Serializer 设计文档](Build/serializer/.doc/serializer_Design.md) | model.mgf 格式、manifest、权重打包、图重建校验 | 1、3 | 4 |
 | 5 | Loader 与 Backend 框架设计文档 | 模型包校验、Graph 重建、GraphEnv/OpEnv 创建、后端注册与选择、I/O 绑定、能力校验、权重转换与上传、资源所有权 | 4 | 5 |
 | 6 | OCL 后端与 Kernel 设计文档 | Backend 接口实现、Kernel 清单、编译缓存、精度策略、契约测试 | 1、5 | 6 |
 | 7 | Executor 设计文档 | Packing、主机 I/O 绑定、attention metadata、按 GetOrderlyOPList 驱动 OpEnv（H2D/计算/D2H）、采样、回写 | 5、6 | 7 |

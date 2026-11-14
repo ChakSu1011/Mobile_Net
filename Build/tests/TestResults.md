@@ -14,67 +14,17 @@
 
 ## 2. 测试命令与结果
 
-### 2.1 Converter 单元/集成测试
+### 2.1 模块级测试结果
 
-命令：
+| 模块 | 结果文档 |
+|------|----------|
+| Converter | [converter/tests/TestResults.md](../converter/tests/TestResults.md) |
+| Optimizer | [optimizer/tests/TestResults.md](../optimizer/tests/TestResults.md) |
+| Serializer | [serializer/tests/TestResults.md](../serializer/tests/TestResults.md) |
 
-```bash
-PYTHONUTF8=1 python -m unittest Build.converter.test_converter -v
-```
+以下为阶段级测试。
 
-实际输出（末尾）：
-
-```text
-Ran 13 tests in 0.058s
-
-OK
-```
-
-结论：通过。覆盖 RecordingGraph 代理一致性、输入/常量/多输出记录、
-图计数（2/310/423/1）、310 个常量权重映射、tied/untied LM Head、
-ModelGraph JSON 往返与权重缺失降级。
-
-### 2.2 Optimizer 单元/集成测试
-
-命令：
-
-```bash
-PYTHONUTF8=1 python -m unittest Build.optimizer.test_optimizer -v
-```
-
-实际输出（末尾）：
-
-```text
-Ran 18 tests in 0.145s
-
-OK
-```
-
-结论：通过。覆盖 BF16→FP16、`target_precision=keep`、非法精度转换、
-linear/gather/RMSNorm/Add/GQA 形状契约、423 个 activation 形状完整、
-生命周期、256 B 对齐、复用无重叠、关闭复用、确定性与报告不变量。
-
-### 2.3 Serializer 单元/集成测试
-
-命令：
-
-```bash
-PYTHONUTF8=1 python -m unittest Build.serializer.test_serializer -v
-```
-
-实际输出（末尾）：
-
-```text
-Ran 13 tests in 0.456s
-
-OK
-```
-
-结论：通过。覆盖 112 字节固定头、manifest/权重 SHA-256 篡改、截断、
-版本不兼容、IR 哈希校验、小型图往返、合成权重打包与 256 B 对齐、
-两次序列化字节一致、metadata-only 包、Qwen3 包加载与重建图。
-
-### 2.4 Build 端到端流水线测试
+### 2.2 Build 端到端流水线测试
 
 命令：
 
@@ -107,7 +57,7 @@ work_dir C:\Users\18626\AppData\Local\Temp\pipeline_rnzsmel_\work4
 `compile_report.json`）、work 目录中间产物、字节级确定性、
 关闭复用后 arena 增大、CLI 入口返回码。
 
-### 2.5 Qwen3 组图回归测试
+### 2.3 Qwen3 组图回归测试
 
 命令：
 
@@ -127,7 +77,7 @@ OK
 1 output、310 个常量、tied embedding、Transformer 权重形状、
 596,049,920 参数与 1,192,099,840 字节 BF16 常量，以及 IR 稳定性。
 
-### 2.6 Graph C++ 测试
+### 2.4 Graph C++ 测试
 
 命令：
 
@@ -144,7 +94,7 @@ graph_test: ALL TESTS PASSED
 结论：通过。确认图构造、SortOp、常量为依赖叶子、I/O op、
 dump_ir 等 Graph 基础行为未回归。
 
-### 2.7 Qwen3-0.6B 模型包生成
+### 2.5 Qwen3-0.6B 模型包生成
 
 命令：
 
@@ -214,7 +164,7 @@ work_dir D:\Mobile_Net\Build\artifacts\qwen3_0_6b_work
 结论：通过。模型包生成后已重新加载并通过 manifest SHA-256 与重建图
 IR SHA-256 自检。
 
-### 2.8 代码规范检查
+### 2.6 代码规范检查
 
 ```bash
 PYTHONUTF8=1 python -m compileall -q Build Models/Qwen3

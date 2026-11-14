@@ -37,11 +37,17 @@ description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer 
 
 ## 输出（四件套）
 
-1. 设计文档：总架构文档对应章节 + converter/optimizer/serializer 模块文档。
+1. 设计文档：主设计文档对应章节，以及
+   `Build/converter/.doc/converter_Design.md`、
+   `Build/optimizer/.doc/optimizer_Design.md`、
+   `Build/serializer/.doc/serializer_Design.md`。
 2. 代码：`Build/common`、`Build/converter`、`Build/optimizer`、
    `Build/serializer`、`Build/pipeline.py`。
-3. 测试报告：`Build/TestResults.md`，含环境、命令、实际输出、结论、
-   未覆盖项与风险。
+3. 测试报告：`Build/tests/TestResults.md`，含环境、命令、实际输出、
+   结论、未覆盖项与风险；模块级结果见
+   `Build/converter/tests/TestResults.md`、
+   `Build/optimizer/tests/TestResults.md`、
+   `Build/serializer/tests/TestResults.md`。
 4. 本 skill。
 
 模型包产物：

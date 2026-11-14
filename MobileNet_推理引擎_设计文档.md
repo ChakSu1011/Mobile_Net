@@ -225,7 +225,7 @@ Agent 智能体在服务侧的应用部署已经非常广泛，手机端或者�
 ```text
 MobileNet/
 ├── Graph/           # C++17 runtime 静态图 IR 与 pybind11 构图绑定（权威图实现）
-│   ├── include/runtime_graph/  # Graph/Op/Tensor/Storage/Shape/GraphEnv/OpEnv
+│   ├── include/            # Graph/Op/Tensor/Storage/Shape/GraphEnv/OpEnv
 │   ├── src/               # 构图、排序、属性/存储/环境实现
 │   ├── python/            # pybind11 绑定与最小 Python 构图 API
 │   └── tests/             # Graph C++/Python 测试

@@ -10,7 +10,7 @@
 //   - 生命周期由 Graph 通过 unique_ptr 持有，Engine 初始化阶段创建。
 //
 // 依赖：
-//   Runtime/common/status.h、runtime_graph/storage.h、C++17 标准库。
+//   Runtime/common/status.h、storage.h、C++17 标准库。
 
 #ifndef MOBILENET_GRAPH_INCLUDE_RUNTIME_GRAPH_GRAPH_ENV_H_
 #define MOBILENET_GRAPH_INCLUDE_RUNTIME_GRAPH_GRAPH_ENV_H_
@@ -19,7 +19,7 @@
 #include <string>
 
 #include "Runtime/common/status.h"
-#include "runtime_graph/storage.h"
+#include "storage.h"
 
 namespace mobilenet {
 namespace runtime_graph {

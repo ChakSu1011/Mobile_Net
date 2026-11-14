@@ -7,9 +7,9 @@
 //   只格式化元数据，不读取 data_ptr 指向的内存，不输出真实地址。
 //
 // 依赖：
-//   runtime_graph/storage.h。
+//   storage.h。
 
-#include "runtime_graph/storage.h"
+#include "storage.h"
 
 #include <sstream>
 #include <string>

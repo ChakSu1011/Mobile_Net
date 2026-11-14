@@ -13,7 +13,7 @@
 //   - 拓扑排序后 op_list_ 只保存非拥有裸指针，不负责释放 op。
 //
 // 依赖：
-//   runtime_graph/attr.h、graph_env.h、op.h、op_type.h、tensor.h、
+//   attr.h、graph_env.h、op.h、op_type.h、tensor.h、
 //   Runtime/common/status.h、C++17 标准库。
 
 #ifndef MOBILENET_GRAPH_INCLUDE_RUNTIME_GRAPH_GRAPH_H_
@@ -25,11 +25,11 @@
 #include <vector>
 
 #include "Runtime/common/status.h"
-#include "runtime_graph/attr.h"
-#include "runtime_graph/graph_env.h"
-#include "runtime_graph/op.h"
-#include "runtime_graph/op_type.h"
-#include "runtime_graph/tensor.h"
+#include "attr.h"
+#include "graph_env.h"
+#include "op.h"
+#include "op_type.h"
+#include "tensor.h"
 
 namespace mobilenet {
 namespace runtime_graph {

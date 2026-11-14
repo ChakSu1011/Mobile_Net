@@ -1,4 +1,4 @@
-"""模块：Runtime Graph Python 公共包。
+"""模块：Runtime Graph Python 公共模块。
 
 职责：
   统一导出 ``_graph`` 扩展中的 Graph、Tensor 与枚举；所有图对象仍由
@@ -42,7 +42,7 @@ def _load_native_module():
     environment_dir = os.environ.get("GRAPH_PYTHON_DIR")
     if environment_dir:
         candidates.append(Path(environment_dir))
-    repository_root = Path(__file__).resolve().parents[3]
+    repository_root = Path(__file__).resolve().parents[2]
     candidates.append(repository_root / "Build" / "graph" / "python")
     for candidate in candidates:
         extension_names = (

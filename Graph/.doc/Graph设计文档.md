@@ -66,8 +66,8 @@ Runtime 端在端侧 Device 上加载并执行静态图。`Graph` 是 Runtime �
 | 交付物 | 位置 | 状态 |
 |--------|------|------|
 | 设计文档 | 本文档 | 已交付 |
-| C++ 代码 | `Graph/include/runtime_graph/`、`Graph/src/` | 已交付 |
-| Python 绑定 | `Graph/python/graph_python.cc`、`Graph/python/mobilenet_runtime_graph/` | 已交付 |
+| C++ 代码 | `Graph/include/`、`Graph/src/` | 已交付 |
+| Python 绑定 | `Graph/python/graph_python.cc`、`Graph/python/mobilenet_runtime_graph.py` | 已交付 |
 | 测试 | `Graph/tests/graph_test.cc`、`Graph/tests/test_graph.py` | 已交付并通过 |
 | 测试结果 | `Graph/TestResults.md` | 已交付 |
 | skill | `Graph/.skill/runtime-static-graph-cpp-pybind/SKILL.md` | 已交付 |
@@ -89,7 +89,7 @@ Runtime 端在端侧 Device 上加载并执行静态图。`Graph` 是 Runtime �
 | FR-09 | `OpEnv` 提供 `Init`、`Forward`、`NeedTempData`；`MegaAttentionOpEnv` 作为派生示例。 | UT-C03 |
 | FR-10 | Python 绑定暴露 Graph、Tensor、Precision、Layout、DeviceType、OpType 和构图/排序/dump 接口；不暴露 Op、Storage、Shape。 | UT-P01 至 UT-P10 |
 | FR-11 | `dump_ir` 输出确定性的 inputs/constants/ops/outputs 文本，不输出真实指针。 | UT-P01 至 UT-P08 |
-| FR-12 | `mobilenet_runtime_graph` 公共包可从源码树或 `GRAPH_PYTHON_DIR` 加载扩展。 | UT-P10 |
+| FR-12 | `mobilenet_runtime_graph` 公共模块可从源码树或 `GRAPH_PYTHON_DIR` 加载扩展。 | UT-P10 |
 | FR-13 | CMake 构建静态库、Python 扩展、C++ 单测并注册 CTest。 | TR-01、TR-02 |
 
 ### 2.2 非功能需求
@@ -124,7 +124,7 @@ Runtime 端在端侧 Device 上加载并执行静态图。`Graph` 是 Runtime �
 | AC-02 | C++ 单测返回 0，输出 `graph_test: ALL TESTS PASSED`。 |
 | AC-03 | Python 单测 10/10 通过，覆盖正常构图、排序、dump 和错误路径。 |
 | AC-04 | CTest 2/2 通过，退出码为 0。 |
-| AC-05 | `_graph` 扩展可在 Python 中导入，公共包可加载并导出相同类型。 |
+| AC-05 | `_graph` 扩展可在 Python 中导入，公共模块可加载并导出相同类型。 |
 | AC-06 | 设计文档、代码、测试结果、skill 四件套齐全且相互可追溯。 |
 
 ## 3. 概要设计
@@ -211,7 +211,7 @@ Graph IR 的核心对象包括：
 ```text
 +-------------------------------------------------------------+
 | Python 模型加载 / 测试脚本                                   |
-|   mobilenet_runtime_graph（公共包，转发到 _graph）      |
+|   mobilenet_runtime_graph（公共模块，转发到 _graph）      |
 +------------------------------+------------------------------+
                                | pybind11
 +------------------------------v------------------------------+
@@ -238,19 +238,19 @@ GPU/OCL。
 
 | 路径 | 职责 |
 |------|------|
-| `include/runtime_graph/types.h` | `Precision`、`Layout`、`DeviceType`、`kMaxShapeDim`、名称/字节数查询。 |
-| `include/runtime_graph/shape.h` | 定长 `dims`/`pitch`、逻辑元素数和物理元素数计算。 |
-| `include/runtime_graph/storage.h` | Shape、Precision、Layout、DeviceType、offset、byte_size、data_ptr、reusable。 |
-| `include/runtime_graph/attr.h` | `AttrValue` variant、`AttrMap`、稳定文本格式化。 |
-| `include/runtime_graph/tensor.h` | 数据边、producer/consumer、内嵌 Storage、constant 标记。 |
-| `include/runtime_graph/op.h` | 节点、属性、输入输出连接、OpEnv 生命周期。 |
-| `include/runtime_graph/op_type.h` | 全部算子枚举和 `OpTypeToStr`。 |
-| `include/runtime_graph/op_env.h` | 执行环境抽象和 `MegaAttentionOpEnv` 示例。 |
-| `include/runtime_graph/graph_env.h` | graph 级共享 Storage 表。 |
-| `include/runtime_graph/graph.h` | 图根对象、构图、图边界、排序和查询。 |
+| `include/types.h` | `Precision`、`Layout`、`DeviceType`、`kMaxShapeDim`、名称/字节数查询。 |
+| `include/shape.h` | 定长 `dims`/`pitch`、逻辑元素数和物理元素数计算。 |
+| `include/storage.h` | Shape、Precision、Layout、DeviceType、offset、byte_size、data_ptr、reusable。 |
+| `include/attr.h` | `AttrValue` variant、`AttrMap`、稳定文本格式化。 |
+| `include/tensor.h` | 数据边、producer/consumer、内嵌 Storage、constant 标记。 |
+| `include/op.h` | 节点、属性、输入输出连接、OpEnv 生命周期。 |
+| `include/op_type.h` | 全部算子枚举和 `OpTypeToStr`。 |
+| `include/op_env.h` | 执行环境抽象和 `MegaAttentionOpEnv` 示例。 |
+| `include/graph_env.h` | graph 级共享 Storage 表。 |
+| `include/graph.h` | 图根对象、构图、图边界、排序和查询。 |
 | `src/*.cc` | 与头文件一一对应的实现。 |
 | `python/graph_python.cc` | pybind11 绑定和属性类型转换。 |
-| `python/mobilenet_runtime_graph/__init__.py` | 公共包加载器，导出原生类型和枚举。 |
+| `python/mobilenet_runtime_graph.py` | 公共模块加载器，导出原生类型和枚举。 |
 | `tests/graph_test.cc` | C++ 单元测试。 |
 | `tests/test_graph.py` | Python 单元测试。 |
 | `tools/` | CMake + Zig 本地构建包装脚本。 |
@@ -362,7 +362,7 @@ Python 调用 graph.create_op(...)
 | 对象所有权 | `unique_ptr` + 非拥有裸指针 | 所有权唯一，执行序列重建成本低 | 裸指针生命周期需文档和测试约束 |
 | 拓扑排序 | 从输出出发的递归 post DFS | 只访问可达子图，天然跳过常量 | 递归深度受图深度限制，超大图需改迭代 |
 | Python 绑定 | pybind11 | 与 C++ 类型映射直接，异常转换简单 | 需显式管理 Tensor 非拥有句柄 |
-| Python 公共包 | 薄加载器 | 兼容源码树和构建目录，不复制图逻辑 | 安装到 site-packages 时默认路径失效 |
+| Python 公共模块 | 薄加载器 | 兼容源码树和构建目录，不复制图逻辑 | 安装到 site-packages 时默认路径失效 |
 | 构建 | CMake + Ninja | 跨平台，易注册 CTest | 无 MSVC 时需 Zig 包装和归档器覆盖 |
 | 错误模型 | 复用 `Status` | 与 Runtime 其他模块一致 | Python 只保留消息，错误码未单独暴露 |
 
@@ -1026,7 +1026,7 @@ Tensor 不直接拥有计算逻辑。它承接 graph 数据流，提供依赖分
 - Python 必须保证 `Graph` 比所有 `Tensor` 句柄存活更久；
 - `create_constant` 只保存 `data_ptr`，不复制数据；调用方必须保证缓冲区在
   Graph 使用该权重期间有效；
-- 模块 docstring 和公共包 docstring 均写明该约束。
+- 模块 docstring 和公共模块 docstring 均写明该约束。
 
 #### 4.4.5 `dump_ir` 文本格式
 
@@ -1098,7 +1098,7 @@ outputs <count>
 | S1 | 对照基础设计冻结公共类型和命名空间 | `types.h`、`shape.h`、`storage.h`、`attr.h` | 完成 |
 | S2 | 实现 `Tensor`、`Op`、`OpEnv`、`GraphEnv` | 对应头文件和源文件 | 完成 |
 | S3 | 实现 `Graph` 构图和 post DFS 排序 | `graph.h`、`graph.cc` | 完成 |
-| S4 | 实现 pybind11 绑定和公共 Python 包 | `graph_python.cc`、`mobilenet_runtime_graph` | 完成 |
+| S4 | 实现 pybind11 绑定和公共 Python 模块 | `graph_python.cc`、`mobilenet_runtime_graph` | 完成 |
 | S5 | 建立 CMake 构建和 CTest | `CMakeLists.txt`、`tools/` | 完成 |
 | S6 | 编写并运行 C++/Python 测试 | `tests/`、`TestResults.md` | 完成 |
 | S7 | 补齐设计文档、测试报告和 skill | 本文件、`TestResults.md`、skill | 完成 |
@@ -1133,8 +1133,8 @@ S1 -> S2 -> S3 -> S4 -> S5 -> S6 -> S7
 | R-02 | Zig 下 CMake 探测把 `CMAKE_AR` 置为 `NOTFOUND`。 | 增加 `GRAPH_AR` / `GRAPH_RANLIB` 缓存覆盖，指向 `python -m ziglang ar` 包装脚本。 |
 | R-03 | `.cmd` 包装脚本含中文注释时，cmd.exe 按本地代码页解析导致命令错乱。 | 全部改为 ASCII `rem` 注释和 CRLF 行尾。 |
 | R-04 | CTest 使用 `python -I`，忽略 `PYTHONUTF8`，中文输出在 GBK 控制台乱码。 | 测试本身仍通过；报告记录该现象，展示可读输出时使用 `PYTHONUTF8=1` 且不使用 `-I`。 |
-| R-05 | Python Tensor 是非拥有句柄，Graph 先析构会悬空。 | 绑定使用 `reference` 策略；模块 docstring、公共包 docstring、测试和本文档均明确生命周期。 |
-| R-06 | 公共包的默认构建目录只适用于源码树。 | 优先 `sys.path`，其次 `GRAPH_PYTHON_DIR`，最后源码树默认路径；安装场景需设置环境变量或安装扩展。 |
+| R-05 | Python Tensor 是非拥有句柄，Graph 先析构会悬空。 | 绑定使用 `reference` 策略；模块 docstring、公共模块 docstring、测试和本文档均明确生命周期。 |
+| R-06 | 公共模块的默认构建目录只适用于源码树。 | 优先 `sys.path`，其次 `GRAPH_PYTHON_DIR`，最后源码树默认路径；安装场景需设置环境变量或安装扩展。 |
 | R-07 | 公开构图接口无法构造依赖环，环检测分支缺少正向测试。 | 保留防御性实现并在测试报告中列为未覆盖项，后续通过内部构建器或反序列化夹具补充。 |
 | R-08 | `.cmd` 与 `.sh` 传入的编译器路径斜杠/盘符大小写不一致，CMake 会重建缓存并丢失归档器覆盖。 | 两个脚本统一使用正斜杠，`.sh` 将盘符首字母转小写；交替执行验证为 `ninja: no work to do`。 |
 
@@ -1156,7 +1156,7 @@ S1 -> S2 -> S3 -> S4 -> S5 -> S6 -> S7
 | 层级 | 目标 | 方式 |
 |------|------|------|
 | C++ 单元测试 | 验证类型、构图、排序、所有权、GraphEnv、OpEnv 和错误路径 | `graph_test` 可执行文件，失败返回非 0 |
-| Python 单元测试 | 验证绑定可用性、属性转换、dump 稳定性、错误映射和公共包 | `unittest`，10 个用例 |
+| Python 单元测试 | 验证绑定可用性、属性转换、dump 稳定性、错误映射和公共模块 | `unittest`，10 个用例 |
 | CTest 集成 | 验证构建产物可执行、Python 环境变量传递正确 | `ctest --output-on-failure` |
 | 人工检查 | 验证 dump 文本可读、错误消息清晰、生命周期文档完整 | 运行示例并阅读输出 |
 
@@ -1197,7 +1197,7 @@ S1 -> S2 -> S3 -> S4 -> S5 -> S6 -> S7
 | UT-P07 | `test_attribute_types` | bool/int/float/str/数组属性输出。 |
 | UT-P08 | `test_multiple_outputs` | 多输出命名、dst 列表。 |
 | UT-P09 | `test_errors` | 重复名称、外部 tensor、空图排序、维度/pitch/attr/out_cnt 错误。 |
-| UT-P10 | `test_public_package` | `mobilenet_runtime_graph` 加载和符号一致性。 |
+| UT-P10 | `test_public_module` | `mobilenet_runtime_graph` 加载和符号一致性。 |
 
 ### 6.5 测试命令
 
@@ -1241,7 +1241,7 @@ bash Graph/tools/build_with_zig.sh
 | FR-09 | UT-C03 | 无（未暴露） |
 | FR-10 | 无（绑定层） | UT-P01 至 UT-P10 |
 | FR-11 | 无（绑定层） | UT-P01 至 UT-P08 |
-| FR-12 | 无（Python 包） | UT-P10 |
+| FR-12 | 无（Python 模块） | UT-P10 |
 | FR-13 | 构建与 CTest | 构建与 CTest |
 
 ### 6.8 未覆盖项与风险

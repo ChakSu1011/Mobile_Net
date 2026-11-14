@@ -175,8 +175,8 @@ class GraphPythonTest(unittest.TestCase):
         dump = graph.dump_ir()
         self.assertIn("dst=[split.out.0,split.out.1]", dump)
 
-    def test_public_package(self) -> None:
-        """公共包可加载扩展，并导出与扩展相同的图类型和枚举。"""
+    def test_public_module(self) -> None:
+        """公共模块可加载扩展，并导出与扩展相同的图类型和枚举。"""
         package_dir = REPOSITORY_ROOT / "Graph" / "python"
         sys.path.insert(0, str(package_dir))
         import mobilenet_runtime_graph as package

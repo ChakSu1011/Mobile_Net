@@ -7,9 +7,9 @@
 //   只做纯函数映射，不读取全局状态，不依赖设备后端。
 //
 // 依赖：
-//   runtime_graph/types.h。
+//   types.h。
 
-#include "runtime_graph/types.h"
+#include "types.h"
 
 namespace mobilenet {
 namespace runtime_graph {

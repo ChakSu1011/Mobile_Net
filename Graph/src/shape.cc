@@ -7,9 +7,9 @@
 //   只做维度乘积与合法性检查，不分配内存、不推导 shape。
 //
 // 依赖：
-//   runtime_graph/shape.h。
+//   shape.h。
 
-#include "runtime_graph/shape.h"
+#include "shape.h"
 
 #include <cstddef>
 #include <limits>

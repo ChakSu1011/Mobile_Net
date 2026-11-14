@@ -7,9 +7,9 @@
 //   不调用任何 GPU/OCL kernel，不申请显存。
 //
 // 依赖：
-//   runtime_graph/op_env.h、Runtime/common/status.h。
+//   op_env.h、Runtime/common/status.h。
 
-#include "runtime_graph/op_env.h"
+#include "op_env.h"
 
 #include "Runtime/common/status.h"
 

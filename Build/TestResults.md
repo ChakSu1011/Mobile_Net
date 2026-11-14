@@ -25,7 +25,7 @@ PYTHONUTF8=1 python -m unittest Build.converter.test_converter -v
 实际输出（末尾）：
 
 ```text
-Ran 13 tests in 0.054s
+Ran 13 tests in 0.058s
 
 OK
 ```
@@ -45,7 +45,7 @@ PYTHONUTF8=1 python -m unittest Build.optimizer.test_optimizer -v
 实际输出（末尾）：
 
 ```text
-Ran 18 tests in 0.146s
+Ran 18 tests in 0.145s
 
 OK
 ```
@@ -65,7 +65,7 @@ PYTHONUTF8=1 python -m unittest Build.serializer.test_serializer -v
 实际输出（末尾）：
 
 ```text
-Ran 13 tests in 0.398s
+Ran 13 tests in 0.456s
 
 OK
 ```
@@ -85,7 +85,7 @@ PYTHONUTF8=1 python -m unittest Build.test_pipeline -v
 实际输出（末尾）：
 
 ```text
-Ran 6 tests in 0.943s
+Ran 6 tests in 0.850s
 
 OK
 adapter qwen3
@@ -97,8 +97,8 @@ weights_available 0
 weights_total_bytes 0
 ir_sha256 3578cbfd1ed37776f8f6384c5b84d5c1ea24589bac5eed39a381376d0a94da20
 manifest_sha256 5f62384fe1fa14b0002b616c51309e9bf7e2b742ad41303d32ef4dd6a203f1df
-package C:\Users\18626\AppData\Local\Temp\pipeline_uxaw4kkf\package4
-work_dir C:\Users\18626\AppData\Local\Temp\pipeline_uxaw4kkf\work4
+package C:\Users\18626\AppData\Local\Temp\pipeline_rnzsmel_\package4
+work_dir C:\Users\18626\AppData\Local\Temp\pipeline_rnzsmel_\work4
 ```
 
 （临时目录名由 `tempfile.mkdtemp` 生成，每次运行不同。）
@@ -118,7 +118,7 @@ PYTHONUTF8=1 python -m unittest discover -s Models/Qwen3 -p 'test_*.py' -v
 实际输出（末尾）：
 
 ```text
-Ran 12 tests in 6.416s
+Ran 12 tests in 6.281s
 
 OK
 ```

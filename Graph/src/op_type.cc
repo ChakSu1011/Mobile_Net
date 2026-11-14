@@ -7,9 +7,9 @@
 //   只做枚举到字符串的映射，不解释 op 语义。
 //
 // 依赖：
-//   runtime_graph/op_type.h。
+//   op_type.h。
 
-#include "runtime_graph/op_type.h"
+#include "op_type.h"
 
 namespace mobilenet {
 namespace runtime_graph {

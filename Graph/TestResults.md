@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 |------|------|
 | 报告日期 | 2026-11-14 |
-| 测试对象 | `Graph` C++ 静态库、`_graph` Python 扩展、公共包 |
+| 测试对象 | `Graph` C++ 静态库、`_graph` Python 扩展、公共模块 |
 | 设计文档 | [Graph 设计文档](.doc/Graph设计文档.md) |
 | 构建目录 | `Build/graph` |
 | 结论 | 已执行的构建、C++ 单测、Python 单测、CTest、包导入和格式检查全部通过；未覆盖项见第 8 节 |
@@ -17,7 +17,7 @@
 
 | 范围 | 内容 |
 |------|------|
-| 已覆盖 | 公共类型、Shape/Storage、Graph 构图、拓扑排序、GraphEnv、OpEnv 生命周期、C++ 错误路径、pybind 绑定、属性转换、dump_ir、公共包加载、构建脚本 |
+| 已覆盖 | 公共类型、Shape/Storage、Graph 构图、拓扑排序、GraphEnv、OpEnv 生命周期、C++ 错误路径、pybind 绑定、属性转换、dump_ir、公共模块加载、构建脚本 |
 | 未覆盖 | 真实 GPU/OCL kernel、显存分配、权重 H2D、序列化、并发、万级大图、Linux/macOS 原生构建 |
 
 ### 1.2 环境
@@ -49,7 +49,7 @@ Build/graph/graph_test.exe
 GRAPH_PYTHON_DIR="D:\Mobile_Net\Build\graph\python" \
   PYTHONUTF8=1 python Graph/tests/test_graph.py -v
 
-# 4. 公共包导入
+# 4. 公共模块导入
 python -c "import sys; sys.path.insert(0, r'Graph\python'); \
   import mobilenet_runtime_graph as m; print(m.Graph, m.Tensor)"
 
@@ -72,7 +72,7 @@ cmd //c "Graph\\tools\\build_with_zig.cmd"
 -- pybind11::lto disabled (problems with undefined symbols for MinGW for now)
 -- pybind11::thin_lto disabled (problems with undefined symbols for MinGW for now)
 -- Found pybind11: C:/Users/18626/AppData/Local/Programs/Python/Python313/Lib/site-packages/pybind11/include (found version "3.1.0")
--- Configuring done (3.5s)
+-- Configuring done (24.3s)
 -- Generating done (0.1s)
 -- Build files have been written to: D:/Mobile_Net/Build/graph
 [1/16] Building CXX object CMakeFiles/graph.dir/src/op_type.cc.obj
@@ -109,7 +109,7 @@ $ cmd //c "Graph\\tools\\build_with_zig.cmd"
 ninja: no work to do.
 
 $ bash Graph/tools/build_with_zig.sh
--- Configuring done (0.5s)
+-- Configuring done (0.4s)
 -- Generating done (0.1s)
 -- Build files have been written to: D:/Mobile_Net/Build/graph
 ninja: no work to do.
@@ -128,13 +128,13 @@ CMAKE_RANLIB:FILEPATH=d:/Mobile_Net/Graph/tools/zig_ranlib.cmd
 ```text
 Test project D:/Mobile_Net/Build/graph
     Start 1: graph_unit
-1/2 Test #1: graph_unit .......................   Passed    0.11 sec
+1/2 Test #1: graph_unit .......................   Passed    0.19 sec
     Start 2: graph_python
-2/2 Test #2: graph_python .....................   Passed    0.28 sec
+2/2 Test #2: graph_python .....................   Passed    0.32 sec
 
 100% tests passed out of 2
 
-Total Test time (real) =   0.54 sec
+Total Test time (real) =   0.66 sec
 ```
 
 结论：CTest 2/2 通过，退出码 0。
@@ -192,8 +192,8 @@ test_legacy_create_input (__main__.GraphPythonTest.test_legacy_create_input)
 legacy create_input 写入默认 Storage，排序与 dump 仍可用。 ... ok
 test_multiple_outputs (__main__.GraphPythonTest.test_multiple_outputs)
 out_cnt > 1 时生成稳定命名的多个输出 tensor。 ... ok
-test_public_package (__main__.GraphPythonTest.test_public_package)
-公共包可加载扩展，并导出与扩展相同的图类型和枚举。 ... ok
+test_public_module (__main__.GraphPythonTest.test_public_module)
+公共模块可加载扩展，并导出与扩展相同的图类型和枚举。 ... ok
 test_tensor_properties (__main__.GraphPythonTest.test_tensor_properties)
 Tensor 暴露名称、constant 标记和复用标记，且不暴露 Storage 对象。 ... ok
 test_topological_order (__main__.GraphPythonTest.test_topological_order)
@@ -217,7 +217,7 @@ OK
 | `test_legacy_create_input` | legacy input 默认 Storage、排序和 dump | 通过 |
 | `test_attribute_types` | bool/int/float/str/数组属性 | 通过 |
 | `test_multiple_outputs` | 多输出命名和 dst 列表 | 通过 |
-| `test_public_package` | 公共包加载和符号一致性 | 通过 |
+| `test_public_module` | 公共模块加载和符号一致性 | 通过 |
 | `test_errors` | 重复名称、外部 tensor、空图排序、维度/pitch/attr/out_cnt 错误 | 通过 |
 
 ### 4.4 结论
@@ -225,9 +225,9 @@ OK
 Python 单测 10/10 通过，退出码 0。错误路径中，C++ `Status` 失败转换为
 `RuntimeError`，绑定层参数错误转换为 `ValueError`，与设计一致。
 
-## 5. 公共包与 dump_ir（TR-05）
+## 5. 公共模块与 dump_ir（TR-05）
 
-### 5.1 公共包导入
+### 5.1 公共模块导入
 
 ```bash
 $ python -c "import sys; sys.path.insert(0, r'Graph\python'); \
@@ -280,8 +280,8 @@ grep -RInE 'torch|ATen|c10|BR2XX|SUPA' \
 实际命中 3 处，全部是注释：
 
 ```text
-Graph/include/runtime_graph/graph.h:95:  //   storage：权重 storage 描述，data_ptr 通常指向 Python torch tensor 的
-Graph/include/runtime_graph/types.h:10://   - 不依赖 ATen/torch/c10，也不包含 GPU/OCL 算子库头文件；
+Graph/include/graph.h:95:  //   storage：权重 storage 描述，data_ptr 通常指向 Python torch tensor 的
+Graph/include/types.h:10://   - 不依赖 ATen/torch/c10，也不包含 GPU/OCL 算子库头文件；
 Graph/python/graph_python.cc:13://   - 不链接 torch/ATen，也不依赖 GPU/OCL 运行时。
 ```
 
@@ -388,7 +388,7 @@ Build/graph/graph_test.exe
 GRAPH_PYTHON_DIR="D:\Mobile_Net\Build\graph\python" \
   PYTHONUTF8=1 python Graph/tests/test_graph.py -v
 
-# 公共包导入
+# 公共模块导入
 python -c "import sys; sys.path.insert(0, r'Graph\python'); \
   import mobilenet_runtime_graph as m; print(m.Graph, m.Tensor)"
 

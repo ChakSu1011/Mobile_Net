@@ -19,15 +19,15 @@
 #include <string>
 #include <vector>
 
-#include "runtime_graph/graph.h"
-#include "runtime_graph/graph_env.h"
-#include "runtime_graph/op.h"
-#include "runtime_graph/op_env.h"
-#include "runtime_graph/op_type.h"
-#include "runtime_graph/shape.h"
-#include "runtime_graph/storage.h"
-#include "runtime_graph/tensor.h"
-#include "runtime_graph/types.h"
+#include "graph.h"
+#include "graph_env.h"
+#include "op.h"
+#include "op_env.h"
+#include "op_type.h"
+#include "shape.h"
+#include "storage.h"
+#include "tensor.h"
+#include "types.h"
 
 namespace {
 

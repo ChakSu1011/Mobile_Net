@@ -75,7 +75,7 @@
 
 ### 2.3 约束条件
 
-- Python 3.10+；图对象必须来自 `Graph/python/mobilenet_runtime_graph`。
+- Python 3.10+；图对象必须来自 `Graph/python/mobilenet_runtime_graph.py`。
 - 原生扩展位于 `Build/graph/python/_graph.pyd`（或 `.so`/`.dylib`）。
 - `Graph` 不允许删除/改写已创建的 op 与 tensor；Converter 只做增量构图。
 - `Graph` 的常量是依赖叶子，不进入 `sort_op()` 执行序列。

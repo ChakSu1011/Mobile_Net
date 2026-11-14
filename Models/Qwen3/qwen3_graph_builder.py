@@ -34,7 +34,7 @@ from qwen3_config import Qwen3Config
 
 
 def _load_graph_api() -> Any:
-    """加载 Graph 的 Python 公共包。
+    """加载 Graph 的 Python 公共模块。
 
     优先使用当前 ``sys.path``；失败时把仓库的 ``Graph/python``
     加入 ``sys.path`` 后重试。
@@ -43,7 +43,7 @@ def _load_graph_api() -> Any:
       ``mobilenet_runtime_graph`` 模块对象。
 
     异常：
-      ModuleNotFoundError：公共包或 ``_graph`` 扩展不可用时抛出。
+      ModuleNotFoundError：公共模块或 ``_graph`` 扩展不可用时抛出。
     """
     try:
         import mobilenet_runtime_graph as graph_api

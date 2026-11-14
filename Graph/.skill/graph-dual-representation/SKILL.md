@@ -156,7 +156,7 @@ description: 为推理引擎构建“Graph IR（torch/at::Tensor）+ RuntimeGrap
 对应构建脚本与测试已从仓库删除，仅保留本文作为迁移记录。当前实现见：
 
 - 设计：`Graph/.doc/Graph设计文档.md`
-- 代码：`Graph/include/runtime_graph/`、`Graph/src/`
+- 代码：`Graph/include/`、`Graph/src/`
 - Python 绑定：`Graph/python/graph_python.cc`
 - 测试：`Graph/tests/graph_test.cc`、`Graph/tests/test_graph.py`
 - 当前 skill：`Graph/.skill/runtime-static-graph-cpp-pybind/SKILL.md`

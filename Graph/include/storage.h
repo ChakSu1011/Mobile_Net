@@ -12,7 +12,7 @@
 //   - data_ptr 的语义由 device_type 决定，调用方必须先检查设备类别。
 //
 // 依赖：
-//   runtime_graph/shape.h、runtime_graph/types.h。
+//   shape.h、types.h。
 
 #ifndef MOBILENET_GRAPH_INCLUDE_RUNTIME_GRAPH_STORAGE_H_
 #define MOBILENET_GRAPH_INCLUDE_RUNTIME_GRAPH_STORAGE_H_
@@ -20,8 +20,8 @@
 #include <cstddef>
 #include <string>
 
-#include "runtime_graph/shape.h"
-#include "runtime_graph/types.h"
+#include "shape.h"
+#include "types.h"
 
 namespace mobilenet {
 namespace runtime_graph {

@@ -37,7 +37,7 @@ description: 从 Runtime 静态图设计出发，实现不依赖 torch/ATen 的 
 2. 代码：
    - 公共类型：Precision/Layout/DeviceType/Shape/Storage/Attr；
    - IR 对象：Tensor/Op/OpEnv/GraphEnv/Graph；
-   - pybind11 绑定与 Python 公共包；
+   - pybind11 绑定与 Python 公共模块；
    - CMake、CTest、构建脚本。
 3. 测试报告：环境、命令、真实输出、通过/失败、未覆盖项与风险。
 4. 本 skill 文档。
@@ -150,7 +150,7 @@ description: 从 Runtime 静态图设计出发，实现不依赖 torch/ATen 的 
    `ClearOpEnv()`。
 2. **Python Tensor 悬空**：`py::return_value_policy::reference` 不延长
    Graph 生命周期；Python 先释放 Graph 再访问 Tensor 会崩溃。必须在模块
-   docstring、公共包和测试中反复说明。
+   docstring、公共模块和测试中反复说明。
 3. **constant 被当成普通 tensor**：如果 constant 写入普通 tensor 容器，
    `SortOp` 会要求 producer，或把常量错误地加入执行序列。应独立容器持有，
    并在遍历时按 `IsConstant()` 跳过。
@@ -215,13 +215,13 @@ ctest --test-dir Build/graph --output-on-failure
 ## 参考实现
 
 - 设计、实施与测试：`Graph/.doc/Graph设计文档.md`
-- 公共类型：`Graph/include/runtime_graph/types.h`、`shape.h`、
+- 公共类型：`Graph/include/types.h`、`shape.h`、
   `storage.h`、`attr.h`
-- IR 对象：`Graph/include/runtime_graph/tensor.h`、`op.h`、
+- IR 对象：`Graph/include/tensor.h`、`op.h`、
   `op_env.h`、`graph_env.h`、`graph.h`
 - 实现：`Graph/src/`
 - Python 绑定：`Graph/python/graph_python.cc`
-- Python 公共包：`Graph/python/mobilenet_runtime_graph/__init__.py`
+- Python 公共模块：`Graph/python/mobilenet_runtime_graph.py`
 - 测试：`Graph/tests/graph_test.cc`、
   `Graph/tests/test_graph.py`
 - 测试报告：`Graph/TestResults.md`

@@ -11,7 +11,7 @@
 //   - 不对外暴露连接修改接口，连接维护只允许 Graph 调用。
 //
 // 依赖：
-//   runtime_graph/storage.h、C++17 标准库。
+//   storage.h、C++17 标准库。
 
 #ifndef MOBILENET_GRAPH_INCLUDE_RUNTIME_GRAPH_TENSOR_H_
 #define MOBILENET_GRAPH_INCLUDE_RUNTIME_GRAPH_TENSOR_H_
@@ -19,7 +19,7 @@
 #include <string>
 #include <vector>
 
-#include "runtime_graph/storage.h"
+#include "storage.h"
 
 namespace mobilenet {
 namespace runtime_graph {

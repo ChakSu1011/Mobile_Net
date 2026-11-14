@@ -7,9 +7,9 @@
 //   只维护元信息表，不分配共享 buffer，不做线程同步。
 //
 // 依赖：
-//   runtime_graph/graph_env.h。
+//   graph_env.h。
 
-#include "runtime_graph/graph_env.h"
+#include "graph_env.h"
 
 #include <map>
 #include <string>

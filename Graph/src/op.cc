@@ -8,9 +8,9 @@
 //   OpEnv 负责。
 //
 // 依赖：
-//   runtime_graph/op.h、Runtime/common/status.h。
+//   op.h、Runtime/common/status.h。
 
-#include "runtime_graph/op.h"
+#include "op.h"
 
 #include <memory>
 #include <string>
@@ -18,7 +18,7 @@
 #include <vector>
 
 #include "Runtime/common/status.h"
-#include "runtime_graph/tensor.h"
+#include "tensor.h"
 
 namespace mobilenet {
 namespace runtime_graph {

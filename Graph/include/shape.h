@@ -10,7 +10,7 @@
 //   - 维度值使用 int64_t，负数视为非法输入。
 //
 // 依赖：
-//   runtime_graph/types.h（kMaxShapeDim）。
+//   types.h（kMaxShapeDim）。
 
 #ifndef MOBILENET_GRAPH_INCLUDE_RUNTIME_GRAPH_SHAPE_H_
 #define MOBILENET_GRAPH_INCLUDE_RUNTIME_GRAPH_SHAPE_H_
@@ -18,7 +18,7 @@
 #include <array>
 #include <cstdint>
 
-#include "runtime_graph/types.h"
+#include "types.h"
 
 namespace mobilenet {
 namespace runtime_graph {

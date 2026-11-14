@@ -7,9 +7,9 @@
 //   只做格式化，不解释属性语义，不读取 Storage 指向的数据。
 //
 // 依赖：
-//   runtime_graph/attr.h、runtime_graph/storage.h。
+//   attr.h、storage.h。
 
-#include "runtime_graph/attr.h"
+#include "attr.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 
-#include "runtime_graph/storage.h"
+#include "storage.h"
 
 namespace mobilenet {
 namespace runtime_graph {

@@ -1,4 +1,4 @@
-"""模块：Graph Python 包加载与枚举名称转换。
+"""模块：Graph Python 模块加载与枚举名称转换。
 
 职责：
   定位并加载 ``mobilenet_runtime_graph``，提供 Precision/Layout/OpType
@@ -41,7 +41,7 @@ _CAMEL_BOUNDARY = re.compile(r"(?<!^)(?=[A-Z])")
 
 
 def load_graph_api() -> Any:
-    """加载 Graph 的 Python 公共包。
+    """加载 Graph 的 Python 公共模块。
 
     优先使用当前 ``sys.path``；失败时把仓库的 ``Graph/python`` 与
     原生扩展目录 ``Build/graph/python`` 加入 ``sys.path`` 后重试。
@@ -51,7 +51,7 @@ def load_graph_api() -> Any:
       ``mobilenet_runtime_graph`` 模块对象。
 
     异常：
-      ModuleNotFoundError：公共包或 ``_graph`` 扩展均不可用时抛出。
+      ModuleNotFoundError：公共模块或 ``_graph`` 扩展均不可用时抛出。
     """
     global _CACHED_API
     if _CACHED_API is not None:

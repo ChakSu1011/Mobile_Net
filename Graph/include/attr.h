@@ -11,7 +11,7 @@
 //   - 不保存权重数据指针以外的运行时资源，权重地址由 constant tensor 承载。
 //
 // 依赖：
-//   runtime_graph/storage.h、C++17 标准库。
+//   storage.h、C++17 标准库。
 
 #ifndef MOBILENET_GRAPH_INCLUDE_RUNTIME_GRAPH_ATTR_H_
 #define MOBILENET_GRAPH_INCLUDE_RUNTIME_GRAPH_ATTR_H_
@@ -22,7 +22,7 @@
 #include <variant>
 #include <vector>
 
-#include "runtime_graph/storage.h"
+#include "storage.h"
 
 namespace mobilenet {
 namespace runtime_graph {

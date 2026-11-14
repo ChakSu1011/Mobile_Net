@@ -10,9 +10,9 @@
 //   - SortOp 只维护 op_list_ 中的非拥有裸指针。
 //
 // 依赖：
-//   runtime_graph/graph.h、runtime_graph/tensor.h、Runtime/common/status.h。
+//   graph.h、tensor.h、Runtime/common/status.h。
 
-#include "runtime_graph/graph.h"
+#include "graph.h"
 
 #include <cstddef>
 #include <map>
@@ -22,7 +22,7 @@
 #include <vector>
 
 #include "Runtime/common/status.h"
-#include "runtime_graph/tensor.h"
+#include "tensor.h"
 
 namespace mobilenet {
 namespace runtime_graph {

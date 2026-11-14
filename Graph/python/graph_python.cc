@@ -13,8 +13,8 @@
 //   - 不链接 torch/ATen，也不依赖 GPU/OCL 运行时。
 //
 // 依赖：
-//   pybind11、runtime_graph/graph.h、runtime_graph/tensor.h、
-//   runtime_graph/op_type.h、runtime_graph/storage.h。
+//   pybind11、graph.h、tensor.h、
+//   op_type.h、storage.h。
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -29,13 +29,13 @@
 #include <vector>
 
 #include "Runtime/common/status.h"
-#include "runtime_graph/attr.h"
-#include "runtime_graph/graph.h"
-#include "runtime_graph/op.h"
-#include "runtime_graph/op_type.h"
-#include "runtime_graph/storage.h"
-#include "runtime_graph/tensor.h"
-#include "runtime_graph/types.h"
+#include "attr.h"
+#include "graph.h"
+#include "op.h"
+#include "op_type.h"
+#include "storage.h"
+#include "tensor.h"
+#include "types.h"
 
 namespace mobilenet {
 namespace runtime_graph {

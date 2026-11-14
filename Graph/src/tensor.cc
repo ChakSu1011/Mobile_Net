@@ -7,9 +7,9 @@
 //   不校验 op 指针归属，不管理 op 生命周期；这些职责由 Graph 承担。
 //
 // 依赖：
-//   runtime_graph/tensor.h。
+//   tensor.h。
 
-#include "runtime_graph/tensor.h"
+#include "tensor.h"
 
 #include <string>
 #include <utility>

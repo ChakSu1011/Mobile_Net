@@ -12,7 +12,7 @@
 //   - 不直接依赖 GPU/OCL 算子库，kernel 执行交给 OpEnv。
 //
 // 依赖：
-//   runtime_graph/attr.h、runtime_graph/op_env.h、runtime_graph/op_type.h、
+//   attr.h、op_env.h、op_type.h、
 //   C++17 标准库。
 
 #ifndef MOBILENET_GRAPH_INCLUDE_RUNTIME_GRAPH_OP_H_
@@ -23,9 +23,9 @@
 #include <vector>
 
 #include "Runtime/common/status.h"
-#include "runtime_graph/attr.h"
-#include "runtime_graph/op_env.h"
-#include "runtime_graph/op_type.h"
+#include "attr.h"
+#include "op_env.h"
+#include "op_type.h"
 
 namespace mobilenet {
 namespace runtime_graph {

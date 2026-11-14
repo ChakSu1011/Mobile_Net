@@ -19,7 +19,7 @@
 | PyTorch | 2.12.0+cpu（仅测试） |
 | Transformers | 5.9.0（仅测试） |
 | Graph Python 模块 | `Graph/python/mobilenet_runtime_graph.py` |
-| Graph 原生扩展 | `Build/graph/python/_graph.pyd` |
+| Graph 原生扩展 | `Graph/build/python/_graph.pyd` |
 | 执行方式 | `PYTHONUTF8=1 python Models/Qwen3/test_qwen3_graph.py -v` |
 
 ## 2. 测试命令

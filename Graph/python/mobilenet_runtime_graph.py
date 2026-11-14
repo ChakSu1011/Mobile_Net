@@ -26,7 +26,7 @@ def _load_native_module():
 
     优先使用当前 ``sys.path``；找不到时依次尝试环境变量
     ``GRAPH_PYTHON_DIR`` 与仓库默认构建目录
-    ``Build/graph/python``。
+    ``Graph/build/python``。
 
     返回：
       ``_graph`` 模块对象。
@@ -43,7 +43,7 @@ def _load_native_module():
     if environment_dir:
         candidates.append(Path(environment_dir))
     repository_root = Path(__file__).resolve().parents[2]
-    candidates.append(repository_root / "Build" / "graph" / "python")
+    candidates.append(repository_root / "Graph" / "build" / "python")
     for candidate in candidates:
         extension_names = (
             "_graph.pyd",

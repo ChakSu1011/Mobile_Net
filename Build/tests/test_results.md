@@ -7,7 +7,7 @@
 | 操作系统 | Windows 11（10.0.26200） |
 | Python | 3.13.3 |
 | 解释器 | `C:\Users\18626\AppData\Local\Programs\Python\Python313\python.exe` |
-| Graph 扩展 | `Build/graph/python/_graph.pyd`（2026-11-14 构建） |
+| Graph 扩展 | `Graph/build/python/_graph.pyd`（2026-11-14 构建） |
 | 字符编码 | `PYTHONUTF8=1` |
 | 外部依赖 | 无 PyTorch / LibTorch / Protobuf；safetensors 由仓库内解析器读取 |
 | 测试日期 | 2026-11-14 |
@@ -82,7 +82,7 @@ OK
 命令：
 
 ```bash
-cd Build/graph && ./graph_test.exe
+cd Graph/build && ./graph_test.exe
 ```
 
 实际输出：

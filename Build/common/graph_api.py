@@ -44,7 +44,7 @@ def load_graph_api() -> Any:
     """加载 Graph 的 Python 公共模块。
 
     优先使用当前 ``sys.path``；失败时把仓库的 ``Graph/python`` 与
-    原生扩展目录 ``Build/graph/python`` 加入 ``sys.path`` 后重试。
+    原生扩展目录 ``Graph/build/python`` 加入 ``sys.path`` 后重试。
     结果会被缓存，重复调用不会重复导入。
 
     返回：
@@ -66,7 +66,7 @@ def load_graph_api() -> Any:
     repository_root = Path(__file__).resolve().parents[2]
     for candidate in (
         repository_root / "Graph" / "python",
-        repository_root / "Build" / "graph" / "python",
+        repository_root / "Graph" / "build" / "python",
     ):
         if not candidate.is_dir():
             continue

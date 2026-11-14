@@ -24,7 +24,7 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 PYTHON_EXTENSION_DIR = os.environ.get(
     "GRAPH_PYTHON_DIR",
-    str(REPOSITORY_ROOT / "Build" / "graph" / "python"),
+    str(REPOSITORY_ROOT / "Graph" / "build" / "python"),
 )
 sys.path.insert(0, PYTHON_EXTENSION_DIR)
 

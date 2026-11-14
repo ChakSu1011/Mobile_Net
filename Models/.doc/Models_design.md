@@ -488,7 +488,7 @@ Graph 构建产物
 |------|------|
 | 操作系统 | Windows 11 |
 | Python | 3.13.3 |
-| Graph 扩展 | `Build/graph/python/_graph.pyd` |
+| Graph 扩展 | `Graph/build/python/_graph.pyd` |
 | Transformers | 5.9.0（仅测试） |
 | PyTorch | 已安装（仅测试） |
 | 执行方式 | `PYTHONUTF8=1 python Models/Qwen3/test_qwen3_graph.py -v` |

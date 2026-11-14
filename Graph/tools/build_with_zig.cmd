@@ -4,15 +4,13 @@ rem Requires python (with ziglang), cmake, and ninja on PATH.
 setlocal
 
 for %%I in ("%~dp0..") do set "ROOT=%%~fI"
-for %%I in ("%~dp0..\..") do set "REPO_ROOT=%%~fI"
 set "TOOLS_DIR=%~dp0"
 
 rem Use forward slashes so switching between this script and the Git Bash
 rem script does not invalidate the CMake cache and lose archiver overrides.
 set "ROOT=%ROOT:\=/%"
-set "REPO_ROOT=%REPO_ROOT:\=/%"
 set "TOOLS_DIR=%TOOLS_DIR:\=/%"
-set "BUILD_DIR=%REPO_ROOT%/Build/graph"
+set "BUILD_DIR=%ROOT%/build"
 
 cmake -S "%ROOT%" -B "%BUILD_DIR%" -G Ninja ^
   -DCMAKE_BUILD_TYPE=Release ^

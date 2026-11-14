@@ -186,30 +186,30 @@ description: 从 Runtime 静态图设计出发，实现不依赖 torch/ATen 的 
 
 ```bash
 # 干净构建 + CTest
-rm -rf Build/graph
+rm -rf Graph/build
 bash Graph/tools/build_with_zig.sh
 
 # Windows cmd 构建
 cmd //c "Graph\\tools\\build_with_zig.cmd"
 
 # C++ 单测
-Build/graph/graph_test.exe
+Graph/build/graph_test.exe
 
 # Python 单测
-GRAPH_PYTHON_DIR="D:\Mobile_Net\Build\graph\python" \
+GRAPH_PYTHON_DIR="D:\Mobile_Net\Graphuild\python" \
   PYTHONUTF8=1 python Graph/tests/test_graph.py -v
 
 # CTest
-ctest --test-dir Build/graph --output-on-failure
+ctest --test-dir Graph/build --output-on-failure
 ```
 
 正式构建（有 MSVC/系统 C++ 工具链时）：
 
 ```bash
-cmake -S Graph -B Build/graph -G Ninja \
+cmake -S Graph -B Graph/build -G Ninja \
   -DCMAKE_BUILD_TYPE=Release
-cmake --build Build/graph
-ctest --test-dir Build/graph --output-on-failure
+cmake --build Graph/build
+ctest --test-dir Graph/build --output-on-failure
 ```
 
 ## 参考实现

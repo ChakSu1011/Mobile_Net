@@ -6,8 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-REPO_ROOT="$(cd "${ROOT}/.." && pwd)"
-BUILD_DIR="${REPO_ROOT}/Build/graph"
+BUILD_DIR="${ROOT}/build"
 
 # CMake 在 Windows 上更偏好 D:/... 形式；Git Bash 提供 cygpath -m。
 to_mixed_path() {

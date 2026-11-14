@@ -13,9 +13,9 @@
 #   CMake 3.20+、C++17 编译器、Python 3.10+、pybind11。
 #
 # 用法：
-#   cmake -S Graph -B Build/graph -G Ninja -DCMAKE_BUILD_TYPE=Release
-#   cmake --build Build/graph
-#   ctest --test-dir Build/graph --output-on-failure
+#   cmake -S Graph -B Graph/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+#   cmake --build Graph/build
+#   ctest --test-dir Graph/build --output-on-failure
 
 cmake_minimum_required(VERSION 3.20)
 

@@ -123,7 +123,7 @@ Agent 智能体在服务侧的应用部署已经非常广泛，手机端或者�
 
 ## 2.4 约束条件
 
-- **工具链环境**：Python 3.10+（当前验证环境为 Python 3.13）、CMake 3.20+；运行于 Windows 11 或 Linux 开发机。Build 阶段不依赖 PyTorch、LibTorch 或 Protobuf；Graph 原生扩展由仓库内 CMake 构建，产物位于 `Build/graph/python/`。
+- **工具链环境**：Python 3.10+（当前验证环境为 Python 3.13）、CMake 3.20+；运行于 Windows 11 或 Linux 开发机。Build 阶段不依赖 PyTorch、LibTorch 或 Protobuf；Graph 原生扩展由仓库内 CMake 构建，产物位于 `Graph/build/python/`。
 - **运行时环境**：C++17、CMake 3.20+、OpenCL 1.2+（优先使用设备支持的更高版本）；首期目标平台为 Android arm64-v8a（Android NDK），主机侧编译用于单元测试。Graph 与运行时均不链接 LibTorch。
 - **图表示约束**：全项目只有一套可执行图表示，即 Graph 的 C++17 runtime IR（Graph/Op/Tensor/Storage/GraphEnv/OpEnv）；Python 侧仅通过 pybind11 最小构图接口访问，不暴露 Op/Storage/Shape 访问器。Build 阶段的优化与序列化元数据由 Converter 旁路记录的 `ModelGraph` sidecar 承载；不存在 Graph IR/RuntimeGraph 双表示，也不存在 `TensorDesc` 转换层。
 - **设备目标**：首期只实现高通 Adreno GPU 的 OpenCL 后端；其他 GPU/CPU 后端不在首期实现，按目录级插件规范预留接入能力。
@@ -230,11 +230,11 @@ MobileNet/
 │   ├── include/            # Graph/Op/Tensor/Storage/Shape/GraphEnv/OpEnv
 │   ├── src/               # 构图、排序、属性/存储/环境实现
 │   ├── python/            # pybind11 绑定与最小 Python 构图 API
+│   ├── build/             # CMake 构建输出（_graph 原生扩展）
 │   └── tests/             # Graph C++/Python 测试与 test_results.md
 ├── Build/                 # 离线工具链（Python）
 │   ├── .skill/            # 阶段级 skill
 │   ├── tests/test_results.md  # 阶段级测试结果
-│   ├── graph/             # Graph 构建产物（_graph 原生扩展）
 │   ├── common/            # ModelGraph、safetensors、JSON、错误与哈希工具
 │   ├── converter/         # RecordingGraph、Qwen3 Adapter、转换报告
 │   │   ├── .doc/          # converter_design.md

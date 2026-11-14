@@ -5,7 +5,7 @@
 | 报告日期 | 2026-11-14 |
 | 测试对象 | `Graph` C++ 静态库、`_graph` Python 扩展、公共模块 |
 | 设计文档 | [Graph 设计文档](../.doc/Graph_design.md) |
-| 构建目录 | `Build/graph` |
+| 构建目录 | `Graph/build` |
 | 结论 | 已执行的构建、C++ 单测、Python 单测、CTest、包导入和格式检查全部通过；未覆盖项见第 8 节 |
 
 本报告只记录实际执行的命令、输出和结论。报告中引用的构建输出为原始终端
@@ -43,10 +43,10 @@
 bash Graph/tools/build_with_zig.sh
 
 # 2. C++ 单测直接运行
-Build/graph/graph_test.exe
+Graph/build/graph_test.exe
 
 # 3. Python 单测
-GRAPH_PYTHON_DIR="D:\Mobile_Net\Build\graph\python" \
+GRAPH_PYTHON_DIR="D:\Mobile_Net\Graphuild\python" \
   PYTHONUTF8=1 python Graph/tests/test_graph.py -v
 
 # 4. 公共模块导入
@@ -61,7 +61,7 @@ cmd //c "Graph\\tools\\build_with_zig.cmd"
 
 ### 2.1 干净构建
 
-删除 `Build/graph` 后执行 `bash Graph/tools/build_with_zig.sh`，实际输出：
+删除 `Graph/build` 后执行 `bash Graph/tools/build_with_zig.sh`，实际输出：
 
 ```text
 -- The CXX compiler identification is Clang 22.1.8
@@ -72,9 +72,9 @@ cmd //c "Graph\\tools\\build_with_zig.cmd"
 -- pybind11::lto disabled (problems with undefined symbols for MinGW for now)
 -- pybind11::thin_lto disabled (problems with undefined symbols for MinGW for now)
 -- Found pybind11: C:/Users/18626/AppData/Local/Programs/Python/Python313/Lib/site-packages/pybind11/include (found version "3.1.0")
--- Configuring done (24.3s)
+-- Configuring done (3.4s)
 -- Generating done (0.1s)
--- Build files have been written to: D:/Mobile_Net/Build/graph
+-- Build files have been written to: D:/Mobile_Net/Graph/build
 [1/16] Building CXX object CMakeFiles/graph.dir/src/op_type.cc.obj
 [2/16] Building CXX object CMakeFiles/graph.dir/src/types.cc.obj
 [3/16] Building CXX object CMakeFiles/graph.dir/src/op_env.cc.obj
@@ -94,7 +94,7 @@ cmd //c "Graph\\tools\\build_with_zig.cmd"
 ```
 
 结论：16/16 目标构建成功，输出中没有编译警告。产物为
-`Build/graph/python/_graph.pyd`。
+`Graph/build/python/_graph.pyd`。
 
 ### 2.2 构建脚本切换验证
 
@@ -103,15 +103,15 @@ cmd //c "Graph\\tools\\build_with_zig.cmd"
 
 ```text
 $ cmd //c "Graph\\tools\\build_with_zig.cmd"
--- Configuring done (0.5s)
+-- Configuring done (0.4s)
 -- Generating done (0.1s)
--- Build files have been written to: D:/Mobile_Net/Build/graph
+-- Build files have been written to: D:/Mobile_Net/Graph/build
 ninja: no work to do.
 
 $ bash Graph/tools/build_with_zig.sh
--- Configuring done (0.4s)
+-- Configuring done (0.5s)
 -- Generating done (0.1s)
--- Build files have been written to: D:/Mobile_Net/Build/graph
+-- Build files have been written to: D:/Mobile_Net/Graph/build
 ninja: no work to do.
 ```
 
@@ -126,15 +126,15 @@ CMAKE_RANLIB:FILEPATH=d:/Mobile_Net/Graph/tools/zig_ranlib.cmd
 ### 2.3 CTest 集成（TR-02）
 
 ```text
-Test project D:/Mobile_Net/Build/graph
+Test project D:/Mobile_Net/Graph/build
     Start 1: graph_unit
-1/2 Test #1: graph_unit .......................   Passed    0.19 sec
+1/2 Test #1: graph_unit .......................   Passed    0.18 sec
     Start 2: graph_python
-2/2 Test #2: graph_python .....................   Passed    0.32 sec
+2/2 Test #2: graph_python .....................   Passed    0.29 sec
 
 100% tests passed out of 2
 
-Total Test time (real) =   0.66 sec
+Total Test time (real) =   0.64 sec
 ```
 
 结论：CTest 2/2 通过，退出码 0。
@@ -144,7 +144,7 @@ Total Test time (real) =   0.66 sec
 ### 3.1 执行命令与输出
 
 ```bash
-$ Build/graph/graph_test.exe
+$ Graph/build/graph_test.exe
 graph_test: ALL TESTS PASSED
 $ echo $?
 0
@@ -171,7 +171,7 @@ GPU，也不读取权重内容。
 ### 4.1 执行命令
 
 ```bash
-$ GRAPH_PYTHON_DIR="D:\Mobile_Net\Build\graph\python" \
+$ GRAPH_PYTHON_DIR="D:\Mobile_Net\Graphuild\python" \
     PYTHONUTF8=1 python Graph/tests/test_graph.py -v
 ```
 
@@ -239,7 +239,7 @@ Graph Tensor OpType.kLinear Precision.kFloat16
 
 `mobilenet_runtime_graph` 优先从 `sys.path` 加载 `_graph`；找不到时
 使用 `GRAPH_PYTHON_DIR`，最后回退到源码树的
-`Build/graph/python`。本次验证同时覆盖了环境变量方式和源码树默认
+`Graph/build/python`。本次验证同时覆盖了环境变量方式和源码树默认
 路径方式。
 
 ### 5.2 dump_ir 实际输出
@@ -375,17 +375,17 @@ Python display width <= 80: OK
 
 ```bash
 # 干净构建 + CTest（Git Bash）
-rm -rf Build/graph
+rm -rf Graph/build
 bash Graph/tools/build_with_zig.sh
 
 # 或者使用 Windows cmd
 cmd //c "Graph\\tools\\build_with_zig.cmd"
 
 # C++ 单测
-Build/graph/graph_test.exe
+Graph/build/graph_test.exe
 
 # Python 单测（可读中文输出）
-GRAPH_PYTHON_DIR="D:\Mobile_Net\Build\graph\python" \
+GRAPH_PYTHON_DIR="D:\Mobile_Net\Graphuild\python" \
   PYTHONUTF8=1 python Graph/tests/test_graph.py -v
 
 # 公共模块导入
@@ -393,5 +393,5 @@ python -c "import sys; sys.path.insert(0, r'Graph\python'); \
   import mobilenet_runtime_graph as m; print(m.Graph, m.Tensor)"
 
 # CTest
-ctest --test-dir Build/graph --output-on-failure
+ctest --test-dir Graph/build --output-on-failure
 ```

@@ -28,7 +28,7 @@ description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer 
 
 1. 模型 `config.json`（Transformers 风格），首期
    `Models/Qwen3/config.json`。
-2. Graph Python 扩展（`Build/graph/python/`）。
+2. Graph Python 扩展（`Graph/build/python/`）。
 3. 可选的 safetensors 权重文件或目录；不提供时生成 metadata-only 包。
 4. 优化配置：`target_precision`、`max_num_tokens`、`context_length`、
    `alignment`、`enable_reuse`。

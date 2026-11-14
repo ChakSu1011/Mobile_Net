@@ -6,7 +6,7 @@
 | 日期 | 2026-11-14 |
 | 文档性质 | Graph 模块设计文档（含实施与测试） |
 | 代码目录 | `Graph/` |
-| 验证目录 | `Build/graph/` |
+| 验证目录 | `Graph/build/` |
 | 测试报告 | [test_results.md](../tests/test_results.md) |
 | 配套 skill | [SKILL.md](../.skill/runtime-static-graph-cpp-pybind/SKILL.md) |
 
@@ -1077,7 +1077,7 @@ outputs <count>
 
 - `graph`：静态库，包含 `src/*.cc` 和 `Runtime/common/status.cc`；开启
   `POSITION_INDEPENDENT_CODE`，保证 Linux/macOS 上可链接进 Python MODULE；
-- `graph_python`：MODULE 库，输出 `Build/graph/python/_graph.pyd`；
+- `graph_python`：MODULE 库，输出 `Graph/build/python/_graph.pyd`；
 - `graph_test`：C++ 单测可执行文件；
 - CTest：
   - `graph_unit`：直接运行 C++ 单测；
@@ -1172,7 +1172,7 @@ S1 -> S2 -> S3 -> S4 -> S5 -> S6 -> S7
 | Ninja | 1.13.2 |
 | Zig | 0.17.1 |
 | 构建类型 | Release |
-| 构建目录 | `Build/graph` |
+| 构建目录 | `Graph/build` |
 | 编译器 | `python -m ziglang c++` 包装脚本 |
 
 ### 6.3 C++ 用例设计
@@ -1202,10 +1202,10 @@ S1 -> S2 -> S3 -> S4 -> S5 -> S6 -> S7
 ### 6.5 测试命令
 
 ```bash
-cmake --build Build/graph --clean-first
-ctest --test-dir Build/graph --output-on-failure
-Build/graph/graph_test.exe
-GRAPH_PYTHON_DIR="D:\Mobile_Net\Build\graph\python" \
+cmake --build Graph/build --clean-first
+ctest --test-dir Graph/build --output-on-failure
+Graph/build/graph_test.exe
+GRAPH_PYTHON_DIR="D:\Mobile_Net\Graphuild\python" \
   PYTHONUTF8=1 python Graph/tests/test_graph.py -v
 ```
 

@@ -1,6 +1,6 @@
 ---
 name: graph_visualizer
-description: 把序列化后的 model.mgf 渲染为自上而下的静态 SVG 流程图，节点只显示融合算子名称/类型/类别/精度/散算子类别，输入、输出、激活和参数都以平行四边形边显示精度与 shape，并折叠重复 Layer。
+description: 把序列化后的 model.mgf 渲染为自上而下的静态 SVG 流程图，节点显示融合算子名称/类型/类别/精度/散算子类别和权重 W 行，输入/输出/激活以平行四边形边显示精度与 shape，并折叠重复 Layer。
 ---
 
 # Graph 静态图可视化
@@ -9,7 +9,7 @@ description: 把序列化后的 model.mgf 渲染为自上而下的静态 SVG 流
 
 - 已有 Serializer 生成的 `model.mgf`，需要人工确认融合算子图。
 - 需要查看每个融合算子的类型、类别、精度和散算子类别。
-- 需要确认输入、输出、激活和参数平行四边形的精度、shape 与串接顺序。
+- 需要确认输入、输出、激活平行四边形的精度、shape 与串接顺序。
 - 需要折叠重复的 Decoder Layer，并发现与其他层结构不同的差异层。
 
 ## 不适用场景
@@ -50,7 +50,7 @@ PYTHONUTF8=1 python Graph/tools/visualize_graph.py \
 1. 加载并校验 `model.mgf` 头部与 manifest 哈希。
 2. 从 manifest 构造 `ModelGraph`。
 3. 识别 `layer.<n>.*`，按结构签名合并连续相同层。
-4. 构建显示节点：融合算子、输入/输出/激活/参数 tensor 平行四边形。
+4. 构建显示节点：融合算子（含 W 行）、输入/输出/激活 tensor 平行四边形。
 5. 计算自上而下 rank、节点/平行四边形尺寸和 Layer 背景框。
 6. 渲染 SVG 并输出警告。
 
@@ -58,10 +58,10 @@ PYTHONUTF8=1 python Graph/tools/visualize_graph.py \
 
 - 节点为融合算子，只显示名称、`OpType`、类别、精度和散算子类别；
   不显示 `attrs`。
-- 输入、输出、激活、参数全部绘制为串在流程中的平行四边形。
-- 平行四边形内只显示精度和 shape；参数平行四边形使用虚线边框。
-- 输入/输出平行四边形外部显示 tensor 名；参数平行四边形不显示权重名称、数值或哈希。
-- shape 元素数 ≤ 1 的常量不绘制参数平行四边形。
+- 输入、输出、激活绘制为串在流程中的平行四边形。
+- 平行四边形内只显示精度和 shape。
+- 权重不单独做边；节点内每行显示 `W: <精度>, <shape>`，多权重多行。
+- 输入/输出平行四边形外部显示 tensor 名；权重行不显示名称或数值。
 - 连续相同 Layer 只画一个代表性子图，标注 `×N (layer.a–layer.b)`。
 - 与基准层签名不同的 Layer 单独绘制，红色边框并标记“差异”。
 - 不提供完整展开模式。
@@ -71,8 +71,8 @@ PYTHONUTF8=1 python Graph/tools/visualize_graph.py \
 
 - [ ] SVG 顶部有模型名、manifest/IR 哈希和图例。
 - [ ] 节点只显示名称、类型、类别、精度和散算子类别，无 attrs。
-- [ ] 输入/输出/激活/参数都是平行四边形边。
-- [ ] 平行四边形只显示精度和 shape；参数平行四边形为虚线。
+- [ ] 输入/输出/激活都是平行四边形边。
+- [ ] 权重在节点内显示 `W: 精度, shape`，不单独做边。
 - [ ] 重复 Layer 标注 `×N`，没有重复绘制 N 份。
 - [ ] 差异 Layer 单独显示并标记。
 - [ ] 输出位于模型 artifacts 目录。
@@ -82,13 +82,13 @@ PYTHONUTF8=1 python Graph/tools/visualize_graph.py \
 
 1. **把 `Graph/build` 当成本工具目录**：工具在
    `Graph/tools/graph_visualizer/`，构建输出在 `Graph/build/`。
-2. **读取 `weights.bin`**：可视化不需要权重内容，参数平行四边形只用 manifest
+2. **读取 `weights.bin`**：可视化不需要权重内容，权重行只用 manifest
    的 shape 和 precision。
 3. **把第一层的 embedding 输入误判为差异**：Layer 签名必须把外部
    activation 归一化为角色占位，而不是比较张量全名。
 4. **用 op 数量判断层是否相同**：必须比较归一化名称、类型、属性、连接
    和对外角色。
-5. **参数平行四边形显示权重名称或数值**：当前规则只显示精度和 shape，避免泄露
+5. **权重行显示权重名称或数值**：当前规则只显示精度和 shape，避免泄露
    权重内容并保持图面简洁。
 6. **输出到 ToolChain 或仓库根目录**：产物应写入
    `Models/<模型目录>/artifacts/`。

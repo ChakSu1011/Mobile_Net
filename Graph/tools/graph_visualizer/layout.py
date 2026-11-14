@@ -1,11 +1,10 @@
 """模块：视图模型的至上而下布局。
 
 职责：
-  计算融合算子节点、tensor 数据边、参数数据边和 Layer 背景框的坐标。
+  计算融合算子节点、tensor 数据边和 Layer 背景框的坐标。
 
 边界：
   - 不做 SVG 绘制；
-  - 参数数据边不参与主数据流 rank，放在消费算子左侧；
   - 布局失败时回退到顺序布局。
 """
 
@@ -147,6 +146,10 @@ def _node_lines(node: Node) -> list[str]:
     else:
         scatter = "散算子: 未登记"
     lines.extend(wrap_lines(scatter, 42))
+    for weight in node.weights:
+        lines.append(
+            f"W: {precision_label(weight.precision)}, "
+            f"{format_shape(weight.shape)}")
     return lines
 
 
@@ -185,27 +188,20 @@ def _tensor_display(
     return lines, half_width, _TENSOR_HALF_HEIGHT
 
 
-def _ranks(view: ViewModel) -> tuple[dict[str, int], set[str]]:
+def _ranks(view: ViewModel) -> dict[str, int]:
     """计算主数据流节点的 rank。
 
     参数：
       view：视图模型。
 
     返回：
-      ``(rank 映射, 参数数据边 ID 集合)``；参数数据边不参与 rank。
+      融合算子与 tensor 平行四边形的 rank 映射。
     """
-    parameter_ids = {
-        tensor.id for tensor in view.tensors
-        if tensor.kind == "parameter"
-    }
     ranks = {}
     for node in view.nodes:
         ranks[node.id] = 0
     for tensor in view.tensors:
-        if tensor.kind != "parameter":
-            ranks[tensor.id] = 0
-            if tensor.kind == "input":
-                ranks[tensor.id] = 0
+        ranks[tensor.id] = 0
     links = [
         link for link in view.links
         if link.src in ranks and link.dst in ranks
@@ -219,7 +215,7 @@ def _ranks(view: ViewModel) -> tuple[dict[str, int], set[str]]:
                 changed = True
         if not changed:
             break
-    return ranks, parameter_ids
+    return ranks
 
 
 def _order_map(view: ViewModel) -> dict[str, int]:
@@ -256,7 +252,7 @@ def layout_view(view: ViewModel) -> LayoutResult:
     返回：
       ``LayoutResult``；包含算子框、tensor 数据边和 Layer 背景框。
     """
-    ranks, parameter_ids = _ranks(view)
+    ranks = _ranks(view)
     order = _order_map(view)
 
     compute_lines = {node.id: _node_lines(node) for node in view.nodes}
@@ -269,12 +265,8 @@ def layout_view(view: ViewModel) -> LayoutResult:
         for tensor in view.tensors
     }
 
-    main_ids = [
-        item_id for item_id in ranks
-        if item_id not in parameter_ids
-    ]
     rows: dict[int, list[str]] = {}
-    for item_id in main_ids:
+    for item_id in ranks:
         rows.setdefault(ranks[item_id], []).append(item_id)
     for row in rows.values():
         row.sort(key=lambda item_id: order.get(item_id, 0))
@@ -336,36 +328,6 @@ def layout_view(view: ViewModel) -> LayoutResult:
             x += item_width + _NODE_GAP
         y += row_heights[rank] + 62.0
 
-    parameter_groups: dict[str, list[TensorNode]] = {}
-    for tensor in view.tensors:
-        if tensor.kind != "parameter":
-            continue
-        consumers = [
-            link.dst for link in view.links
-            if link.src == tensor.id and link.dst in computes
-        ]
-        if not consumers:
-            continue
-        parameter_groups.setdefault(consumers[0], []).append(tensor)
-
-    for consumer_id, group in parameter_groups.items():
-        box = computes.get(consumer_id)
-        if box is None:
-            continue
-        group.sort(key=lambda tensor: order.get(tensor.id, 0))
-        count = len(group)
-        for index, tensor in enumerate(group):
-            lines, half_width, half_height = tensor_lines[tensor.id]
-            offset = (index - (count - 1) / 2.0) * 78.0
-            tensors[tensor.id] = TensorBox(
-                tensor=tensor,
-                cx=box.x - 120.0,
-                cy=box.y + box.height / 2.0 + offset,
-                half_width=half_width,
-                half_height=half_height,
-                lines=tuple(lines),
-            )
-
     height = max(y + 70.0, 700.0)
 
     run_boxes = []
@@ -381,8 +343,6 @@ def layout_view(view: ViewModel) -> LayoutResult:
         max_x = max(box.x + box.width for box in run_computes) + 30.0
         max_y = max(box.y + box.height for box in run_computes) + 30.0
         for tensor in tensors.values():
-            if tensor.tensor.kind == "parameter":
-                continue
             if min_x <= tensor.cx <= max_x and min_y <= tensor.cy <= max_y:
                 min_x = min(min_x, tensor.cx - tensor.half_width - 10.0)
                 max_x = max(max_x, tensor.cx + tensor.half_width + 10.0)

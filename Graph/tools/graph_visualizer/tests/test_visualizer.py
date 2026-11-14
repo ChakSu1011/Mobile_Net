@@ -183,26 +183,25 @@ class VisualizerTest(unittest.TestCase):
         kinds = [tensor.kind for tensor in self.view.tensors]
         self.assertEqual(kinds.count("input"), 2)
         self.assertEqual(kinds.count("output"), 1)
-        self.assertEqual(kinds.count("parameter"), 14)
-        parameter_links = [
-            link for link in self.view.links
-            if link.src.startswith("tensor:") and any(
-                tensor.id == link.src and tensor.kind == "parameter"
-                for tensor in self.view.tensors)
-        ]
-        self.assertEqual(len(parameter_links), 14)
+        self.assertNotIn("parameter", kinds)
+        total_weights = sum(
+            len(node.weights) for node in self.view.nodes)
+        self.assertEqual(total_weights, 14)
+        gate_up = next(
+            node for node in self.view.nodes
+            if node.id == "layer.0.mlp_gate_up")
+        self.assertEqual(len(gate_up.weights), 2)
         self.assertFalse(self.view.warnings)
 
-    def test_parameter_labels(self) -> None:
-        """UT-VIS-005：参数平行四边形只有精度与 shape。"""
-        parameters = [
-            tensor for tensor in self.view.tensors
-            if tensor.kind == "parameter"]
-        self.assertTrue(parameters)
-        for tensor in parameters:
-            self.assertEqual(tensor.precision, "float16")
-            self.assertTrue(tensor.shape)
-            self.assertIsNone(tensor.caption)
+    def test_node_weights(self) -> None:
+        """UT-VIS-005：权重精度与 shape 位于节点内。"""
+        weighted = [
+            node for node in self.view.nodes if node.weights]
+        self.assertTrue(weighted)
+        for node in weighted:
+            for weight in node.weights:
+                self.assertEqual(weight.precision, "float16")
+                self.assertTrue(weight.shape)
 
     def test_render_deterministic(self) -> None:
         """UT-VIS-009：两次渲染生成字节一致的 SVG。"""
@@ -215,7 +214,8 @@ class VisualizerTest(unittest.TestCase):
             text = first.read_text(encoding="utf-8")
             self.assertIn("DecoderLayer ×28", text)
             self.assertIn("kLinearSwiGlu", text)
-            self.assertIn("1024×1024", text)
+            self.assertIn("W: fp16, 3072×1024", text)
+            self.assertIn("W: fp16, 1024×3072", text)
             self.assertIn("fp16", text)
             self.assertNotIn("available", text)
             self.assertNotIn(".weight", text)

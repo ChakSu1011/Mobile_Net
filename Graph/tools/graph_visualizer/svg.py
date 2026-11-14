@@ -42,7 +42,7 @@ def _tensor_color(tensor_kind: str) -> str:
     """返回 tensor 数据边和连线的颜色。
 
     参数：
-      tensor_kind：input/activation/output/parameter。
+      tensor_kind：input/activation/output。
 
     返回：
       十六进制颜色。
@@ -51,8 +51,6 @@ def _tensor_color(tensor_kind: str) -> str:
         return "#2563eb"
     if tensor_kind == "output":
         return "#16a34a"
-    if tensor_kind == "parameter":
-        return "#d97706"
     return "#334155"
 
 
@@ -69,8 +67,6 @@ def _tensor_marker(tensor_kind: str) -> str:
         return "arrow-input"
     if tensor_kind == "output":
         return "arrow-output"
-    if tensor_kind == "parameter":
-        return "arrow-param"
     return "arrow-activation"
 
 
@@ -157,7 +153,6 @@ def _render_legend(width: float) -> str:
     rows = (
         ("rect", "#475569", "融合算子"),
         ("data", "#334155", "输入/激活/输出边（精度+shape）"),
-        ("data-param", "#d97706", "参数边（精度+shape）"),
         ("box", "#dc2626", "差异 Layer"),
     )
     for index, (shape, color, text) in enumerate(rows):
@@ -169,13 +164,9 @@ def _render_legend(width: float) -> str:
                 f'width="28" height="12" rx="3" fill="#ffffff" '
                 f'stroke="{color}"{dash}/>')
         else:
-            dash = (
-                ' stroke-dasharray="5 3"'
-                if shape == "data-param" else ""
-            )
             parts.append(
                 f'<path d="{_parallelogram_path(x + 14, row_y - 4, 15, 9, 4)}" '
-                f'fill="#ffffff" stroke="{color}"{dash}/>')
+                f'fill="#ffffff" stroke="{color}"/>')
         parts.append(_label(x + 40, row_y, text, 10, "#334155"))
     return "\n".join(parts)
 
@@ -256,15 +247,11 @@ def _render_tensor(box: TensorBox) -> str:
     """
     tensor = box.tensor
     color = _tensor_color(tensor.kind)
-    dash = (
-        ' stroke-dasharray="6 4"'
-        if tensor.kind == "parameter" else ""
-    )
     path = _parallelogram_path(
         box.cx, box.cy, box.half_width, box.half_height)
     parts = [
         f'<path d="{path}" fill="#ffffff" stroke="{color}" '
-        f'stroke-width="1.6"{dash}/>',
+        f'stroke-width="1.6"/>',
         _label(
             box.cx,
             box.cy - 3.0,
@@ -333,11 +320,6 @@ def _render_links(view: ViewModel, layout: LayoutResult) -> str:
             y2 = dst_compute.y
             color = _tensor_color(src_tensor.tensor.kind)
             marker = _tensor_marker(src_tensor.tensor.kind)
-            if src_tensor.tensor.kind == "parameter":
-                x1 = src_tensor.cx + src_tensor.half_width - 6.0
-                y1 = src_tensor.cy
-                x2 = dst_compute.x
-                y2 = dst_compute.y + dst_compute.height / 2.0
         else:
             continue
         parts.append(
@@ -383,9 +365,6 @@ def render_svg(
         '<marker id="arrow-output" markerWidth="8" markerHeight="8" '
         'refX="7" refY="4" orient="auto">'
         '<path d="M0,0 L8,4 L0,8 z" fill="#16a34a"/></marker>',
-        '<marker id="arrow-param" markerWidth="8" markerHeight="8" '
-        'refX="7" refY="4" orient="auto">'
-        '<path d="M0,0 L8,4 L0,8 z" fill="#d97706"/></marker>',
         "</defs>",
         f'<rect width="{_fmt(layout.width)}" '
         f'height="{_fmt(layout.height)}" fill="#ffffff"/>',

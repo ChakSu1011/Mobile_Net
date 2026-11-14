@@ -2,12 +2,12 @@
 
 职责：
   把 ``ModelGraph`` 转换为融合算子节点、数据边平行四边形和 Layer 区间；折叠连续
-  相同层，为输入/输出/激活/参数生成唯一的 tensor 平行四边形。
+  相同层，为输入/输出/激活生成唯一的 tensor 平行四边形；权重挂在节点内。
 
 边界：
   - 不读取权重内容、不执行推理；
   - 不负责布局、SVG 绘制或命令行；
-  - 参数平行四边形只保留精度与 shape，不保留权重名称或数值。
+  - 权重不再作为边，精度与 shape 直接记录在节点内。
 """
 
 from __future__ import annotations
@@ -30,6 +30,19 @@ _LAYER_REF = re.compile(r"layer\.(?P<index>\d+)\.")
 
 
 @dataclass(frozen=True)
+class WeightSpec:
+    """节点内显示的权重信息。
+
+    属性：
+      precision：权重精度；
+      shape：权重形状。
+    """
+
+    precision: str
+    shape: tuple[int | str, ...]
+
+
+@dataclass(frozen=True)
 class Node:
     """融合算子节点。
 
@@ -39,7 +52,8 @@ class Node:
       op_type：稳定 op 类型名；
       category：显示类别；
       precision：节点精度；
-      composition：散算子组成。
+      composition：散算子组成；
+      weights：节点内显示的权重精度与 shape。
     """
 
     id: str
@@ -48,6 +62,7 @@ class Node:
     category: str
     precision: str
     composition: tuple[str, ...]
+    weights: tuple[WeightSpec, ...]
 
 
 @dataclass(frozen=True)
@@ -59,7 +74,7 @@ class TensorNode:
       name：张量名；
       precision：张量精度；
       shape：张量形状；
-      kind：input/activation/output/parameter；
+      kind：input/activation/output；
       caption：输入/输出平行四边形外部显示的 tensor 名称。
     """
 
@@ -109,7 +124,7 @@ class ViewModel:
       manifest_sha256：manifest 哈希；
       ir_sha256：IR 哈希；
       nodes：融合算子节点；
-      tensors：输入/输出/激活/参数平行四边形；
+      tensors：输入/输出/激活平行四边形；
       links：连接；
       runs：Layer 区间视图；
       warnings：构建警告。
@@ -153,23 +168,6 @@ def _precision_of(meta: TensorMeta | None, fallback: str) -> str:
     if meta is None or not meta.precision:
         return fallback
     return meta.precision
-
-
-def _numel(shape: tuple[int | str, ...]) -> int:
-    """返回静态形状的元素数量。
-
-    参数：
-      shape：静态形状。
-
-    返回：
-      元素数量；不能计算时返回 0。
-    """
-    if not shape:
-        return 1
-    try:
-        return math.prod(int(value) for value in shape)
-    except (TypeError, ValueError):
-        return 0
 
 
 def _layer_index(name: str) -> int | None:
@@ -323,6 +321,27 @@ def build_view_model(package: LoadedPackage) -> ViewModel:
     display_ops = _display_ops(graph, representative)
     display_names = {name for name, _ in display_ops}
 
+    weights_by_op: dict[str, tuple[WeightSpec, ...]] = {}
+    for display_name, op in display_ops:
+        specs = []
+        for source in op.inputs:
+            if source not in graph.constants:
+                continue
+            meta = _edge_meta(
+                graph,
+                source,
+                _map_tensor_name(source, representative),
+            )
+            if meta is None:
+                warnings.append(
+                    f"constant metadata missing: {source}")
+                continue
+            specs.append(WeightSpec(
+                precision=_precision_of(meta, "unknown"),
+                shape=_shape_of(meta),
+            ))
+        weights_by_op[display_name] = tuple(specs)
+
     nodes: list[Node] = []
     for display_name, op in display_ops:
         description = describe_op(op.op_type, op.attrs)
@@ -336,6 +355,7 @@ def build_view_model(package: LoadedPackage) -> ViewModel:
             category=description.category,
             precision=_node_precision(op, graph),
             composition=description.composition,
+            weights=weights_by_op[display_name],
         ))
 
     tensors: dict[str, TensorNode] = {}
@@ -346,16 +366,13 @@ def build_view_model(package: LoadedPackage) -> ViewModel:
         name: str,
         kind: str,
         caption: str | None = None,
-        *,
-        key_suffix: str = "",
     ) -> str | None:
         """创建或更新一个 tensor 平行四边形。
 
         参数：
           name：原始张量名；
-          kind：input/activation/output/parameter；
+          kind：input/activation/output；
           caption：输入/输出平行四边形外部说明；
-          key_suffix：参数平行四边形按消费者去重使用的后缀。
 
         返回：
           tensor 平行四边形 ID；元数据缺失时返回 None。
@@ -364,7 +381,7 @@ def build_view_model(package: LoadedPackage) -> ViewModel:
         meta = _edge_meta(graph, name, mapped)
         if meta is None:
             return None
-        tensor_id = f"tensor:{mapped}{key_suffix}"
+        tensor_id = f"tensor:{mapped}"
         existing = tensors.get(tensor_id)
         final_kind = kind
         final_caption = caption
@@ -412,27 +429,6 @@ def build_view_model(package: LoadedPackage) -> ViewModel:
     for display_name, op in display_ops:
         for source in op.inputs:
             if source in graph.constants:
-                meta = _edge_meta(
-                    graph,
-                    source,
-                    _map_tensor_name(source, representative),
-                )
-                if meta is None:
-                    warnings.append(
-                        f"constant metadata missing: {source}")
-                    continue
-                shape = _shape_of(meta)
-                if _numel(shape) <= 1:
-                    warnings.append(
-                        f"scalar parameter not drawn: {source}")
-                    continue
-                tensor_id = ensure_tensor(
-                    source,
-                    "parameter",
-                    key_suffix=f"@{display_name}",
-                )
-                if tensor_id is not None:
-                    add_link(tensor_id, display_name)
                 continue
             if source in graph.inputs:
                 tensor_id = ensure_tensor(

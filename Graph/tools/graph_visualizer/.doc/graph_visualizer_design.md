@@ -15,7 +15,7 @@
 | 决策 | 结论 |
 |------|------|
 | 输出格式 | 仅 SVG |
-| 权重展示 | 不显示权重值；shape 元素数 > 1 的常量作为虚线平行四边形参数边，只标注精度和 shape |
+| 权重展示 | 权重不单独做边；节点内以 `W: <精度>, <shape>` 一行显示，不显示权重数值 |
 | 重复 Layer | 绘制代表性子图，标注重复次数 |
 | 差异 Layer | 与基准层结构不同的 Layer 单独显示并标记 |
 | 完整图 | 不提供完整展开视图 |
@@ -36,8 +36,8 @@
 1. 从 `model.mgf` 生成类似算子流程图的静态 SVG。
 2. 节点表示融合算子，只显示名称、`OpType`、类别、精度和散算子类别；
    不显示属性。
-3. 输入、输出、激活和参数都作为串在流程中的平行四边形边，平行四边形只显示
-   精度与 shape。
+3. 输入、输出、激活作为串在流程中的平行四边形边，只显示精度与 shape；
+   权重精度与 shape 放在节点内。
 4. 连续相同 Layer 折叠为代表性子图并标注 `×N`。
 5. 与基准层结构不同的 Layer 单独绘制并标记差异。
 6. 输出自包含 SVG，离线可打开，相同输入生成字节一致结果。
@@ -69,10 +69,10 @@
 | 编号 | 需求 | 验收方式 |
 |------|------|----------|
 | FR-VIS-01 | 读取 `model.mgf`，校验头部、manifest SHA-256 与版本 | 损坏包报错，不生成图 |
-| FR-VIS-02 | 节点只显示融合算子名称、`OpType`、类别、精度、散算子类别；不显示属性 | Qwen3 节点信息完整且无 attrs |
+| FR-VIS-02 | 节点显示融合算子名称、`OpType`、类别、精度、散算子类别和权重行；不显示属性 | Qwen3 节点信息完整且无 attrs |
 | FR-VIS-03 | 输入、输出、激活均为平行四边形边，平行四边形只显示精度和 shape | 抽查与 manifest 一致 |
-| FR-VIS-04 | shape 元素数 > 1 的常量作为虚线平行四边形参数边，只标注精度和 shape | 折叠视图只显示代表层参数边 |
-| FR-VIS-05 | 参数平行四边形不显示权重名称、数值、统计值、可用性或哈希 | SVG 中无权重内容 |
+| FR-VIS-04 | 每个显示算子消费的权重在节点内显示为 `W: <精度>, <shape>` 行 | 多权重算子显示多行；折叠层只显示代表层权重 |
+| FR-VIS-05 | 节点内权重行不显示权重名称、数值、统计值、可用性或哈希 | SVG 中无权重内容 |
 | FR-VIS-06 | 连续相同 Layer 折叠为代表性子图，标注 `×N` | Qwen3 显示一个 Decoder Layer `×28` |
 | FR-VIS-07 | 与基准层结构不同的 Layer 单独绘制并标记差异 | 合成测试图中差异层单独出现 |
 | FR-VIS-08 | 输出自包含 SVG，含标题、图例、模型/IR 哈希 | 浏览器离线打开正常 |
@@ -96,8 +96,8 @@
 - 输入是 Serializer 生成的 `model.mgf` v1。
 - 当前 Qwen3 包为 metadata-only；工具不依赖权重内容。
 - 精度以 `ModelGraph` 中 `TensorMeta.precision` 为准。
-- 参数边来自 `ModelGraph.constants` 与 `manifest["weights"]["entries"]`；
-  只有 shape 元素数 > 1 的常量绘制为参数平行四边形。
+- 权重来自 `ModelGraph.constants` 与 `manifest["weights"]["entries"]`；
+  权重不单独做边，而是以节点内 W 行显示精度与 shape。
 - 不读取 `weights.bin`，不依赖 `_graph` 扩展。
 - 输出遵守模型产物目录规则；代码遵守 Google Style 与中文注释要求。
 
@@ -106,8 +106,8 @@
 | 编号 | 验收标准 |
 |------|----------|
 | AC-VIS-01 | Qwen3 图包含 2 个输入、embedding、Decoder Layer 代表子图 `×28`、final norm、LM Head、1 个输出 |
-| AC-VIS-02 | 每个融合算子节点只显示名称、类型、类别、精度和散算子类别 |
-| AC-VIS-03 | 输入、输出、激活、参数都是平行四边形边，平行四边形只显示精度和 shape |
+| AC-VIS-02 | 每个融合算子节点只显示名称、类型、类别、精度、散算子类别和权重行 |
+| AC-VIS-03 | 输入、输出、激活是平行四边形边，权重在节点内显示 W 行 |
 | AC-VIS-04 | SVG 中不出现权重值、统计值、采样值或权重哈希 |
 | AC-VIS-05 | 所有层一致时只画一个代表层；某层不同时该层单独显示并标记 |
 | AC-VIS-06 | 相同输入与选项生成字节一致的 SVG |
@@ -167,6 +167,11 @@ Graph/tools/
 
 ```python
 @dataclass(frozen=True)
+class WeightSpec:
+    precision: str
+    shape: tuple[int | str, ...]
+
+@dataclass(frozen=True)
 class Node:
     id: str
     name: str
@@ -174,6 +179,7 @@ class Node:
     category: str
     precision: str
     composition: tuple[str, ...]
+    weights: tuple[WeightSpec, ...]
 
 @dataclass(frozen=True)
 class TensorNode:
@@ -181,7 +187,7 @@ class TensorNode:
     name: str
     precision: str
     shape: tuple[int | str, ...]
-    kind: str                # input/activation/output/parameter
+    kind: str                # input/activation/output
     caption: str | None      # 仅输入/输出在平行四边形外显示名称
 
 @dataclass(frozen=True)
@@ -227,6 +233,8 @@ class LayerRun:
 layer.0.mlp_gate_up
 kLinearSwiGlu  [mlp / fp16]
 散算子: linear, silu, mul
+W: fp16, 3072×1024
+W: fp16, 3072×1024
 ```
 
 融合算子组成表覆盖 Qwen3 使用类型；未知类型显示“未登记”。
@@ -263,9 +271,9 @@ kLinearSwiGlu  [mlp / fp16]
 | `quant` | `kQuant`、`kKvCompress` |
 | `other` | 未归类类型 |
 
-### 4.3 边：输入、输出、激活、参数
+### 4.3 边：输入、输出、激活
 
-所有边都是串在流程图中的平行四边形，平行四边形内只显示两行：
+输入、输出、激活都是串在流程图中的平行四边形，平行四边形内只显示两行：
 
 ```text
 fp16
@@ -277,19 +285,19 @@ fp16
 | 图输入 | 蓝色边框，平行四边形外显示 tensor 名 | 精度、shape |
 | 激活 | 深灰边框 | 精度、shape |
 | 图输出 | 绿色边框，平行四边形外显示输出名 | 精度、shape |
-| 参数 | 橙色虚线边框 | 精度、shape |
 
-参数平行四边形规则：
+权重行规则：
 
-- 只有 shape 元素数 > 1 的常量绘制为参数平行四边形；标量常量不绘制并给出警告；
-- 每个显示算子消费的常量生成一条参数平行四边形；折叠层只显示代表层参数；
-- 同一常量被多个 op 消费时，为每个消费 op 各绘制一个参数平行四边形；
+- 权重不单独做边；每个显示算子消费的权重在节点内显示为
+  `W: <precision>, <shape>`；
+- 多权重算子按输入顺序显示多行，例如 `kLinearSwiGlu` 显示两行；
+- 折叠层只显示代表层权重；
 - 不显示权重名称、数值、统计值、可用性或 SHA-256。
 
-### 4.4 节点属性
+### 4.4 节点属性与权重
 
-节点不显示 `attrs`；只保留融合算子名称、`OpType`、类别、精度与散算子
-类别。属性不影响人工确认数据流，避免节点过高和文字拥挤。
+节点不显示 `attrs`；只保留融合算子名称、`OpType`、类别、精度、散算子
+类别和权重行。属性不影响人工确认数据流，避免节点过高和文字拥挤。
 
 ### 4.5 重复 Layer 与差异 Layer
 
@@ -312,7 +320,7 @@ fp16
 ### 4.6 布局
 
 - 自上而下：输入在顶部，输出在底部。
-- 仅主数据流平行四边形与算子参与层级计算；参数平行四边形不改变 rank。
+- 主数据流平行四边形与算子参与层级计算；权重行不改变 rank。
 - 每个 `LayerRun` 作为整体参与分层。
 - 同层节点按首次出现顺序加重心排序。
 - 节点宽度最大 360 px，超长文本换行。
@@ -323,8 +331,8 @@ fp16
 
 - 自包含 `<svg>`，`<defs>` 定义箭头 marker。
 - 无外部 JS/CSS/字体引用。
-- 配色：输入 `#2563eb`、输出 `#16a34a`、激活 `#334155`、参数
-  `#d97706`、attention `#7c3aed`、norm `#0f766e`、mlp `#b45309`、
+- 配色：输入 `#2563eb`、输出 `#16a34a`、激活 `#334155`、
+  attention `#7c3aed`、norm `#0f766e`、mlp `#b45309`、
   linear `#475569`、差异层 `#dc2626`。
 - 节点/平行四边形 ID 使用稳定序号；无时间戳、随机数、绝对路径。
 - 相同输入和选项生成字节一致的 SVG。
@@ -362,7 +370,6 @@ render_svg(view, output_path)
 | 包不存在/头部损坏/manifest 哈希不符 | 抛 `BuildError`，退出码 3 |
 | manifest 缺少 `graph` | 抛 `BuildError`，指出缺失字段 |
 | 未知 OpType | 正常绘制，标注“未登记”，stderr 警告 |
-| 标量常量（shape 元素数 ≤ 1） | 不绘制参数平行四边形，stderr 警告 |
 | Layer 结构不一致 | 按 run 拆分，差异层单独显示并警告 |
 | 输出目录不可写 | 报错，返回非零退出码 |
 
@@ -407,7 +414,7 @@ render_svg(view, output_path)
 - 集成测试：Qwen3 `model.mgf` 生成 SVG，检查关键节点和边。
 - 差异测试：合成 3 层图，其中一层不同，确认差异层单独显示。
 - 确定性测试：同一输入两次生成 SVG 字节一致。
-- 人工验收：用户打开 SVG 确认布局、平行四边形边、精度、参数边、`×28`。
+- 人工验收：用户打开 SVG 确认布局、平行四边形边、精度、权重行、`×28`。
 
 ### 6.2 用例设计
 
@@ -417,7 +424,7 @@ render_svg(view, output_path)
 | UT-VIS-002 | 损坏 manifest | 抛 `BuildError` |
 | UT-VIS-003 | `kLinearSwiGlu` 组成 | 返回 4 个散算子 |
 | UT-VIS-004 | 未知 OpType | 不崩溃，标注“未登记” |
-| UT-VIS-005 | 常量生成参数平行四边形 | 平行四边形仅 shape/精度 |
+| UT-VIS-005 | 权重写入节点 | 节点内显示 W 行，精度/shape 正确 |
 | UT-VIS-006 | 激活平行四边形 | 精度、shape 与 manifest 一致 |
 | UT-VIS-007 | 3 层同构 | 折叠为 `×3` |
 | UT-VIS-008 | 3 层中一层不同 | 差异层单独显示并标记 |
@@ -437,7 +444,7 @@ PYTHONUTF8=1 python Graph/tools/graph_visualizer/tests/test_visualizer.py -v
 ### 6.4 通过标准
 
 - 单元/集成测试全部通过。
-- Qwen3 图节点、边、精度、参数边、`×28` 正确。
+- Qwen3 图节点、边、精度、权重行、`×28` 正确。
 - 差异层测试通过。
 - 相同输入 SVG 字节一致。
 - 用户人工确认图与 manifest / 设计意图一致。
@@ -445,8 +452,8 @@ PYTHONUTF8=1 python Graph/tools/graph_visualizer/tests/test_visualizer.py -v
 ### 6.5 人工验收清单
 
 - [ ] 节点只显示融合算子名称、类型、类别、精度和散算子类别。
-- [ ] 输入/输出/激活/参数都是串在流程中的平行四边形。
-- [ ] 平行四边形只显示精度和 shape；参数平行四边形为虚线。
+- [ ] 输入/输出/激活是串在流程中的平行四边形。
+- [ ] 权重在节点内显示 `W: 精度, shape` 行。
 - [ ] SVG 中没有任何权重值、统计值、采样值或权重哈希。
 - [ ] 重复 Layer 只画代表性子图并标注 `×N`。
 - [ ] 结构不同的 Layer 单独显示并标记“差异”。

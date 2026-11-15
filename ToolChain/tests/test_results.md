@@ -99,7 +99,10 @@ dump_ir 等 Graph 基础行为未回归。
 命令：
 
 ```bash
-PYTHONUTF8=1 python -m ToolChain.pipeline
+PYTHONUTF8=1 python -m ToolChain.pipeline \
+  --config Models/Qwen3/config.json \
+  --weights Models/Qwen3/model.safetensors \
+  --target-precision bfloat16
 ```
 
 实际输出：
@@ -110,10 +113,10 @@ model qwen3_0_6b
 tensors 623
 ops 311
 constants 310
-weights_available 0
-weights_total_bytes 0
-ir_sha256 ebc16228db005814bbb331ab444d1a1ca501243102868ccb063f6463127c3483
-manifest_sha256 0605cd1a754717b0e82bfc214a57d0cdecbe9720f9ff18b6afbdf834315b0b8f
+weights_available 310
+weights_total_bytes 1192099840
+ir_sha256 633d0890cb50a7bcf0d5006710b55600c6c2b32aa4f0b75f0a4d98d5ef212fc0
+manifest_sha256 c8576519821f45748f3846dc368925e15af2e2a87d53de170e832b3f8c40180b
 package D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b
 work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
 ```
@@ -122,11 +125,12 @@ work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
 
 | 路径 | 大小 | 说明 |
 | --- | --- | --- |
-| `Models/Qwen3/artifacts/qwen3_0_6b/model.mgf` | 374,576 B | 112 B 头 + 规范化 JSON manifest，无权重区 |
-| `Models/Qwen3/artifacts/qwen3_0_6b/compile_report.json` | 992 B | 构建摘要、IR 哈希、显存计划、验证结果 |
-| `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/model_graph.json` | 418,862 B | 转换后元数据 |
-| `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/conversion_report.json` | 83,948 B | 权重映射与转换摘要 |
-| `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/model_graph.json` | 443,868 B | 优化后元数据 |
+| `Models/Qwen3/artifacts/qwen3_0_6b/model.mgf` | 386,117 B | 112 B 头 + 规范化 JSON manifest，含权重表 |
+| `Models/Qwen3/artifacts/qwen3_0_6b/weights.bin` | 1,192,099,840 B | BF16 权重打包，按 256 B 对齐 |
+| `Models/Qwen3/artifacts/qwen3_0_6b/compile_report.json` | 1,204 B | 构建摘要、IR 哈希、显存计划、验证结果 |
+| `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/model_graph.json` | 418,551 B | 转换后元数据 |
+| `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/conversion_report.json` | 83,637 B | 权重映射与转换摘要 |
+| `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/model_graph.json` | 444,490 B | 优化后元数据 |
 | `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/optimize_report.json` | 1,611 B | 精度/形状/显存与不变量报告 |
 
 `compile_report.json` 关键字段：
@@ -137,7 +141,7 @@ work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
     "activation_tensors": 311,
     "constants": 310,
     "ir_line_count": 632,
-    "ir_sha256": "ebc16228db005814bbb331ab444d1a1ca501243102868ccb063f6463127c3483",
+    "ir_sha256": "633d0890cb50a7bcf0d5006710b55600c6c2b32aa4f0b75f0a4d98d5ef212fc0",
     "ops": 311,
     "tensors": 623
   },
@@ -149,20 +153,20 @@ work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
     "peak_bytes": 78315520
   },
   "verification": {
-    "manifest_sha256": "0605cd1a754717b0e82bfc214a57d0cdecbe9720f9ff18b6afbdf834315b0b8f",
+    "manifest_sha256": "c8576519821f45748f3846dc368925e15af2e2a87d53de170e832b3f8c40180b",
     "package_reloaded": true
   },
   "weights": {
-    "available": 0,
-    "sha256": null,
-    "total_bytes": 0,
-    "unavailable": 310
+    "available": 310,
+    "sha256": "a74093f6d736652f709bbfd39c436c32601125d56c674215a4b67153cf1805e9",
+    "total_bytes": 1192099840,
+    "unavailable": 0
   }
 }
 ```
 
-结论：通过。模型包生成后已重新加载并通过 manifest SHA-256 与重建图
-IR SHA-256 自检。
+结论：通过。310 个 BF16 权重全部打包为 `weights.bin`；模型包生成后已
+重新加载并通过 manifest SHA-256 与重建图 IR SHA-256 自检。
 
 ### 2.6 代码规范检查
 
@@ -187,10 +191,9 @@ PYTHONUTF8=1 python -m compileall -q ToolChain Models/Qwen3
 
 ## 4. 未覆盖项与风险
 
-1. **无真实 Qwen3-0.6B 权重**：仓库未包含 safetensors 权重，生成的
-   `model.mgf` 为 metadata-only，310 个权重条目均为
-   `available=false`、`reason="weights not supplied"`。权重打包路径仅由
-   合成 safetensors 测试覆盖，未做真实模型数值验证。
+1. **权重数值未验证**：本地已使用 `Models/Qwen3/model.safetensors`
+   打包 310 个 BF16 权重到 `weights.bin`，但未与 Transformers 做逐张量
+   数值基线对比，也未执行运行时推理。`Models/` 仅本地保留，不提交 Git。
 2. **权重精度匹配约束**：Serializer 原样打包权重字节，不做 dtype 转换。
    默认优化目标为 FP16；若直接提供官方 BF16 safetensors，权重会因
    `dtype mismatch` 全部不可用。此时应使用

@@ -77,12 +77,15 @@ class Graph {
   //   name：op 名称，必须非空且在 graph 内唯一；
   //   src_tensors：输入 tensor 列表，元素必须是当前 graph 持有的 tensor；
   //   out_cnt：输出 tensor 数量，必须大于 0；
-  //   op_type：op 类型，不得为 kInput/kOutput/kUnknown；
+  //   op_type：op 类型，不得为 kInput/kOutput/kSample/kUnknown；
   //   attr：op 属性，按值复制；
   //   outputs：输出参数，返回新创建的输出 tensor，调用方不拥有所有权。
   // 返回：
   //   成功返回 OK；参数非法、名称重复或 tensor 不属于当前 graph 时返回
   //   INVALID_ARGUMENT。
+  // 注意：
+  //   op_type 不得为 kInput/kOutput/kSample；前两者使用 CreateInput/
+  //   CreateOutput，kSample 使用 CreateSample。
   virtual Status CreateOp(const std::string& name,
                           const std::vector<Tensor*>& src_tensors,
                           size_t out_cnt, OpType op_type, const AttrMap& attr,
@@ -132,6 +135,30 @@ class Graph {
   //   INVALID_ARGUMENT。
   virtual Status CreateOutput(const std::string& name, Tensor* input);
 
+  // 创建 Sample op，默认 method=argmax、axis=-1、precision=int64，
+  // 并返回输出 token tensor。
+  //
+  // 参数：
+  //   name：Sample op 名称，必须非空且在 graph 内唯一；
+  //   input：logits tensor，必须是当前 graph 持有的 tensor；
+  //   output：输出参数，返回新创建的 <name>.out tensor，调用方不拥有所有权。
+  // 返回：
+  //   成功返回 OK；参数非法、名称重复或 tensor 不属于当前 graph 时返回
+  //   INVALID_ARGUMENT。
+  virtual Status CreateSample(const std::string& name, Tensor* input,
+                              Tensor** output);
+
+  // 创建 Sample op，并显式指定属性。
+  //
+  // 参数：
+  //   name：Sample op 名称；
+  //   input：logits tensor；
+  //   attr：op 属性；缺少 method/axis/precision 时补默认值
+  //         argmax/-1/int64；
+  //   output：返回 <name>.out tensor。
+  virtual Status CreateSample(const std::string& name, Tensor* input,
+                              const AttrMap& attr, Tensor** output);
+
   // 根据 graph 输出依赖整理 op 列表。
   //
   // 功能：
@@ -152,6 +179,9 @@ class Graph {
 
   // 返回所有输出 op。
   virtual const std::vector<Op*>& GetAllOutputOp();
+
+  // 返回所有 Sample op。
+  virtual const std::vector<Op*>& GetAllSampleOp();
 
   // 返回拓扑排序后的执行 op 序列。
   virtual const std::vector<Op*>& GetOrderlyOPList();
@@ -191,6 +221,7 @@ class Graph {
   std::vector<Tensor*> constant_tensor_list_;
   std::vector<Op*> input_op_list_;
   std::vector<Op*> output_op_list_;
+  std::vector<Op*> sample_op_list_;
   std::map<std::string, std::unique_ptr<Op>> op_map_;
   std::map<std::string, std::unique_ptr<Tensor>> tensor_map_;
   std::map<std::string, std::unique_ptr<Tensor>> constant_tensor_map_;

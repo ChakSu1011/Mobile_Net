@@ -265,7 +265,7 @@ class MemoryViewModel:
   重叠的区块不在同一 lane。
 - Arena summary：
   ```text
-  arena TBD B | peak TBD B | alignment 256 B | entries 312
+  arena 78,317,568 B | peak 78,315,520 B | alignment 256 B | entries 312
   ```
 
 ### 4.4 权重区块

@@ -230,6 +230,8 @@ class ShapePass:
             return self._infer_attention(op, inputs)
         if op.op_type == "add":
             return self._infer_add(op, inputs)
+        if op.op_type == "sample":
+            return self._infer_sample(op, inputs)
         raise BuildError(
             "optimizer",
             f"unsupported op type for shape inference: {op.op_type}",
@@ -663,6 +665,59 @@ class ShapePass:
                     target=op.name,
                 )
         return first
+
+    def _infer_sample(
+        self,
+        op: OpMeta,
+        inputs: list[tuple[int, ...]],
+    ) -> tuple[int, ...]:
+        """推导 Sample/Argmax 输出形状。
+
+        参数：
+          op：sample op；
+          inputs：logits 形状。
+
+        返回：
+          ``logits.shape[:-1]``；vocab 维被 Argmax 归约。
+
+        异常：
+          BuildError：输入数量/秩、method、axis 或精度不合法。
+        """
+        if len(inputs) != 1:
+            raise BuildError(
+                "optimizer",
+                "sample requires exactly one input",
+                target=op.name,
+            )
+        logits = inputs[0]
+        if len(logits) < 2:
+            raise BuildError(
+                "optimizer",
+                f"sample input must have rank >= 2, got {logits}",
+                target=op.name,
+            )
+        method = op.attrs.get("method", "argmax")
+        if method != "argmax":
+            raise BuildError(
+                "optimizer",
+                f"unsupported sample method: {method}",
+                target=op.name,
+            )
+        axis = int(op.attrs.get("axis", -1))
+        if axis != -1:
+            raise BuildError(
+                "optimizer",
+                f"sample only supports axis -1, got {axis}",
+                target=op.name,
+            )
+        precision = op.attrs.get("precision", "int64")
+        if precision not in ("int64", "int32"):
+            raise BuildError(
+                "optimizer",
+                f"sample output precision must be integer, got {precision}",
+                target=op.name,
+            )
+        return logits[:-1]
 
     @staticmethod
     def _int_attr(op: OpMeta, name: str) -> int:

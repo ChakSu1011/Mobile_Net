@@ -254,7 +254,7 @@ W: fp16, 3072×1024
 | `kLinearRmsNormRopeQuantPagedKVStore` | `linear`、`rms_norm`、`rope`、`quant`、`paged_kv_store` |
 | `kAddRmsNorm` | `add`、`rms_norm` |
 | `kFfn` | `gate/up`、`activation`、`down` |
-| `kSample` | `argmax`（默认） |
+| `kSample` | `argmax`（默认，axis=-1） |
 | 其他/未知 | 显示 `op_type`，标注“未登记融合组成” |
 
 类别映射：

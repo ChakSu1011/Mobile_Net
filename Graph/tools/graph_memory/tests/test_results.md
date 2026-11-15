@@ -28,7 +28,7 @@ PYTHONUTF8=1 python Graph/tools/graph_memory/tests/test_memory_visualizer.py -v
 实际输出（末尾）：
 
 ```text
-Ran 8 tests in 0.069s
+Ran 8 tests in 0.710s
 
 OK
 ```
@@ -41,7 +41,7 @@ OK
 |------|------|------|
 | UT-MEM-001 | Qwen3 Activation/权重计数与 summary | 通过 |
 | UT-MEM-002 | Activation owner/shape/pitch/offset/size | 通过 |
-| UT-MEM-003 | 权重 owner/shape/pitch/planned offset | 通过 |
+| UT-MEM-003 | 权重 owner/shape/pitch/实际 offset | 通过 |
 | UT-MEM-004 | tied embedding 多 owner | 通过 |
 | UT-MEM-006 | Qwen3 Layer 折叠 ×28 | 通过 |
 | UT-MEM-007 | 合成层签名差异标记 | 通过 |
@@ -60,11 +60,10 @@ PYTHONUTF8=1 python Graph/tools/graph_memory/visualize_memory.py \
 实际输出：
 
 ```text
-warning: weights have no physical offsets; using planned layout
 wrote Models\Qwen3\artifacts\qwen3_0_6b_memory.svg
-activations 311
+activations 312
 weights 310
-planned_weights True
+planned_weights False
 ```
 
 产物：
@@ -72,16 +71,16 @@ planned_weights True
 | 项目 | 值 |
 |------|-----|
 | 路径 | `Models/Qwen3/artifacts/qwen3_0_6b_memory.svg` |
-| 大小 | 73 KB |
-| SHA-256 | `befd337a97259eeaeaaf4f076b9030af754552aaa62978cc2ee049a0aea96a94` |
-| 画布 | 1600 × 2730 |
-| Activation arena | 81,985,536 B |
+| 大小 | 74,556 B |
+| SHA-256 | `99e12d654a81a62541d75befe2af482f82913ee5d8900f896b5dd1e779050095` |
+| 画布 | 1600 × 2796 |
+| Activation arena | 78,317,568 B |
 | Activation peak | 78,315,520 B |
 | Alignment | 256 B |
-| Activation entries | 311 |
+| Activation entries | 312 |
 | 常量逻辑字节 | 1,192,099,840 B |
-| 权重布局 | planned layout |
-| Activation 明细行 | 14（3 非层 + 11 代表层） |
+| 权重布局 | 实际 `weights.bin` offset |
+| Activation 明细行 | 15（4 非层 + 11 代表层） |
 | 权重明细行 | 13（2 非层 + 11 代表层） |
 | Layer 复用条 | 28 行 |
 | 权重分组 | 3（LayerWeights ×28、embedding、final_norm） |
@@ -95,7 +94,8 @@ planned_weights True
   的总览和明细；
 - 每个权重显示 owner、参数名、Shape、Pitch、size、offset；
 - tied `embedding.weight` 显示 `embedding, lm_head` 两个 owner；
-- 当前无真实权重，权重 offset 为 planned layout（256 B 对齐）。
+- 模型包包含真实权重，权重 offset 来自 `weights.bin`（256 B 对齐）；
+- Sample 的 `sample.out [1×256] int64` 作为非层 Activation 显示。
 
 ## 4. 人工验收
 
@@ -105,15 +105,15 @@ planned_weights True
 - [ ] 28 层复用条与代表层布局一致。
 - [ ] REUSE 区块共享 offset。
 - [ ] 权重显示 owner、参数名、Shape、Pitch、size、offset。
-- [ ] planned layout 有明确标注。
+- [ ] Sample 的 `sample.out` 显示在非层 Activation 中。
 - [ ] 重复 Layer 只画代表层并标注 ×28。
 - [ ] 两个面板、图例、哈希完整。
 
 ## 5. 未覆盖项与风险
 
 1. **人工视觉验收未完成**：SVG 已生成，可读性需用户确认。
-2. **无真实权重**：权重 offset 为 planned layout，不是实际
-   `weights.bin` 偏移。
+2. **权重 offset 未运行时校验**：当前使用 `weights.bin` 的打包 offset，
+   未验证设备端实际地址与 256 B 对齐后的映射。
 3. **逻辑地址**：Activation offset 来自 MemoryPass 的逻辑规划，
    不是设备实测地址。
 4. **复杂布局**：区块较多时标签可能拥挤；当前 Qwen3 视图已人工检查。

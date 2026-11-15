@@ -56,10 +56,11 @@ Status Graph::CreateOp(const std::string& name,
                       "Graph::CreateOp: out_cnt must be greater than zero");
   }
   if (op_type == OpType::kUnknown || op_type == OpType::kInput ||
-      op_type == OpType::kOutput) {
+      op_type == OpType::kOutput || op_type == OpType::kSample) {
     return MakeStatus(
         ErrorCode::kInvalidArgument,
-        "Graph::CreateOp: op_type must be a compute op, got " +
+        "Graph::CreateOp: op_type must use its dedicated Create interface, "
+        "got " +
             std::string(OpTypeToStr(op_type)));
   }
   for (Tensor* source : src_tensors) {
@@ -174,6 +175,62 @@ Status Graph::CreateOutput(const std::string& name, Tensor* input) {
   return Status::Ok();
 }
 
+Status Graph::CreateSample(const std::string& name, Tensor* input,
+                           Tensor** output) {
+  return CreateSample(name, input, AttrMap{}, output);
+}
+
+Status Graph::CreateSample(const std::string& name, Tensor* input,
+                           const AttrMap& attr, Tensor** output) {
+  Status status = ValidateNewOpName(name);
+  if (!status.ok()) {
+    return status;
+  }
+  if (output == nullptr) {
+    return MakeStatus(ErrorCode::kInvalidArgument,
+                      "Graph::CreateSample: output must not be null");
+  }
+  if (!OwnsTensor(input)) {
+    return MakeStatus(
+        ErrorCode::kInvalidArgument,
+        "Graph::CreateSample: input tensor is null or not owned by graph: "
+        + name);
+  }
+
+  const std::string tensor_name = name + ".out";
+  status = ValidateNewTensorName(tensor_name);
+  if (!status.ok()) {
+    return status;
+  }
+
+  AttrMap sample_attr = attr;
+  if (sample_attr.find("method") == sample_attr.end()) {
+    sample_attr["method"] = std::string("argmax");
+  }
+  if (sample_attr.find("axis") == sample_attr.end()) {
+    sample_attr["axis"] = int64_t{-1};
+  }
+  if (sample_attr.find("precision") == sample_attr.end()) {
+    sample_attr["precision"] = std::string("int64");
+  }
+
+  auto op = std::make_unique<Op>(name, OpType::kSample, sample_attr);
+  Op* op_ptr = op.get();
+  op_ptr->AddSrcTensor(input);
+  input->AddDstOp(op_ptr);
+
+  auto tensor = std::make_unique<Tensor>(tensor_name);
+  Tensor* tensor_ptr = tensor.get();
+  tensor_ptr->AddSrcOp(op_ptr);
+  op_ptr->AddDstTensor(tensor_ptr);
+
+  op_map_.emplace(name, std::move(op));
+  tensor_map_.emplace(tensor_name, std::move(tensor));
+  sample_op_list_.push_back(op_ptr);
+  *output = tensor_ptr;
+  return Status::Ok();
+}
+
 Status Graph::SortOp() {
   op_list_.clear();
   if (output_op_list_.empty()) {
@@ -204,6 +261,8 @@ const std::vector<Tensor*>& Graph::GetAllConstantTensor() {
 const std::vector<Op*>& Graph::GetAllInputOp() { return input_op_list_; }
 
 const std::vector<Op*>& Graph::GetAllOutputOp() { return output_op_list_; }
+
+const std::vector<Op*>& Graph::GetAllSampleOp() { return sample_op_list_; }
 
 const std::vector<Op*>& Graph::GetOrderlyOPList() { return op_list_; }
 

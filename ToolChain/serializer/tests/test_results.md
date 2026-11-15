@@ -27,7 +27,7 @@ PYTHONUTF8=1 python -m unittest ToolChain.serializer.test_serializer -v
 实际输出（末尾）：
 
 ```text
-Ran 13 tests in 0.219s
+Ran 14 tests in 0.245s
 
 OK
 ```
@@ -40,6 +40,7 @@ OK
 - manifest / 权重 SHA-256 篡改检测、截断文件、版本不兼容；
 - IR SHA-256 校验与重建图一致性；
 - 小型图序列化与加载往返；
+- 含 Sample 的图重建：`op_type=sample` 必须走 `create_sample`；
 - 合成权重打包、单张量 256 B 对齐、逐权重哈希；
 - 两次序列化字节一致；
 - metadata-only 包生成与加载；

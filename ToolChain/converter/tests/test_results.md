@@ -27,7 +27,7 @@ PYTHONUTF8=1 python -m unittest ToolChain.converter.test_converter -v
 实际输出（末尾）：
 
 ```text
-Ran 21 tests in 0.150s
+Ran 22 tests in 0.109s
 
 OK
 ```
@@ -71,9 +71,11 @@ Qwen3 有效运行参数（`ConversionResult.inference_config.to_dict()`）：
 ## 3. 覆盖范围
 
 - `RecordingGraph` 代理图与原生 `Graph` 的 `dump_ir()` 完全一致；
+- `create_sample` 默认 argmax/axis=-1/int64、`sample.out` 命名与元数据；
 - 输入、常量、多输出 op 的元数据记录与输出命名；
-- Qwen3 图计数：2 inputs、310 constants、311 compute ops、1 output，
-  IR `ops` 段为 314（含 3 个 I/O op）；
+- Qwen3 图计数：2 inputs、310 constants、312 compute ops、1 output，
+  IR `ops` 段为 315（含 3 个 I/O op）；
+- LM Head 与 Output 之间的默认 Argmax Sample 记录与 `output.tokens` 绑定；
 - 310 个常量的 Hugging Face 权重名映射；
 - tied / untied LM Head 处理；
 - `ModelGraph` JSON 往返与权重缺失降级；

@@ -270,6 +270,82 @@ class RecordingGraph:
         )
         return list(outputs)
 
+    def create_sample(
+        self,
+        name: str,
+        tensor: Any,
+        attr: dict[str, Any] | None = None,
+    ) -> Any:
+        """创建 Sample op 并记录元数据。
+
+        参数：
+          name：Sample op 名称；
+          tensor：输入 logits 的 Tensor 句柄；
+          attr：可选属性；默认 ``method=argmax``、``axis=-1``、
+            ``precision=int64``。
+
+        返回：
+          ``<name>.out`` Tensor 句柄。
+
+        异常：
+          RuntimeError：Graph 拒绝创建；
+          BuildError：输入未登记、属性非法或输出名不符。
+        """
+        tensor_name = tensor.name
+        if tensor_name not in self._tensors:
+            raise BuildError(
+                "converter",
+                "sample input tensor is not recorded",
+                target=tensor_name,
+            )
+        raw_attr: dict[str, Any] = {
+            "method": "argmax",
+            "axis": -1,
+            "precision": "int64",
+        }
+        if attr is not None:
+            raw_attr.update(attr)
+        try:
+            normalized_attr = normalize_json_value(
+                raw_attr, context=f"op {name}.attrs")
+        except ValueError as error:
+            raise BuildError(
+                "converter", str(error), target=name) from error
+        if not isinstance(normalized_attr, dict):
+            raise BuildError(
+                "converter", "attrs must be a dict", target=name)
+
+        output = self._graph.create_sample(
+            name, tensor, normalized_attr)
+        expected_name = f"{name}.out"
+        if output.name != expected_name:
+            raise BuildError(
+                "converter",
+                "sample output tensor name differs: "
+                f"expected {expected_name}, got {output.name}",
+                target=name,
+            )
+        self._record_tensor(
+            TensorMeta(
+                name=output.name,
+                kind="activation",
+                precision=str(
+                    normalized_attr.get("precision", "int64")),
+                layout="row_major",
+            ),
+            expected_name=expected_name,
+        )
+        self._ops.append(
+            OpMeta(
+                name=name,
+                op_type="sample",
+                inputs=(tensor_name,),
+                outputs=(output.name,),
+                attrs=normalized_attr,
+            )
+        )
+        return output
+
     def create_output(self, name: str, tensor: Any) -> None:
         """创建图输出绑定并记录。
 

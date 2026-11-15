@@ -60,7 +60,10 @@ class GraphPythonTest(unittest.TestCase):
         self.add_output = self.graph.create_op(
             "add", [self.linear_output], 1, gf.OpType.kAdd
         )[0]
-        self.graph.create_output("output", self.add_output)
+        self.sample_output = self.graph.create_sample(
+            "sample", self.add_output
+        )
+        self.graph.create_output("output", self.sample_output)
         self.graph.sort_op()
         self.dump = self.graph.dump_ir()
         self.lines = self.dump.splitlines()
@@ -70,22 +73,41 @@ class GraphPythonTest(unittest.TestCase):
         self.assertEqual(self.lines[0], "graph unit_graph")
         self.assertIn("inputs 1", self.lines)
         self.assertIn("constants 1", self.lines)
-        self.assertIn("ops 4", self.lines)
+        self.assertIn("ops 5", self.lines)
         self.assertIn("outputs 1", self.lines)
 
     def test_topological_order(self) -> None:
-        """op 序列为 input、linear、add、output，constant 不进入序列。"""
+        """op 序列为 input、linear、add、sample、output。"""
         op_lines = [line for line in self.lines if line.startswith("  [")]
-        self.assertEqual(len(op_lines), 4)
+        self.assertEqual(len(op_lines), 5)
         self.assertIn("  [0] input input", op_lines[0])
         self.assertIn("  [1] linear linear", op_lines[1])
         self.assertIn("  [2] add add", op_lines[2])
-        self.assertIn("  [3] output output", op_lines[3])
+        self.assertIn("  [3] sample sample", op_lines[3])
+        self.assertIn("  [4] output output", op_lines[4])
         self.assertIn("src=[input,weight]", op_lines[1])
         self.assertIn("dst=[linear.out]", op_lines[1])
         self.assertIn("src=[linear.out]", op_lines[2])
         self.assertIn("dst=[add.out]", op_lines[2])
-        self.assertIn("output <- [add.out]", self.dump)
+        self.assertIn("src=[add.out]", op_lines[3])
+        self.assertIn("dst=[sample.out]", op_lines[3])
+        self.assertIn("output <- [sample.out]", self.dump)
+
+    def test_sample(self) -> None:
+        """create_sample 默认 argmax，输出 sample.out。"""
+        self.assertEqual(self.sample_output.name, "sample.out")
+        line = self._op_line("sample")
+        self.assertIn("method=argmax", line)
+        self.assertIn("axis=-1", line)
+        self.assertIn("precision=int64", line)
+        self.assertIn("sample.out", self.dump)
+
+    def _op_line(self, name: str) -> str:
+        """返回指定 op 的 IR 行。"""
+        for line in self.lines:
+            if line.startswith("  [") and f"] {name} " in line:
+                return line
+        self.fail(f"op line not found: {name}")
 
     def test_constant_dump(self) -> None:
         """constant tensor 的 storage 文本包含精度、形状和不可复用标记。"""
@@ -209,11 +231,22 @@ class GraphPythonTest(unittest.TestCase):
             )
         with self.assertRaises(RuntimeError):
             self.graph.create_input("input")
+        with self.assertRaises(RuntimeError):
+            self.graph.create_op(
+                "sample_type",
+                [self.input_tensor],
+                1,
+                gf.OpType.kSample,
+            )
+        with self.assertRaises(RuntimeError):
+            self.graph.create_sample("sample", self.add_output)
 
         other = gf.Graph("other")
         foreign_tensor = other.create_input("foreign")
         with self.assertRaises(RuntimeError):
             self.graph.create_output("bad_output", foreign_tensor)
+        with self.assertRaises(RuntimeError):
+            self.graph.create_sample("bad_sample", foreign_tensor)
 
         empty_graph = gf.Graph("empty")
         with self.assertRaises(RuntimeError):

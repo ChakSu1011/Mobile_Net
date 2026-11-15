@@ -111,6 +111,8 @@ class PrecisionPass:
             for op in model_graph.ops:
                 if "precision" not in op.attrs:
                     continue
+                if self._all_outputs_integer(model_graph, op):
+                    continue
                 if op.attrs["precision"] != target:
                     op.attrs["precision"] = target
         for op in model_graph.ops:
@@ -143,6 +145,28 @@ class PrecisionPass:
             ),
         }
 
+    @staticmethod
+    def _all_outputs_integer(model_graph: ModelGraph, op: Any) -> bool:
+        """判断 op 的所有输出是否都是整数张量。
+
+        参数：
+          model_graph：模型图；
+          op：算子元数据。
+
+        返回：
+          True 表示所有输出均为整数精度；无输出时返回 False。
+
+        异常：
+          BuildError：输出张量未登记。
+        """
+        if not op.outputs:
+            return False
+        for name in op.outputs:
+            tensor = model_graph.tensor(name)
+            if tensor.precision not in INTEGER_PRECISIONS:
+                return False
+        return True
+
     def _verify(self, model_graph: ModelGraph, target: str) -> None:
         """校验精度转换不变量。
 
@@ -165,6 +189,8 @@ class PrecisionPass:
         for op in model_graph.ops:
             attribute = op.attrs.get("precision")
             if attribute is None:
+                continue
+            if self._all_outputs_integer(model_graph, op):
                 continue
             if attribute != target:
                 raise BuildError(

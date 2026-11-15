@@ -81,7 +81,8 @@ def _build_demo_graph(graph, api) -> None:
             "out_features": 4,
         },
     )[0]
-    graph.create_output("output.y", output)
+    sample = graph.create_sample("sample", output)
+    graph.create_output("output.y", sample)
     graph.sort_op()
 
 
@@ -170,9 +171,23 @@ class RecordingGraphTest(unittest.TestCase):
             ["output.y"],
         )
         self.assertEqual(
-            self.model.outputs[0].tensor, "linear.out")
+            self.model.outputs[0].tensor, "sample.out")
         self.assertFalse(
-            self.model.tensor("linear.out").reusable)
+            self.model.tensor("sample.out").reusable)
+
+    def test_sample_record(self) -> None:
+        """UT-CONV-021：Sample op 与输出元数据记录正确。"""
+        sample = next(
+            op for op in self.model.ops if op.op_type == "sample")
+        self.assertEqual(sample.inputs, ("linear.out",))
+        self.assertEqual(sample.outputs, ("sample.out",))
+        self.assertEqual(sample.attrs["method"], "argmax")
+        self.assertEqual(sample.attrs["axis"], -1)
+        self.assertEqual(sample.attrs["precision"], "int64")
+        tensor = self.model.tensor("sample.out")
+        self.assertEqual(tensor.kind, "activation")
+        self.assertEqual(tensor.precision, "int64")
+        self.assertEqual(tensor.layout, "row_major")
 
 
 class InferenceConfigTest(unittest.TestCase):
@@ -344,11 +359,21 @@ class Qwen3ConversionTest(unittest.TestCase):
         """UT-CONV-007：图计数与 IR 计数符合预期。"""
         self.assertEqual(len(self.model.inputs), 2)
         self.assertEqual(len(self.model.constants), 310)
-        self.assertEqual(len(self.model.ops), 311)
+        self.assertEqual(len(self.model.ops), 312)
         self.assertEqual(len(self.model.outputs), 1)
-        self.assertEqual(len(self.model.tensors), 623)
+        self.assertEqual(len(self.model.tensors), 624)
         ir_text = self.conversion.ir_text
-        self.assertIn("\nops 314\n", ir_text)
+        self.assertIn("\nops 315\n", ir_text)
+        self.assertEqual(
+            self.model.outputs[0].tensor, "sample.out")
+        sample = next(
+            op for op in self.model.ops if op.op_type == "sample")
+        self.assertEqual(sample.inputs, ("lm_head.out",))
+        self.assertEqual(sample.attrs["method"], "argmax")
+        self.assertIn(
+            "output.tokens <- [sample.out]", ir_text)
+        self.assertIn(
+            "sample.out", self.model.tensors)
 
     def test_weight_mapping(self) -> None:
         """UT-CONV-008：所有常量都有 HF 映射与静态形状。"""

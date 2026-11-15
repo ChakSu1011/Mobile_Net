@@ -35,18 +35,18 @@ PYTHONUTF8=1 python -m unittest ToolChain.test_pipeline -v
 实际输出（末尾）：
 
 ```text
-Ran 8 tests in 0.757s
+Ran 8 tests in 0.743s
 
 OK
 adapter qwen3
 model qwen3_0_6b
-tensors 623
-ops 311
+tensors 624
+ops 312
 constants 310
 weights_available 0
 weights_total_bytes 0
-ir_sha256 ebc16228db005814bbb331ab444d1a1ca501243102868ccb063f6463127c3483
-manifest_sha256 0605cd1a754717b0e82bfc214a57d0cdecbe9720f9ff18b6afbdf834315b0b8f
+ir_sha256 4326aaa8c2505f020184f721df6a2ac947fc2d1d4959edd5d78ddda53f95adaf
+manifest_sha256 90aa9f00b0c7d4094934cf781df6c101e05098d81b1dd85fff777014d1c446b7
 package C:\Users\18626\AppData\Local\Temp\pipeline_czoxd9rs\package4
 work_dir C:\Users\18626\AppData\Local\Temp\pipeline_czoxd9rs\work4
 ```
@@ -69,14 +69,15 @@ PYTHONUTF8=1 python -m unittest discover -s Models/Qwen3 -p 'test_*.py' -v
 实际输出（末尾）：
 
 ```text
-Ran 12 tests in 5.196s
+Ran 13 tests in 4.713s
 
 OK
 ```
 
-结论：通过。确认 Qwen3-0.6B 的 2 inputs / 310 constants / 311 ops /
-1 output、310 个常量、tied embedding、Transformer 权重形状、
-596,049,920 参数与 1,192,099,840 字节 BF16 常量，以及 IR 稳定性。
+结论：通过。确认 Qwen3-0.6B 的 2 inputs / 310 constants / 312 ops /
+1 output、默认 Argmax Sample、`output.tokens` 绑定、310 个常量、
+tied embedding、Transformer 权重形状、596,049,920 参数与
+1,192,099,840 字节 BF16 常量，以及 IR 稳定性。
 
 ### 2.4 Graph C++ 测试
 
@@ -93,7 +94,7 @@ graph_test: ALL TESTS PASSED
 ```
 
 结论：通过。确认图构造、SortOp、常量为依赖叶子、I/O op、
-dump_ir 等 Graph 基础行为未回归。
+Sample 默认 argmax、dump_ir 等 Graph 基础行为未回归。
 
 ### 2.5 Qwen3-0.6B 模型包生成
 
@@ -111,13 +112,13 @@ PYTHONUTF8=1 python -m ToolChain.pipeline \
 ```text
 adapter qwen3
 model qwen3_0_6b
-tensors 623
-ops 311
+tensors 624
+ops 312
 constants 310
 weights_available 310
 weights_total_bytes 1192099840
-ir_sha256 ebc16228db005814bbb331ab444d1a1ca501243102868ccb063f6463127c3483
-manifest_sha256 e8a2ec7472441239bcb7d0901e64c3ab01d4410d2c315eb4ea362d4f857fad23
+ir_sha256 4326aaa8c2505f020184f721df6a2ac947fc2d1d4959edd5d78ddda53f95adaf
+manifest_sha256 9c817f7a601424fd1a10155edae527a02d8a52e98e2d7a8233b5f6ece9d06c9a
 package D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b
 work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
 ```
@@ -126,12 +127,12 @@ work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
 
 | 路径 | 大小 | 说明 |
 | --- | --- | --- |
-| `Models/Qwen3/artifacts/qwen3_0_6b/model.mgf` | 385,147 B | 112 B 头 + 规范化 JSON manifest，含权重表与运行参数 |
+| `Models/Qwen3/artifacts/qwen3_0_6b/model.mgf` | 385,587 B | 112 B 头 + 规范化 JSON manifest，含权重表、运行参数与 Sample 节点 |
 | `Models/Qwen3/artifacts/qwen3_0_6b/weights.bin` | 1,192,099,840 B | FP16 权重打包，按 256 B 对齐 |
 | `Models/Qwen3/artifacts/qwen3_0_6b/compile_report.json` | 1,204 B | 构建摘要、IR 哈希、显存计划、验证结果 |
-| `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/model_graph.json` | 418,983 B | 转换后元数据，含 `metadata.inference_config` |
+| `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/model_graph.json` | 419,566 B | 转换后元数据，含 Sample 与 `metadata.inference_config` |
 | `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/conversion_report.json` | 84,033 B | 权重映射、运行参数与转换摘要 |
-| `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/model_graph.json` | 443,989 B | 优化后元数据 |
+| `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/model_graph.json` | 444,608 B | 优化后元数据 |
 | `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/optimize_report.json` | 1,819 B | 精度/形状/显存、权重转换与不变量报告 |
 | `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/weights_fp16.safetensors` | 1,192,134,752 B | Precision Pass 流式转换的 FP16 权重文件 |
 
@@ -140,22 +141,22 @@ work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
 ```json
 {
   "graph": {
-    "activation_tensors": 311,
+    "activation_tensors": 312,
     "constants": 310,
-    "ir_line_count": 632,
-    "ir_sha256": "ebc16228db005814bbb331ab444d1a1ca501243102868ccb063f6463127c3483",
-    "ops": 311,
-    "tensors": 623
+    "ir_line_count": 633,
+    "ir_sha256": "4326aaa8c2505f020184f721df6a2ac947fc2d1d4959edd5d78ddda53f95adaf",
+    "ops": 312,
+    "tensors": 624
   },
   "memory": {
     "alignment": 256,
-    "arena_bytes": 81985536,
+    "arena_bytes": 78317568,
     "constants_bytes": 1192099840,
-    "entries": 311,
+    "entries": 312,
     "peak_bytes": 78315520
   },
   "verification": {
-    "manifest_sha256": "e8a2ec7472441239bcb7d0901e64c3ab01d4410d2c315eb4ea362d4f857fad23",
+    "manifest_sha256": "9c817f7a601424fd1a10155edae527a02d8a52e98e2d7a8233b5f6ece9d06c9a",
     "package_reloaded": true
   },
   "weights": {
@@ -207,8 +208,9 @@ work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
 
 结论：通过。Precision Pass 将 310 个 BF16 权重流式转换为 FP16 并写出
 `weights_fp16.safetensors`，Serializer 打包 310 个 FP16 权重到
-`weights.bin`；模型包生成后已重新加载并通过 manifest SHA-256 与重建图
-IR SHA-256 自检。另抽样验证：`model.layers.0.self_attn.q_proj.weight`
+`weights.bin`；图在 LM Head 与 Output 之间包含默认 Argmax Sample，
+输出绑定 `output.tokens <- sample.out`；模型包生成后已重新加载并通过
+manifest SHA-256 与重建图 IR SHA-256 自检。另抽样验证：`model.layers.0.self_attn.q_proj.weight`
 的源 BF16→FP16 结果与转换文件、包内字节三者完全一致，包内 SHA-256 与
 manifest 一致；`embed_tokens.weight` 前 1 MiB 同样一致。
 
@@ -226,12 +228,12 @@ PYTHONUTF8=1 python -m compileall -q ToolChain Models/Qwen3
 
 | 套件 | 用例数 | 主要覆盖 |
 | --- | --- | --- |
-| `ToolChain.converter.test_converter` | 21 | UT-CONV-001 ~ 020，含输入配置 |
-| `ToolChain.optimizer.test_optimizer` | 21 | UT-OPT-001 ~ 019，含权重转换 |
-| `ToolChain.serializer.test_serializer` | 13 | UT-SER-001 ~ 012 |
+| `ToolChain.converter.test_converter` | 22 | UT-CONV-001 ~ 021，含输入配置与 Sample |
+| `ToolChain.optimizer.test_optimizer` | 22 | UT-OPT-001 ~ 021，含权重转换与 Sample |
+| `ToolChain.serializer.test_serializer` | 14 | UT-SER-001 ~ 013，含 Sample 往返 |
 | `ToolChain.test_pipeline` | 8 | 端到端、确定性、复用开关、CLI、输入配置默认值 |
-| `Models/Qwen3/test_qwen3_graph.py` | 12 | 组图结构、权重形状、配置、IR 稳定性 |
-| `graph_test.exe` | C++ 全量 | Graph/SortOp/I/O/dump_ir |
+| `Models/Qwen3/test_qwen3_graph.py` | 13 | 组图结构、Sample、权重形状、配置、IR 稳定性 |
+| `graph_test.exe` | C++ 全量 | Graph/SortOp/Sample/I/O/dump_ir |
 
 ## 4. 未覆盖项与风险
 
@@ -258,5 +260,8 @@ PYTHONUTF8=1 python -m compileall -q ToolChain Models/Qwen3
    `generation_config.json` 缺失时的缺省采样策略也未做端到端推理验证。
 8. **输入配置无版本字段**：当前格式固定且拒绝未知字段；未来不兼容变更
    需要新增兼容策略或更换文件名，不能静默改变语义。
-9. **测试环境为 Windows 主机**：未在 Android arm64 设备或 OpenCL
-   后端上执行加载与推理测试。
+9. **Sample 未执行**：当前只验证 Graph 构图、ModelGraph 记录与形状推导，
+   未实现 `kSample` 的 OpEnv/Kernel，也未验证 Argmax token 与 PyTorch
+   参考一致；`sample.out` 为全序列 `[B,S]`，运行时需取最后位置。
+10. **测试环境为 Windows 主机**：未在 Android arm64 设备或 OpenCL
+    后端上执行加载与推理测试。

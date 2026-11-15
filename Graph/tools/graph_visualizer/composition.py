@@ -52,6 +52,7 @@ _OP_TYPE_LABELS = {
     "reshape": "kReshape",
     "pack": "kPack",
     "unpack": "kUnpack",
+    "sample": "kSample",
     "input": "kInput",
     "output": "kOutput",
     "unknown": "kUnknown",
@@ -69,6 +70,7 @@ _CATEGORY_COLORS = {
     "routing": "#be123c",
     "quant": "#ca8a04",
     "reshape": "#64748b",
+    "sampling": "#0d9488",
     "other": "#64748b",
 }
 
@@ -146,6 +148,7 @@ _TABLE = {
     "reshape": ("reshape", ("reshape",)),
     "pack": ("reshape", ("pack",)),
     "unpack": ("reshape", ("unpack",)),
+    "sample": ("sampling", ("argmax",)),
     "input": ("io", ()),
     "output": ("io", ()),
     "unknown": ("other", ()),

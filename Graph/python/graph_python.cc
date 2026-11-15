@@ -321,7 +321,8 @@ std::string DumpIr(Graph& graph) {
 //
 // 功能：
 //   注册 Tensor、Graph、Precision、Layout、DeviceType、OpType，并绑定
-//   create_op/create_constant/create_input/create_output/sort_op/dump_ir。
+//   create_op/create_constant/create_input/create_output/create_sample/
+//   sort_op/dump_ir。
 //
 // 边界：
 //   - 不暴露 Op、Storage、Shape 类型；
@@ -397,7 +398,8 @@ PYBIND11_MODULE(_graph, module) {
       .value("kTopK", OpType::kTopK)
       .value("kReshape", OpType::kReshape)
       .value("kPack", OpType::kPack)
-      .value("kUnpack", OpType::kUnpack);
+      .value("kUnpack", OpType::kUnpack)
+      .value("kSample", OpType::kSample);
 
   py::class_<Tensor>(module, "Tensor",
                      "Non-owning handle to a tensor owned by Graph.")
@@ -467,6 +469,17 @@ PYBIND11_MODULE(_graph, module) {
             ThrowIfError(graph.CreateOutput(name, input));
           },
           py::arg("name"), py::arg("input"))
+      .def(
+          "create_sample",
+          [](Graph& graph, const std::string& name, Tensor* input,
+             const py::object& attr) {
+            const AttrMap attr_map = ToAttrMap(attr);
+            Tensor* tensor = nullptr;
+            ThrowIfError(
+                graph.CreateSample(name, input, attr_map, &tensor));
+            return py::cast(tensor, py::return_value_policy::reference);
+          },
+          py::arg("name"), py::arg("input"), py::arg("attr") = py::none())
       .def("sort_op",
            [](Graph& graph) { ThrowIfError(graph.SortOp()); })
       .def("dump_ir", [](Graph& graph) { return DumpIr(graph); });

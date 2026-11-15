@@ -28,7 +28,7 @@ PYTHONUTF8=1 python Graph/tools/graph_visualizer/tests/test_visualizer.py -v
 实际输出（末尾）：
 
 ```text
-Ran 10 tests in 0.043s
+Ran 10 tests in 0.709s
 
 OK
 ```
@@ -39,9 +39,9 @@ OK
 
 | 编号 | 用例 | 结果 |
 |------|------|------|
-| UT-VIS-001 | Qwen3 包计数（2/310/311/1/623） | 通过 |
+| UT-VIS-001 | Qwen3 包计数（2/310/312/1/624） | 通过 |
 | UT-VIS-002 | 视图模型包含 embedding、Layer ×28、final norm、LM Head，节点内权重行 14 个 | 通过 |
-| UT-VIS-003 | `linear_swi_glu`、`linear_per_head_rms_norm_rope` 融合组成 | 通过 |
+| UT-VIS-003 | `linear_swi_glu`、`linear_per_head_rms_norm_rope`、`sample` 融合组成 | 通过 |
 | UT-VIS-004 | 未知 OpType 不崩溃 | 通过 |
 | UT-VIS-005 | 权重在节点内显示精度/shape | 通过 |
 | UT-VIS-006 | shape 使用 `×` 连接 | 通过 |
@@ -62,9 +62,9 @@ PYTHONUTF8=1 python Graph/tools/visualize_graph.py \
 
 ```text
 wrote Models\Qwen3\artifacts\qwen3_0_6b_graph.svg
-nodes 14
-tensor_edges 16
-links 34
+nodes 15
+tensor_edges 17
+links 36
 ```
 
 产物：
@@ -72,12 +72,12 @@ links 34
 | 项目 | 值 |
 |------|-----|
 | 路径 | `Models/Qwen3/artifacts/qwen3_0_6b_graph.svg` |
-| 大小 | 20 KB |
-| SHA-256 | `3caa797b3e9778a6e5df48a21a65bf78f0fabdf51e1dd94a1af3095f25bed234` |
-| 画布 | 1634 × 3768 |
-| 融合算子节点 | 14 |
-| tensor 平行四边形 | 16 |
-| 连接 | 34 |
+| 大小 | 21,304 B |
+| SHA-256 | `f66ded10cc6be66f24d8d01c55d632d70e8e514a3bef54770d557aa5b28636bf` |
+| 画布 | 1634 × 4035 |
+| 融合算子节点 | 15 |
+| tensor 平行四边形 | 17 |
+| 连接 | 36 |
 | Layer 折叠 | `DecoderLayer ×28 (layer.0–layer.27)` |
 | 节点内权重行 | 14 行，每行 `W: fp16, shape` |
 
@@ -86,7 +86,7 @@ links 34
 - 2 个输入平行四边形：`input.input_ids`、`input.position_ids`；
 - embedding；
 - 一个 Decoder Layer 代表子图，包含 11 个融合算子；
-- final norm、LM Head、1 个输出平行四边形；
+- final norm、LM Head、默认 Argmax Sample、1 个输出平行四边形；
 - 输入、激活、输出为平行四边形；
 - 权重不单独做边，节点内显示 `W: fp16, shape`，无权重名称或数值；
 - 节点无 `attrs`，只显示名称、类型、类别、精度、散算子类别和权重行。
@@ -99,6 +99,7 @@ links 34
 - [ ] 输入、输出、激活是串在流程中的平行四边形；
 - [ ] 权重在节点内显示 `W: 精度, shape`，不单独做边；
 - [ ] 重复 Layer 只画代表性子图并标注 `×28`；
+- [ ] LM Head 与 Output 之间存在 `kSample [sampling / i64]` 节点；
 - [ ] 自上而下布局，箭头方向清晰；
 - [ ] 图例、标题、manifest/IR 哈希完整。
 

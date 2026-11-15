@@ -32,7 +32,11 @@ from ToolChain.serializer.format import (
     HEADER_SIZE,
     unpack_header,
 )
-from ToolChain.testing import build_tiny_model, write_safetensors
+from ToolChain.testing import (
+    build_sample_model,
+    build_tiny_model,
+    write_safetensors,
+)
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 _QWEN3_CONFIG = (
@@ -281,8 +285,8 @@ class Qwen3PackageTest(unittest.TestCase):
             self.serialized.package_dir, verify=True)
         graph = rebuild_graph(package, verify_ir=True)
         summary = package_summary(package)
-        self.assertEqual(summary["tensors"], 623)
-        self.assertEqual(summary["ops"], 311)
+        self.assertEqual(summary["tensors"], 624)
+        self.assertEqual(summary["ops"], 312)
         self.assertEqual(summary["constants"], 310)
         self.assertEqual(summary["weights_available"], 0)
         ir_text = graph.dump_ir()
@@ -299,6 +303,20 @@ class Qwen3PackageTest(unittest.TestCase):
                    self.serialized.package_dir.iterdir()),
             ["compile_report.json", "model.mgf"],
         )
+
+    def test_sample_roundtrip(self) -> None:
+        """UT-SER-013：含 Sample 的图可序列化并重建。"""
+        with tempfile.TemporaryDirectory() as directory:
+            result = Optimizer(_SMALL_CONFIG).run(
+                build_sample_model())
+            serialized = serialize_package(
+                result, Path(directory) / "package")
+            package = load_package(
+                serialized.package_dir, verify=True)
+            graph = rebuild_graph(package, verify_ir=True)
+        ir_text = graph.dump_ir()
+        self.assertIn("sample sample", ir_text)
+        self.assertIn("output.tokens <- [sample.out]", ir_text)
 
 
 if __name__ == "__main__":

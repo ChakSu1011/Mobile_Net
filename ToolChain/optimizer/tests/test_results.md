@@ -27,7 +27,7 @@ PYTHONUTF8=1 python -m unittest ToolChain.optimizer.test_optimizer -v
 实际输出（末尾）：
 
 ```text
-Ran 21 tests in 0.150s
+Ran 22 tests in 0.114s
 
 OK
 ```
@@ -50,8 +50,8 @@ PYTHONUTF8=1 python -m ToolChain.pipeline \
 ```text
 weights_available 310
 weights_total_bytes 1192099840
-ir_sha256 ebc16228db005814bbb331ab444d1a1ca501243102868ccb063f6463127c3483
-manifest_sha256 dd4c69c96d9a935dd8968771748c825867bf62fb5d295cc1d3fe4024e0d41b50
+ir_sha256 4326aaa8c2505f020184f721df6a2ac947fc2d1d4959edd5d78ddda53f95adaf
+manifest_sha256 9c817f7a601424fd1a10155edae527a02d8a52e98e2d7a8233b5f6ece9d06c9a
 ```
 
 `optimize_report.json` 的 `weight_conversion`：
@@ -89,7 +89,8 @@ embed sample match True
 - BF16 → FP16 等宽精度转换、`target_precision=keep`、非法精度转换报错；
 - BF16 权重字节转换、转换文件 dtype/数值、溢出报错、BF16 目标跳过转换；
 - linear、gather、RMSNorm、Add、GQA 的形状契约；
-- 311 个 activation 张量的静态形状完整性；
+- 312 个 activation 张量的静态形状完整性；
+- Sample 输出 `[B,S]`、精度 `int64`，整数输出精度属性不被改写；
 - 生命周期计算与 256 B 对齐；
 - 复用区间无重叠、关闭复用后 arena 增大；
 - 输入/常量不进入 arena，输出不可复用；
@@ -97,7 +98,8 @@ embed sample match True
 
 ## 4. 未覆盖项与风险
 
-1. **显存计划为静态规划值**：`arena_bytes`、`peak_bytes` 基于
+1. **显存计划为静态规划值**：`arena_bytes=78,317,568`、
+   `peak_bytes=78,315,520` 基于
    `B=1`、`max_num_tokens=256` 的规划上界，不是设备实测峰值。
 2. **未做量化**：Precision Pass 已定位为量化统一入口，INT8/INT4 仅有
    扩展点，无实现与测试。

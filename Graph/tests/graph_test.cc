@@ -190,18 +190,39 @@ bool TestGraphConstruction() {
   CHECK(linear_output->DstOps().size() == 1);
   CHECK(linear_output->DstOps()[0]->Name() == "add");
 
-  CHECK(graph.CreateOutput("output", add_outputs[0]).ok());
+  Tensor* sample_output = nullptr;
+  CHECK(graph.CreateSample("sample", add_outputs[0], &sample_output).ok());
+  CHECK(sample_output != nullptr);
+  CHECK(sample_output->Name() == "sample.out");
+  CHECK(graph.GetAllSampleOp().size() == 1);
+  const Op* sample_op = graph.GetAllSampleOp()[0];
+  CHECK(sample_op->Type() == OpType::kSample);
+  const auto method_iterator = sample_op->Attrs().find("method");
+  CHECK(method_iterator != sample_op->Attrs().end());
+  CHECK(std::get<std::string>(method_iterator->second) == "argmax");
+  const auto axis_iterator = sample_op->Attrs().find("axis");
+  CHECK(axis_iterator != sample_op->Attrs().end());
+  CHECK(std::get<int64_t>(axis_iterator->second) == -1);
+  const auto precision_iterator = sample_op->Attrs().find("precision");
+  CHECK(precision_iterator != sample_op->Attrs().end());
+  CHECK(std::get<std::string>(precision_iterator->second) == "int64");
+  CHECK(add_outputs[0]->DstOps().size() == 1);
+  CHECK(add_outputs[0]->DstOps()[0]->Name() == "sample");
+
+  CHECK(graph.CreateOutput("output", sample_output).ok());
   CHECK(graph.GetAllOutputOp().size() == 1);
   CHECK(graph.SortOp().ok());
 
   const std::vector<Op*>& ordered = graph.GetOrderlyOPList();
-  CHECK(ordered.size() == 4);
+  CHECK(ordered.size() == 5);
   CHECK(ordered[0]->Type() == OpType::kInput);
   CHECK(ordered[1]->Name() == "linear");
   CHECK(ordered[1]->Type() == OpType::kLinear);
   CHECK(ordered[2]->Name() == "add");
   CHECK(ordered[2]->Type() == OpType::kAdd);
-  CHECK(ordered[3]->Type() == OpType::kOutput);
+  CHECK(ordered[3]->Name() == "sample");
+  CHECK(ordered[3]->Type() == OpType::kSample);
+  CHECK(ordered[4]->Type() == OpType::kOutput);
   CHECK(graph.GetAllConstantTensor().size() == 1);
 
   CHECK(ordered[1]->SetAttr("eps", 1e-6).ok());
@@ -209,7 +230,7 @@ bool TestGraphConstruction() {
   CHECK(!ordered[1]->SetOpEnv(nullptr).ok());
 
   CHECK(graph.SortOp().ok());
-  CHECK(graph.GetOrderlyOPList().size() == 4);
+  CHECK(graph.GetOrderlyOPList().size() == 5);
   return true;
 }
 
@@ -312,9 +333,11 @@ bool TestErrors() {
   CHECK(!graph.CreateOp("input_type", {}, 1, OpType::kInput, AttrMap{},
                         &outputs)
              .ok());
-
   Tensor* input = nullptr;
   CHECK(graph.CreateInput("x", &input).ok());
+  CHECK(!graph.CreateOp("sample_type", {input}, 1, OpType::kSample,
+                        AttrMap{}, &outputs)
+             .ok());
   CHECK(graph.CreateOp("op", {input}, 1, OpType::kAdd, AttrMap{}, &outputs)
             .ok());
   CHECK(!graph.CreateOp("op", {input}, 1, OpType::kAdd, AttrMap{}, &outputs)
@@ -346,6 +369,11 @@ bool TestErrors() {
              .ok());
   CHECK(!graph.CreateOutput("foreign_output", other_input).ok());
   CHECK(!graph.CreateOutput("", input).ok());
+  Tensor* sample_output = nullptr;
+  CHECK(!graph.CreateSample("", input, nullptr).ok());
+  CHECK(!graph.CreateSample("null_sample", input, nullptr).ok());
+  CHECK(!graph.CreateSample("foreign_sample", other_input, &sample_output)
+             .ok());
   return true;
 }
 

@@ -85,7 +85,7 @@ Runtime 端在端侧 Device 上加载并执行静态图。`Graph` 是 Runtime �
 | FR-05 | `CreateOutput` 创建只消费已有 tensor、不产生新 tensor 的输出 op，登记到输出列表。 | UT-C02、UT-P02 |
 | FR-06 | `SortOp` 从输出 op 出发做 post DFS，生成拓扑序 `op_list_`，constant 作为依赖叶子，不进入执行序列；重复调用结果稳定。 | UT-C02、UT-P02、UT-P08 |
 | FR-07 | 提供常量、输入 op、输出 op、Sample op、执行序列的只读查询。 | UT-C02、UT-C03、UT-P02 |
-| FR-14 | `CreateSample` 创建单输入、单输出的 `kSample` op，输出 tensor 名为 `<name>.out`；`attr` 未指定 `method` 时默认 `argmax`；登记到 Sample 列表。 | UT-C02、UT-C04、UT-P11 |
+| FR-14 | `CreateSample` 创建单输入、单输出的 `kSample` op，输出 tensor 名为 `<name>.out`；`attr` 未指定时默认 `method=argmax`、`axis=-1`、`precision=int64`；登记到 Sample 列表。 | UT-C02、UT-C04、UT-P11 |
 | FR-08 | `GraphEnv` 以名称为键注册和查询共享 Storage，拒绝空名称和重复名称。 | UT-C03 |
 | FR-09 | `OpEnv` 提供 `Init`、`Forward`、`NeedTempData`；`MegaAttentionOpEnv` 作为派生示例。 | UT-C03 |
 | FR-10 | Python 绑定暴露 Graph、Tensor、Precision、Layout、DeviceType、OpType 和构图/排序/dump 接口；不暴露 Op、Storage、Shape。 | UT-P01 至 UT-P10 |
@@ -123,7 +123,7 @@ Runtime 端在端侧 Device 上加载并执行静态图。`Graph` 是 Runtime �
 |------|----------|
 | AC-01 | 干净构建 16/16 目标成功，无编译警告。 |
 | AC-02 | C++ 单测返回 0，输出 `graph_test: ALL TESTS PASSED`。 |
-| AC-03 | Python 单测 10/10 通过，覆盖正常构图、排序、dump 和错误路径。 |
+| AC-03 | Python 单测 11/11 通过，覆盖正常构图、Sample、排序、dump 和错误路径。 |
 | AC-04 | CTest 2/2 通过，退出码为 0。 |
 | AC-05 | `_graph` 扩展可在 Python 中导入，公共模块可加载并导出相同类型。 |
 | AC-06 | 设计文档、代码、测试结果、skill 四件套齐全且相互可追溯。 |
@@ -578,7 +578,7 @@ protected:
 | `CreateConstant()` | `create_constant()` | C++：`name`、`storage`、`output`；Python：`name`、`dims`、`pitch`、`precision`、`layout`、`byte_size`、`data_ptr`。 | C++ 接口创建 constant tensor，并将权重 storage 直接保存到该 tensor 内；Python wrapper 不暴露 `Storage`，而是在 wrapper 内由散装参数组装 storage。 |
 | `CreateInput()` | `create_input()` | legacy：`name`、`output`；显式声明 overload：额外传 `precision`、`layout`。 | 创建 input op 和一个输出 tensor并注册图输入；legacy 给 Input attr 写默认 `Storage{}`，显式 overload 把 precision/layout 写入该 attr。Python `Tensor(..., dtype=..., is_input=True)` 通过 `mark_input(name, dtype)` 调用显式接口。 |
 | `CreateOutput()` | `create_output()` | `name`：输出名称；`input`：输出依赖的输入 tensor。 | 创建 output op 并注册图输出；output op 没有输出 tensor，因此不调用 `CreateOp()`，也不写入 `tensor_map_`。 |
-| `CreateSample()` | `create_sample()` | `name`：Sample op 名称；`input`：logits tensor；`attr`：可选属性；`output`：返回 `<name>.out` tensor。 | 创建 `kSample` op，默认 `method=argmax`，登记到 Sample 列表；`CreateOp` 不得直接创建 `kSample`。 |
+| `CreateSample()` | `create_sample()` | `name`：Sample op 名称；`input`：logits tensor；`attr`：可选属性；`output`：返回 `<name>.out` tensor。 | 创建 `kSample` op，默认 `method=argmax`、`axis=-1`、`precision=int64`，登记到 Sample 列表；`CreateOp` 不得直接创建 `kSample`。 |
 | `GetAllSampleOp()` | - | 无。 | 返回 graph 中所有 Sample op 的列表，供采样参数检查和调试使用。 |
 | `SortOp()` | `sort_op()` | 无。 | 从 graph 输出出发，沿 tensor 依赖关系执行 post DFS，将 graph op 按拓扑顺序放入 `op_list_`；constant tensor 作为依赖叶子，不要求 producer op。 |
 | `GetAllConstantTensor()` | - | 无。 | 返回 graph 中所有由 `CreateConstant()` 创建的 constant tensor，供 Engine 初始化阶段加载权重。 |
@@ -721,7 +721,8 @@ Status CreateSample(const std::string& name, Tensor* input,
 - 校验 op 名称非空且未占用；
 - 校验 `output` 非空；
 - 校验 `input` 属于当前 graph；
-- 复制 `attr`；若缺少 `method`，写入 `method="argmax"`；
+- 复制 `attr`；缺少 `method`/`axis`/`precision` 时分别写入
+  `argmax`、`-1`、`int64`；
 - 预生成并校验输出 tensor 名 `<name>.out`；
 - 创建 `kSample` op 和输出 tensor，维护 `input -> op -> <name>.out`
   双向连接；

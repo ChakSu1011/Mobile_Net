@@ -244,15 +244,28 @@ def rebuild_graph_from_model(model_graph: ModelGraph) -> Any:
                 precision_from_name(api, meta.precision),
                 layout_from_name(api, meta.layout),
             )
+        sample_type = op_type_from_name(api, "sample")
         for op in model_graph.ops:
             sources = [tensors[name] for name in op.inputs]
-            outputs = graph.create_op(
-                op.name,
-                sources,
-                len(op.outputs),
-                op_type_from_name(api, op.op_type),
-                dict(op.attrs),
-            )
+            op_type = op_type_from_name(api, op.op_type)
+            if op_type == sample_type:
+                if len(sources) != 1:
+                    raise BuildError(
+                        "serializer",
+                        "sample op must have exactly one input",
+                        target=op.name,
+                    )
+                outputs = [
+                    graph.create_sample(
+                        op.name, sources[0], dict(op.attrs))]
+            else:
+                outputs = graph.create_op(
+                    op.name,
+                    sources,
+                    len(op.outputs),
+                    op_type,
+                    dict(op.attrs),
+                )
             actual_names = [tensor.name for tensor in outputs]
             if actual_names != list(op.outputs):
                 raise BuildError(

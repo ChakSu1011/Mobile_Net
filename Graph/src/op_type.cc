@@ -92,6 +92,8 @@ const char* OpTypeToStr(OpType op_type) {
       return "pack";
     case OpType::kUnpack:
       return "unpack";
+    case OpType::kSample:
+      return "sample";
   }
   return "unknown";
 }

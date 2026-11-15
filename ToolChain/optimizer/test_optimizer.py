@@ -305,9 +305,9 @@ class Qwen3OptimizerTest(unittest.TestCase):
             conversion.model_graph)
 
     def test_shape_completeness(self) -> None:
-        """UT-OPT-015：311 个 activation 全部有静态形状。"""
+        """UT-OPT-015：312 个 activation 全部有静态形状。"""
         activations = self.result.model_graph.activation_tensors
-        self.assertEqual(len(activations), 311)
+        self.assertEqual(len(activations), 312)
         for tensor in activations:
             self.assertIsNotNone(tensor.static_shape, tensor.name)
             self.assertTrue(tensor.static_shape, tensor.name)
@@ -323,11 +323,23 @@ class Qwen3OptimizerTest(unittest.TestCase):
             for item in self.result.report["invariants"]
         ))
         self.assertEqual(
-            self.result.report["memory"]["entries"], 311)
+            self.result.report["memory"]["entries"], 312)
         self.assertEqual(
             self.result.report["memory"]["constants_bytes"],
             1192099840,
         )
+
+    def test_sample_shape_and_precision(self) -> None:
+        """UT-OPT-020：Sample 输出 [B,S] 且保持 int64。"""
+        sample = self.result.model_graph.tensor("sample.out")
+        self.assertEqual(sample.static_shape, (1, 256))
+        self.assertEqual(sample.precision, "int64")
+        self.assertEqual(sample.byte_size, 2048)
+        op = next(
+            item for item in self.result.model_graph.ops
+            if item.op_type == "sample")
+        self.assertEqual(op.attrs["method"], "argmax")
+        self.assertEqual(op.attrs["precision"], "int64")
 
 
 class MemoryPassIsolationTest(unittest.TestCase):

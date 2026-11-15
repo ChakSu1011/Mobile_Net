@@ -42,9 +42,9 @@ class MemoryVisualizerTest(unittest.TestCase):
 
     def test_counts(self) -> None:
         """UT-MEM-001：Activation/权重计数与 summary 正确。"""
-        self.assertEqual(len(self.view.activation_blocks), 311)
+        self.assertEqual(len(self.view.activation_blocks), 312)
         self.assertEqual(len(self.view.weight_blocks), 310)
-        self.assertEqual(self.view.arena_bytes, 81985536)
+        self.assertEqual(self.view.arena_bytes, 78317568)
         self.assertEqual(self.view.peak_bytes, 78315520)
         self.assertEqual(self.view.constants_bytes, 1192099840)
 
@@ -69,7 +69,7 @@ class MemoryVisualizerTest(unittest.TestCase):
         self.assertEqual(block.shape, (2048, 1024))
         self.assertEqual(block.pitch, (2048, 1024))
         self.assertEqual(block.size, 4194304)
-        self.assertTrue(self.view.planned_weights)
+        self.assertFalse(self.view.planned_weights)
         self.assertEqual(block.offset % 256, 0)
 
     def test_shared_weight_owner(self) -> None:
@@ -101,7 +101,7 @@ class MemoryVisualizerTest(unittest.TestCase):
 
     def test_layout_rows(self) -> None:
         """UT-MEM-008：代表层明细行数正确。"""
-        self.assertEqual(len(self.layout.activation_rows), 14)
+        self.assertEqual(len(self.layout.activation_rows), 15)
         self.assertEqual(len(self.layout.weight_rows), 13)
         self.assertEqual(len(self.layout.weight_groups), 3)
 
@@ -119,7 +119,7 @@ class MemoryVisualizerTest(unittest.TestCase):
             self.assertIn("pitch", text)
             self.assertIn("REUSE", text)
             self.assertIn("LayerWeights ×28", text)
-            self.assertIn("planned", text)
+            self.assertIn("weights 310", text)
 
 
 if __name__ == "__main__":

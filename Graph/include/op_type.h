@@ -7,6 +7,7 @@
 // 边界：
 //   - 只表达 op 的逻辑类别，不携带 kernel 实现、精度或 shape 信息；
 //   - kInput/kOutput 是图边界 op，普通计算 op 不得使用；
+//   - kSample 只能通过 Graph::CreateSample 创建，默认 method=argmax；
 //   - 新增枚举值必须同步更新 OpTypeToStr()，否则 dump_ir 会输出 unknown；
 //   - 枚举顺序是 IR 契约的一部分，序列化或 Python 绑定不得随意调整。
 //
@@ -59,6 +60,7 @@ enum class OpType {
   kReshape,
   kPack,    // 按 input_start_index 把 [B,S_max,*rest] 压成 [M,*rest]。
   kUnpack,  // 按 input_start_index 把 [M,*rest] 还原成 [B,S_max,*rest]。
+  kSample,  // 采样：默认 argmax，把 logits 转为 token id。
 };
 
 // 返回 op 类型对应的稳定字符串名称。

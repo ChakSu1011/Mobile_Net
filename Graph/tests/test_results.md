@@ -17,7 +17,7 @@
 
 | 范围 | 内容 |
 |------|------|
-| 已覆盖 | 公共类型、Shape/Storage、Graph 构图、拓扑排序、GraphEnv、OpEnv 生命周期、C++ 错误路径、pybind 绑定、属性转换、dump_ir、公共模块加载、构建脚本 |
+| 已覆盖 | 公共类型、Shape/Storage、Graph 构图、Sample 节点、拓扑排序、GraphEnv、OpEnv 生命周期、C++ 错误路径、pybind 绑定、属性转换、dump_ir、公共模块加载、构建脚本 |
 | 未覆盖 | 真实 GPU/OCL kernel、显存分配、权重 H2D、序列化、并发、万级大图、Linux/macOS 原生构建 |
 
 ### 1.2 环境
@@ -152,14 +152,14 @@ $ echo $?
 
 ### 3.2 用例与实际覆盖
 
-C++ 测试文件包含 4 个测试函数和 99 个 `CHECK` 断言：
+C++ 测试文件包含 4 个测试函数和 119 个 `CHECK` 断言：
 
 | 用例 | 实际覆盖内容 | 结果 |
 |------|--------------|------|
 | `TestShape` | 默认 shape（`max_dim=0`、元素数 1）、dims/pitch 乘积、`max_dim` 越界、负维度、`int64_t` 溢出 | 通过 |
-| `TestGraphConstruction` | constant 的不可复用标记和空 producer、显式 input 的 attr storage、linear/add/output 连接、排序顺序 `input -> linear -> add -> output`、constant 不进入执行序列、`SetAttr`、空属性名失败、`SetOpEnv(nullptr)` 失败、重复 `SortOp` 稳定 | 通过 |
+| `TestGraphConstruction` | constant 的不可复用标记和空 producer、显式 input 的 attr storage、linear/add/sample/output 连接、Sample 默认 `argmax/-1/int64`、排序顺序 `input -> linear -> add -> sample -> output`、constant 不进入执行序列、`SetAttr`、空属性名失败、`SetOpEnv(nullptr)` 失败、重复 `SortOp` 稳定 | 通过 |
 | `TestEnvironment` | GraphEnv 注册/查询/重复名、Graph 接管所有权、MegaAttentionOpEnv 的 `NeedTempData`/`Init`/未实现 `Forward`、`ClearOpEnv`、Graph 析构自动清理 OpEnv | 通过 |
-| `TestErrors` | 空图排序、空 op 名、0 输出、空输出参数、非法 op 类型、重复 op、空源 tensor、重复常量名、空常量输出、非法 shape、外部 tensor、空输出名 | 通过 |
+| `TestErrors` | 空图排序、空 op 名、0 输出、空输出参数、非法 op 类型（含 `kSample`）、重复 op、空源 tensor、重复常量名、空常量输出、非法 shape、外部 tensor、空输出名、Sample 空名/空输出/外部 tensor | 通过 |
 
 ### 3.3 结论
 
@@ -196,11 +196,13 @@ test_public_module (__main__.GraphPythonTest.test_public_module)
 公共模块可加载扩展，并导出与扩展相同的图类型和枚举。 ... ok
 test_tensor_properties (__main__.GraphPythonTest.test_tensor_properties)
 Tensor 暴露名称、constant 标记和复用标记，且不暴露 Storage 对象。 ... ok
+test_sample (__main__.GraphPythonTest.test_sample)
+create_sample 默认 argmax，输出 sample.out。 ... ok
 test_topological_order (__main__.GraphPythonTest.test_topological_order)
-op 序列为 input、linear、add、output，constant 不进入序列。 ... ok
+op 序列为 input、linear、add、sample、output。 ... ok
 
 ----------------------------------------------------------------------
-Ran 10 tests in 0.002s
+Ran 11 tests in 0.002s
 
 OK
 ```
@@ -211,6 +213,7 @@ OK
 |------|--------|------|
 | `test_graph_sections` | dump 段标题、计数、graph 名称 | 通过 |
 | `test_topological_order` | 拓扑顺序、src/dst、constant 不进入执行序列 | 通过 |
+| `test_sample` | `create_sample` 默认 argmax/axis/precision、输出名与 dump | 通过 |
 | `test_constant_dump` | constant Storage 文本、精度、形状、不可复用 | 通过 |
 | `test_input_attr_storage` | 显式 input 的 attr storage | 通过 |
 | `test_tensor_properties` | name、is_constant、reusable、set_reusable、不暴露 storage | 通过 |
@@ -222,7 +225,7 @@ OK
 
 ### 4.4 结论
 
-Python 单测 10/10 通过，退出码 0。错误路径中，C++ `Status` 失败转换为
+Python 单测 11/11 通过，退出码 0。错误路径中，C++ `Status` 失败转换为
 `RuntimeError`，绑定层参数错误转换为 `ValueError`，与设计一致。
 
 ## 5. 公共模块与 dump_ir（TR-05）
@@ -357,9 +360,9 @@ Python display width <= 80: OK
 ## 9. 结论
 
 1. 干净构建 16/16 成功，无编译警告；
-2. C++ 单测 99 个 `CHECK` 断言全部通过，输出
+2. C++ 单测 119 个 `CHECK` 断言全部通过，输出
    `graph_test: ALL TESTS PASSED`；
-3. Python 单测 10/10 通过；
+3. Python 单测 11/11 通过；
 4. CTest 2/2 通过；
 5. `_graph` 与 `mobilenet_runtime_graph` 均可导入；
 6. `dump_ir` 输出稳定、可重复；

@@ -148,6 +148,90 @@ def build_tiny_model(
     )
 
 
+def build_sample_model(
+    precision: str = "float16",
+) -> ModelGraph:
+    """构造 gather→linear→sample 的最小模型图。
+
+    参数：
+      precision：常量与浮点激活精度。
+
+    返回：
+      通过 ``validate()`` 的 ``ModelGraph``；Sample 输出 ``int64``。
+    """
+    tensors = {
+        "input.input_ids": make_tensor(
+            "input.input_ids", "input", ("B", "S"), "int64",
+            reusable=False),
+        "embedding.weight": make_tensor(
+            "embedding.weight", "constant",
+            (100, S_HIDDEN), precision,
+            reusable=False,
+            weight_source="model.embed_tokens.weight"),
+        "embedding.out": make_tensor(
+            "embedding.out", "activation",
+            ("B", "S", S_HIDDEN), precision),
+        "head.weight": make_tensor(
+            "head.weight", "constant",
+            (S_INTERMEDIATE, S_HIDDEN), precision,
+            reusable=False,
+            weight_source="lm_head.weight"),
+        "head.out": make_tensor(
+            "head.out", "activation",
+            ("B", "S", S_INTERMEDIATE), precision),
+        "sample.out": make_tensor(
+            "sample.out", "activation", ("B", "S"), "int64"),
+    }
+    ops = (
+        OpMeta(
+            name="embedding",
+            op_type="gather",
+            inputs=("input.input_ids", "embedding.weight"),
+            outputs=("embedding.out",),
+            attrs={
+                "axis": 0,
+                "precision": precision,
+                "layout": "row_major",
+            },
+        ),
+        OpMeta(
+            name="head",
+            op_type="linear",
+            inputs=("embedding.out", "head.weight"),
+            outputs=("head.out",),
+            attrs={
+                "in_features": S_HIDDEN,
+                "out_features": S_INTERMEDIATE,
+                "precision": precision,
+                "layout": "row_major",
+                "bias": False,
+            },
+        ),
+        OpMeta(
+            name="sample",
+            op_type="sample",
+            inputs=("head.out",),
+            outputs=("sample.out",),
+            attrs={
+                "method": "argmax",
+                "axis": -1,
+                "precision": "int64",
+            },
+        ),
+    )
+    return ModelGraph(
+        name="sample_model",
+        adapter="test",
+        inputs=("input.input_ids",),
+        constants=("embedding.weight", "head.weight"),
+        outputs=(IOBinding(
+            name="output.tokens", tensor="sample.out"),),
+        tensors=tensors,
+        ops=ops,
+        metadata={},
+    )
+
+
 def build_attention_model(
     num_heads: int,
     num_kv_heads: int,

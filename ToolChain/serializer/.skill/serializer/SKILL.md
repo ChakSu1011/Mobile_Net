@@ -41,6 +41,8 @@ description: 把优化后的 ModelGraph、显存计划与可选权重打包为�
   不含时间戳；时间戳只能进 `compile_report.json`。
 - **IR 哈希闭环**：manifest 记录重建图 `dump_ir()` 的 SHA-256 与行数；
   Loader 重建后必须复算并比对。
+- **Sample 专用接口**：`op_type=sample` 必须调用 `create_sample`，不能走
+  `create_op`；否则 Graph 会拒绝 `kSample`，重建失败。
 - **权重原样打包**：不做 dtype 转换；源权重 dtype 必须与优化后图精度一致。
 - **对齐与哈希**：每个权重按 256 B 对齐，记录 offset、byte_size 与
   SHA-256。
@@ -82,10 +84,12 @@ description: 把优化后的 ModelGraph、显存计划与可选权重打包为�
    传入 Precision Pass 生成的 FP16 转换文件；手工调用时若图精度是 FP16
    而权重仍是 BF16，会全部 `dtype mismatch`。
 2. **把时间戳写进 manifest**：破坏字节确定性与哈希稳定性。
-3. **只比较 manifest 哈希**：IR 哈希必须由重建图计算，不能复用转换期
+3. **用 create_op 重建 Sample**：`kSample` 只能由 `create_sample` 创建；
+   重建循环必须按 op_type 分派。
+4. **只比较 manifest 哈希**：IR 哈希必须由重建图计算，不能复用转换期
    缓存值。
-4. **覆盖非空输出目录**：`serialize_package` 默认拒绝；手工调用时不要
+5. **覆盖非空输出目录**：`serialize_package` 默认拒绝；手工调用时不要
    误删用户目录。
-5. **metadata-only 包当成可用模型**：`weights_available=0` 只能验证图与
+6. **metadata-only 包当成可用模型**：`weights_available=0` 只能验证图与
    加载流程，不能用于推理。
-6. **权重对齐错误**：未按 256 B 对齐会导致 Runtime 直接映射失败。
+7. **权重对齐错误**：未按 256 B 对齐会导致 Runtime 直接映射失败。

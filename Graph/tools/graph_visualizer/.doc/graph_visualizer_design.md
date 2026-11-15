@@ -105,7 +105,7 @@
 
 | 编号 | 验收标准 |
 |------|----------|
-| AC-VIS-01 | Qwen3 图包含 2 个输入、embedding、Decoder Layer 代表子图 `×28`、final norm、LM Head、1 个输出 |
+| AC-VIS-01 | Qwen3 图包含 2 个输入、embedding、Decoder Layer 代表子图 `×28`、final norm、LM Head、Sample、1 个输出 |
 | AC-VIS-02 | 每个融合算子节点只显示名称、类型、类别、精度、散算子类别和权重行 |
 | AC-VIS-03 | 输入、输出、激活是平行四边形边，权重在节点内显示 W 行 |
 | AC-VIS-04 | SVG 中不出现权重值、统计值、采样值或权重哈希 |
@@ -254,6 +254,7 @@ W: fp16, 3072×1024
 | `kLinearRmsNormRopeQuantPagedKVStore` | `linear`、`rms_norm`、`rope`、`quant`、`paged_kv_store` |
 | `kAddRmsNorm` | `add`、`rms_norm` |
 | `kFfn` | `gate/up`、`activation`、`down` |
+| `kSample` | `argmax`（默认） |
 | 其他/未知 | 显示 `op_type`，标注“未登记融合组成” |
 
 类别映射：
@@ -270,6 +271,7 @@ W: fp16, 3072×1024
 | `position` | `kRope`、`kRotate` |
 | `routing` | 各 Router |
 | `quant` | `kQuant`、`kKvCompress` |
+| `sampling` | `kSample` |
 | `other` | 未归类类型 |
 
 ### 4.3 边：输入、输出、激活
@@ -377,7 +379,7 @@ render_svg(view, output_path)
 ### 4.10 性能与内存
 
 - 默认视图约 20–40 个节点，不读取权重内容。
-- 不构建完整 311 op 视图；SVG 预估小于 300 KB。
+- 不构建完整 312 op 视图；SVG 预估小于 300 KB。
 
 ### 4.11 输出命名
 
@@ -421,7 +423,7 @@ render_svg(view, output_path)
 
 | 编号 | 用例 | 预期 |
 |------|------|------|
-| UT-VIS-001 | 读取合法 Qwen3 包 | 返回 623 tensor、311 计算 op |
+| UT-VIS-001 | 读取合法 Qwen3 包 | 返回 624 tensor、312 计算 op |
 | UT-VIS-002 | 损坏 manifest | 抛 `BuildError` |
 | UT-VIS-003 | `kLinearSwiGlu` / `kLinearPerHeadRMSNormRope` 组成 | 分别返回 4 / 3 个散算子 |
 | UT-VIS-004 | 未知 OpType | 不崩溃，标注“未登记” |
@@ -430,7 +432,7 @@ render_svg(view, output_path)
 | UT-VIS-007 | 3 层同构 | 折叠为 `×3` |
 | UT-VIS-008 | 3 层中一层不同 | 差异层单独显示并标记 |
 | UT-VIS-009 | 两次渲染 | SVG 字节一致 |
-| IT-VIS-001 | Qwen3 默认视图 | 含 embedding、Layer ×28、final norm、LM Head、output |
+| IT-VIS-001 | Qwen3 默认视图 | 含 embedding、Layer ×28、final norm、LM Head、Sample、output |
 | IT-VIS-002 | 输出路径 | 生成 `Models/Qwen3/artifacts/qwen3_0_6b_graph.svg` |
 
 ### 6.3 测试环境与命令

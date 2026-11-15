@@ -84,7 +84,7 @@
 | 编号 | 验收项 | 通过条件 |
 | --- | --- | --- |
 | AC-OPT-01 | 精度完整 | 无 `unknown`/源精度残留（`keep` 除外）；int64 输入不变 |
-| AC-OPT-02 | 形状完整 | 311 个 Qwen3 activation 全部有静态形状 |
+| AC-OPT-02 | 形状完整 | 312 个 Qwen3 activation 全部有静态形状 |
 | AC-OPT-03 | 显存安全 | 生命周期重叠张量零字节重叠；峰值与报告一致 |
 | AC-OPT-04 | 可重复 | 连续两次优化结果 `to_dict()` 相等 |
 | AC-OPT-05 | 报告 | JSON 可解析；不变量全部 passed |
@@ -217,8 +217,12 @@ class MemoryPass:
 | --- | --- |
 | `input.input_ids`、`input.position_ids` | 保持 `int64` |
 | constant（BF16） | 改为目标精度（FP16），`byte_size` 不变；提供权重时转换字节 |
-| activation | 改为目标精度 |
+| 浮点 activation | 改为目标精度 |
+| Sample 等整数输出 activation | 保持 `int64`，不参与浮点转换 |
 | 图输出张量 | 跟随其生产 op |
+
+对输出张量全部为整数的 op（如 `sample`），不重写其 `precision` 属性；
+其余 op 的 `precision` 属性跟随目标精度。
 
 目标精度只接受 `float16`、`bfloat16`、`float32`、`keep`。当目标与源元素
 字节数不同（如 FP32→FP16）时抛 `BuildError`：本阶段不重排权重，体积变化
@@ -289,6 +293,7 @@ class MemoryPass:
 | `rope` | 输入末维 == `num_heads * head_dim` | 与输入同形 |
 | `mega_attention` | q 末维 == `num_heads*head_dim`；k/v 末维 == `num_kv_heads*head_dim`；比例匹配 | 与 q 同形 |
 | `add` | 两个输入同形 | 与输入同形 |
+| `sample` | 单输入 rank>=2；`method=argmax`；`axis=-1` | `输入[:-1]`，精度 `int64` |
 | 其他 | 失败 | 抛 `BuildError` |
 
 #### 4.4.3 精度补全
@@ -343,9 +348,9 @@ class MemoryPass:
   "bounds": {"batch": 1, "sequence": 256, "context_length": 40960},
   "precision": {"target": "float16", "accumulate": "float32",
                 "converted_tensors": 733, "precision_histogram": {...}},
-  "shape": {"resolved_tensors": 311, "unresolved": []},
+  "shape": {"resolved_tensors": 312, "unresolved": []},
   "memory": {"alignment": 256, "arena_bytes": ..., "peak_bytes": ...,
-             "constants_bytes": 1192099840, "entries": 311},
+             "constants_bytes": 1192099840, "entries": 312},
   "invariants": [{"name": "...", "passed": true, "detail": "..."}]
 }
 ```
@@ -409,8 +414,10 @@ class MemoryPass:
 | UT-OPT-012 | 关闭复用 | `enable_reuse=false` | 偏移单调增长，arena 更大 |
 | UT-OPT-013 | 对齐 | 尺寸非 256 倍数 | 所有 offset % 256 == 0 |
 | UT-OPT-014 | 确定性 | 连续两次运行 | `to_dict()` 相等 |
-| UT-OPT-015 | Qwen3 形状完整性 | Qwen3 图 | 311 个 activation 全部有形状 |
+| UT-OPT-015 | Qwen3 形状完整性 | Qwen3 图 | 312 个 activation 全部有形状 |
 | UT-OPT-016 | 报告 JSON | Qwen3 图 | 可 json 序列化；不变量 passed |
+| UT-OPT-020 | Sample 形状 | `[B,S,V]` logits | 输出 `[B,S]`、精度 `int64` |
+| UT-OPT-021 | 整数输出精度属性 | `sample` op | `precision` 属性保持 `int64` |
 
 ### 6.3 测试环境
 

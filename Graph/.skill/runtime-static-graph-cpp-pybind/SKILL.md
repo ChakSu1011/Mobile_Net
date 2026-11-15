@@ -102,6 +102,8 @@ description: 从 Runtime 静态图设计出发，实现不依赖 torch/ATen 的 
 - `CreateInput`：legacy 写默认 `Storage{}`，显式重载把 precision/layout
   写入 `attr["storage"]`；输入 op 与 tensor 同名。
 - `CreateOutput`：只创建 `kOutput` op，不产生 tensor，写入默认 storage attr。
+- `CreateSample`：只创建 `kSample` op 与 `<name>.out` tensor；attr 缺少
+  `method` 时补 `argmax`；登记 Sample 列表；`CreateOp` 拒绝 `kSample`。
 - `SortOp`：清空执行序列；无输出返回状态错误；从输出做 post DFS；常量跳过；
   非 const 无 producer 报错；重复排序结果稳定。
 - 析构函数先清空所有 OpEnv，再让成员逆序析构。
@@ -116,6 +118,8 @@ description: 从 Runtime 静态图设计出发，实现不依赖 torch/ATen 的 
 - `Status` 失败抛 `std::runtime_error`（Python `RuntimeError`）；类型转换失败
   抛 `std::invalid_argument`（Python `ValueError`）。
 - `create_constant` 只接收指针，不读取数据；文档中写明缓冲区生命周期。
+- `create_sample(name, input, attr)` 返回 `<name>.out`；Python 默认属性由
+  Converter 的 RecordingGraph 补齐，Graph 只保证 `method=argmax`。
 - `dump_ir` 用 `op_list_` 输出 ops，段顺序、属性顺序和命名必须确定。
 
 ### 6. 构建与测试

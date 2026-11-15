@@ -218,7 +218,7 @@ class MemoryViewModel:
 | 主题 | 选择 | 理由 | 代价 |
 |------|------|------|------|
 | 输出 | 一个 SVG 两面板 | 便于整体审阅 | 文件较高 |
-| Activation | 代表层 + 28 层条 | 避免 311 条标签 | 细节需看代表层 |
+| Activation | 代表层 + 28 层条 | 避免 312 条标签 | 细节需看代表层 |
 | 复用 | 生命周期 lane + 共享 offset | 直观 | 区块可能有交叉 |
 | 权重 | planned offset | 无权重时仍可看相对布局 | 不是实际物理地址 |
 
@@ -265,7 +265,7 @@ class MemoryViewModel:
   重叠的区块不在同一 lane。
 - Arena summary：
   ```text
-  arena 81,985,536 B | peak 78,315,520 B | alignment 256 B | entries 311
+  arena TBD B | peak TBD B | alignment 256 B | entries 312
   ```
 
 ### 4.4 权重区块
@@ -393,7 +393,7 @@ Models/Qwen3/artifacts/qwen3_0_6b_memory.svg
 | R-01 | 复用区块重叠 | lane + 纹理 + 代表层 |
 | R-02 | 无真实权重 offset | planned layout 标注 |
 | R-03 | 层 offset 漂移导致误判差异 | 比较 shape/pitch/size，不比较绝对 offset |
-| R-04 | 311 条 Activation 拥挤 | 28 层条 + 代表层 |
+| R-04 | 312 条 Activation 拥挤 | 28 层条 + 代表层 |
 | R-05 | SVG 字体差异 | 通用字体栈，人工验收 |
 
 ## 6. 测试与验证设计
@@ -410,7 +410,7 @@ Models/Qwen3/artifacts/qwen3_0_6b_memory.svg
 
 | 编号 | 用例 | 预期 |
 |------|------|------|
-| UT-MEM-001 | Qwen3 包 | 311 Activation、310 常量 |
+| UT-MEM-001 | Qwen3 包 | 312 Activation、310 常量 |
 | UT-MEM-002 | Activation 字段 | owner/shape/pitch/offset/size 一致 |
 | UT-MEM-003 | Activation Pitch | 空 pitch 按 shape 推导并标记 |
 | UT-MEM-004 | 权重 owner | 每个常量映射到消费算子 |

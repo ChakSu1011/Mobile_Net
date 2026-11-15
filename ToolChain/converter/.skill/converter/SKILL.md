@@ -53,7 +53,7 @@ description: 把模型配置（首期 Qwen3-0.6B）转换为 Graph 可执行静�
   `sort_op`、`dump_ir`，代理图与原生图 IR 逐字节一致。
 - **常量是叶子**：常量不进入 `SortOp()` 执行序列；Qwen3 的 310 个常量
   在 IR 的 `constants` 段，不在执行序中。
-- **计数口径**：Qwen3 `ModelGraph.ops=311` 是计算 op；IR `ops=314`
+- **计数口径**：Qwen3 `ModelGraph.ops=312` 是计算 op；IR `ops=315`
   额外包含 2 个 Input op 与 1 个 Output op，不能混用。
 - **输入约定**：`input_ids`、`position_ids` 记录为 `[B, S]`、`int64`、
   `row_major`，并清空 pitch。
@@ -97,7 +97,8 @@ description: 把模型配置（首期 Qwen3-0.6B）转换为 Graph 可执行静�
 
 ## 常见陷阱
 
-1. **把 IR `ops=314` 当成计算 op 数**：其中 3 个是 I/O op。
+1. **把 IR `ops=315` 当成计算 op 数**：其中 3 个是 I/O op；
+   Qwen3 计算 op 是 312（含默认 Sample）。
 2. **用 torch 读 safetensors**：Build 不依赖 torch；使用
    `ToolChain/common/safetensors.py` 解析头部。
 3. **忘记 tied 别名**：图里只有一个 `embedding.weight`，事后无法从图

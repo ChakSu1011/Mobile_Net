@@ -56,7 +56,9 @@ description: 对 Converter 产出的 ModelGraph 执行精度推导、可选 BF16
 - **Shape 绑定**：`B=1`、`S=max_num_tokens`；所有 activation 必须得到
   静态形状，符号维不得进入 Memory Pass。
 - **形状契约**：linear K 维匹配、GQA `num_heads/num_kv_heads` 整除、
-  RMSNorm 末维整除、Add 同形。
+  RMSNorm 末维整除、Add 同形、Sample 末维归约为 `[B,S]`。
+- **整数输出保持**：`sample` 输出 `int64`，不参与浮点精度转换；输出全为
+  整数的 op 不重写 `precision` 属性。
 - **Memory 前置条件**：Memory Pass 入口拒绝未解析形状的 activation。
 - **显存不重叠**：生命周期重叠的张量 `[offset, offset+size)` 不得相交；
   所有 offset 按 alignment 对齐。
@@ -73,7 +75,7 @@ description: 对 Converter 产出的 ModelGraph 执行精度推导、可选 BF16
    计算确定性头部与偏移 → 分块转换 BF16、复制其他 dtype → 写临时文件
    后原子替换为 `weights_output`。
 4. Shape Pass：绑定 `B`、`S`，按 op 规则推导输出形状并校验契约；
-   标记输出不可复用。
+   `sample` 将 `[B,S,V]` 归约为 `[B,S]` 且精度为 `int64`；标记输出不可复用。
 5. Memory Pass：按拓扑序计算 `birth` / `last_use`；输出绑定视为下标
    `N` 的消费者；按 `(birth, -size, name)` 排序做 first-fit 复用；
    校验对齐、重叠、峰值与常量字节。

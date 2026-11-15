@@ -209,12 +209,12 @@ def rebuild_graph(
     "adapter": "qwen3",
     "inputs": ["input.input_ids", "input.position_ids"],
     "constants": ["embedding.weight", "..."],
-    "outputs": [{"name": "output.logits", "tensor": "lm_head.out"}],
+    "outputs": [{"name": "output.tokens", "tensor": "sample.out"}],
     "tensors": [],
     "ops": [],
     "metadata": {},
     "ir_sha256": "...",
-    "ir_line_count": 632
+    "ir_line_count": 633
   },
   "optimization": {
     "config": {"target_precision": "float16", "...": "..."},
@@ -231,8 +231,8 @@ def rebuild_graph(
     ]
   },
   "statistics": {
-    "tensors": 623, "ops": 311, "constants": 310, "outputs": 1,
-    "activation_tensors": 311, "constant_bytes": 1192099840
+    "tensors": 624, "ops": 312, "constants": 310, "outputs": 1,
+    "activation_tensors": 312, "constant_bytes": 1192099840
   }
 }
 ```
@@ -297,10 +297,11 @@ dtype 映射：
    - `precision`/`layout` 由字符串映射到枚举；
    - `byte_size` 与 `data_ptr=0`。
 4. 按 `inputs` 顺序调用 `create_input(name, precision, layout)`。
-5. 按 `ops` 记录顺序调用 `create_op`：
+5. 按 `ops` 记录顺序重建计算 op：
    - `op_type` 字符串映射回 OpType；
+   - `sample` 调用 `create_sample(name, input, attrs)`，其余调用
+     `create_op(name, src_tensors, len(outputs), op_type, attrs)`；
    - `src_tensors` 按名称映射到已创建的 Tensor；
-   - `out_cnt = len(outputs)`；
    - `attrs` 原样传入。
 6. 按 `outputs` 顺序调用 `create_output(name, tensor)`。
 7. `sort_op()`。
@@ -374,7 +375,8 @@ dtype 映射：
 | UT-SER-009 | 合成权重 | 手动写 safetensors | 打包字节与源一致；offset 对齐 |
 | UT-SER-010 | IR 校验失败 | 修改 manifest 图 | 重建后哈希不符抛错 |
 | UT-SER-011 | 未优化图 | 含 unknown 精度 | 抛 `BuildError` |
-| UT-SER-012 | Qwen3 包 | 全流程 | 包可加载；IR 行数 632；统计 623/311/310 |
+| UT-SER-012 | Qwen3 包 | 全流程 | 包可加载；IR 行数 633；统计 624/312/310 |
+| UT-SER-013 | Sample 往返 | 含 sample 的 ModelGraph | 重建图使用 `create_sample`，输出绑定一致 |
 
 ### 6.3 测试环境
 

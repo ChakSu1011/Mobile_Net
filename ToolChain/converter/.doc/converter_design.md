@@ -57,9 +57,9 @@
 
 | 编号 | 需求 | 验收要点 |
 | --- | --- | --- |
-| FR-CONV-01 | `RecordingGraph` 必须完整代理 `create_input`、`create_constant`、`create_op`、`create_output`、`sort_op`、`dump_ir`，调用方无感知 | 使用 RecordingGraph 与直接使用 Graph 构建同一模型，`dump_ir()` 完全一致 |
+| FR-CONV-01 | `RecordingGraph` 必须完整代理 `create_input`、`create_constant`、`create_op`、`create_output`、`create_sample`、`sort_op`、`dump_ir`，调用方无感知 | 使用 RecordingGraph 与直接使用 Graph 构建同一模型，`dump_ir()` 完全一致 |
 | FR-CONV-02 | Converter 输出必须同时包含可执行的 `Graph.Graph` 与 `ModelGraph` 元数据 | 两个对象均非空；`ModelGraph` 通过自校验 |
-| FR-CONV-03 | Qwen3 Adapter 必须按 `Models/Qwen3/qwen3_graph_builder.py` 的结构构图，不得复制或改写层结构 | 图计数与既有 Qwen3 测试一致：2 inputs、310 constants、311 个计算 op、1 output；`dump_ir()` 的 `ops` 段为 314，因为额外包含 2 个 Input op 与 1 个 Output op |
+| FR-CONV-03 | Qwen3 Adapter 必须按 `Models/Qwen3/qwen3_graph_builder.py` 的结构构图，不得复制或改写层结构；LM Head 与 Output 之间必须插入 Sample 节点 | 图计数与既有 Qwen3 测试一致：2 inputs、310 constants、312 个计算 op、1 output；`dump_ir()` 的 `ops` 段为 315，因为额外包含 2 个 Input op 与 1 个 Output op；Output 绑定 `sample.out` |
 | FR-CONV-04 | 每个 constant 必须记录图内名称、shape、dtype、byte_size 与 Hugging Face 权重名 | 覆盖 embedding、28 层 11 个权重、final norm；tied LM Head 记录别名关系 |
 | FR-CONV-05 | 输入张量必须记录符号形状 `[B, S]` 与 `int64` 精度，并作为 `ModelGraph` 的图输入 | `input_ids`、`position_ids` 均为 `[B, S]`、`int64` |
 | FR-CONV-06 | 支持可选 safetensors 权重目录探测，登记权重可用性与来源文件 | 有真实权重时 `weight_available=true`；缺失时为 false，不报错 |
@@ -93,7 +93,7 @@
 | 编号 | 验收项 | 通过条件 |
 | --- | --- | --- |
 | AC-CONV-01 | 图一致性 | RecordingGraph 与原生 Graph 的 `dump_ir()` 逐字节一致 |
-| AC-CONV-02 | Qwen3 计数 | 2 inputs、310 constants、311 个计算 op、1 output（IR `ops` 段为 314，含 3 个 I/O op） |
+| AC-CONV-02 | Qwen3 计数 | 2 inputs、310 constants、312 个计算 op、1 output（IR `ops` 段为 315，含 3 个 I/O op）；Sample 默认 argmax |
 | AC-CONV-03 | 元数据完整性 | 每个 op 的输入/输出/attrs 均已记录；每个 tensor 有 kind/precision/layout |
 | AC-CONV-04 | 权重映射 | 310 个 constant 均有 HF 权重名与形状；tied 别名有记录 |
 | AC-CONV-05 | 往返 | `ModelGraph` JSON 保存/加载后 `to_dict()` 相等 |
@@ -145,7 +145,8 @@ Converter 不引入第二套可执行图。`RecordingGraph` 的每个方法先�
    `input/inference_config.json`，合并为有效运行参数。
 2. 创建 `Graph.Graph` 与 `RecordingGraph`。
 3. 通过注入的 `graph_factory` 让 `Qwen3GraphBuilder` 使用 RecordingGraph。
-4. Builder 依次登记常量、输入、计算 op、输出，并调用 `sort_op()`。
+4. Builder 依次登记常量、输入、计算 op、Sample op、输出，并调用
+   `sort_op()`。
 5. Adapter 补充权重来源、tied 别名与模型配置元数据。
 6. `RecordingGraph.finish()` 生成 `ModelGraph` 并自校验。
 7. 可选写 `model_graph.json` 与转换摘要。
@@ -194,6 +195,9 @@ class RecordingGraph:
         self, name: str, src_tensors, out_cnt: int,
         op_type: Any, attr=None) -> list[Any]: ...
     def create_output(self, name: str, tensor: Any) -> None: ...
+    def create_sample(
+        self, name: str, tensor: Any,
+        attr: dict[str, Any] | None = None) -> Any: ...
     def sort_op(self) -> None: ...
     def dump_ir(self) -> str: ...
     def finish(self) -> ModelGraph: ...
@@ -363,6 +367,27 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 - CLI 显式给出的优化参数优先，只覆盖显式字段，其余字段仍取有效配置。
 - 采样字段、Token ID 与运行时派生的单请求生成上限只记录，不参与 build。
 
+#### 4.3.8 Sample 节点插入
+
+Qwen3 Builder 在 `lm_head` 与 Output 之间固定插入 Sample 节点：
+
+```text
+lm_head.out [B,S,V] -> sample (kSample, method=argmax, axis=-1)
+                    -> sample.out [B,S] int64
+                    -> output.tokens
+```
+
+- `RecordingGraph.create_sample` 转发 `Graph.create_sample`，默认属性
+  `method=argmax`、`axis=-1`、`precision=int64`；调用方可覆盖 `method`。
+- Graph 创建 `kSample` op 与 `<name>.out` tensor；`CreateOp` 不得直接创建
+  `kSample`。
+- `ModelGraph` 记录 `op_type="sample"`、输入 `lm_head.out`、输出
+  `sample.out`、属性与 `int64` activation；Sample 不引入常量。
+- Output op 名改为 `output.tokens`，绑定 `sample.out`；不再直接绑定
+  `lm_head.out`。
+- Sample 输出形状由 Optimizer 的 Shape Pass 推导为 `input[:-1]`，即
+  `[B,S]`；数值为 Argmax token id。
+
 ### 4.4 异常与错误处理
 
 | 场景 | 异常 | 信息 |
@@ -373,6 +398,7 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 | 配置非法 | `ValueError` | 由 `Qwen3Config.validate()` 抛出 |
 | 输入配置缺失、字段未知/缺失、类型或范围非法 | `BuildError` | 文件路径与字段名 |
 | 官方 `generation_config.json` 非法 | `BuildError` | 文件路径与字段名 |
+| `create_sample` 名称重复、输入未登记或输出名不符 | `BuildError` | Sample 名与张量名 |
 | 图构造失败 | `RuntimeError` | 由 Graph 抛出，原样传播 |
 | 输出路径不可写 | `OSError` | 文件路径 |
 
@@ -381,7 +407,7 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 ### 4.5 性能与内存
 
 - 记录层只保存名字与小型元数据，不复制 Storage。
-- Qwen3 图规模 623 个 tensor、311 个计算 op（IR 中另有 3 个 I/O op）；记录开销为 O(V+E)。
+- Qwen3 图规模 624 个 tensor、312 个计算 op（IR 中另有 3 个 I/O op）；记录开销为 O(V+E)。
 - 权重探测只读 safetensors 头部；不触碰权重数据区。
 - 输入配置只读取少量 JSON 字段，合并结果规模固定，不随模型规模增长。
 - 转换完成后 `ModelGraph` 与 Graph 同时存活；调用方负责释放。
@@ -429,7 +455,8 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 | UT-CONV-004 | 多输出命名 | `out_cnt=2` | 记录 `name.out.0`、`name.out.1` |
 | UT-CONV-005 | 非法属性 | 传入 `object()` | 抛 `BuildError` |
 | UT-CONV-006 | 输出绑定 | `create_output` | `ModelGraph.outputs` 正确 |
-| UT-CONV-007 | Qwen3 计数 | Qwen3 配置 | 2/310/311/1（IR `ops` 段 314） |
+| UT-CONV-021 | Sample 记录 | `create_sample` | op_type=sample、默认 argmax、输出 `sample.out`、元数据完整 |
+| UT-CONV-007 | Qwen3 计数 | Qwen3 配置 | 2/310/312/1（IR `ops` 段 315） |
 | UT-CONV-008 | 权重映射 | Qwen3 配置 | 310 个常量均有 HF 名与形状 |
 | UT-CONV-009 | tied/untied | 两种配置 | tied 记别名；untied 有 `lm_head.weight` |
 | UT-CONV-010 | JSON 往返 | 转换结果 | `to_dict()` 相等 |

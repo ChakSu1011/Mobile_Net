@@ -47,11 +47,12 @@ OK
 
 ## 4. 未覆盖项与风险
 
-1. **无真实 Qwen3-0.6B 权重**：生成的 `model.mgf` 为 metadata-only，
-   310 个权重条目均为不可用；权重打包路径仅由合成 safetensors 覆盖。
-2. **权重精度必须匹配**：Serializer 原样打包权重字节，不做 dtype 转换；
-   官方 BF16 权重配默认 FP16 图会全部不可用，应使用
-   `--target-precision bfloat16`。
+1. **模块测试未覆盖真实权重**：Serializer 单测使用 metadata-only 包与
+   合成 safetensors；真实 Qwen3 FP16 权重打包由阶段级流水线测试覆盖
+   （见 [ToolChain/tests/test_results.md](../../tests/test_results.md)）。
+2. **Serializer 不做 dtype 转换**：它原样打包传入的权重字节。流水线会
+   优先传入 Precision Pass 生成的 FP16 转换文件；手工调用时若图精度与
+   权重 dtype 不一致，会因 `dtype mismatch` 全部不可用。
 3. **未执行运行时加载**：未验证设备端权重上传、Kernel 创建与推理数值。
 4. **未实现旧版本迁移**：首版只有 format version 1。
 5. **仅 Windows 主机验证**：未在 Android/Linux 目标环境执行。

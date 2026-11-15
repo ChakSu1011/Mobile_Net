@@ -12,15 +12,22 @@
 from __future__ import annotations
 
 import json
+import struct
+import tempfile
 import unittest
 from pathlib import Path
 
 from ToolChain.common.errors import BuildError
 from ToolChain.common.model_ir import ModelGraph
+from ToolChain.common.safetensors import (
+    read_index,
+    read_tensor_bytes,
+)
 from ToolChain.converter.converter import convert
 from ToolChain.optimizer import OptimizeConfig, Optimizer
 from ToolChain.optimizer.memory import MemoryPass
 from ToolChain.testing import (
+    write_safetensors,
     build_add_model,
     build_attention_model,
     build_rms_norm_model,
@@ -88,6 +95,82 @@ class PrecisionPassTest(unittest.TestCase):
             Optimizer(_SMALL_CONFIG).run(
                 build_tiny_model("float32"))
         self.assertIn("precision conversion", str(context.exception))
+
+    def test_bf16_weight_conversion(self) -> None:
+        """UT-OPT-017：BF16 权重转换为 FP16 并写出文件。"""
+        model = build_tiny_model("bfloat16")
+        one = struct.pack("<H", 0x3F80)
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "weights.safetensors"
+            output = Path(directory) / "weights_fp16.safetensors"
+            write_safetensors(source, {
+                "model.embed_tokens.weight": (
+                    "BF16", (100, 16), one * (100 * 16)),
+                "lm_head.weight": (
+                    "BF16", (32, 16), one * (32 * 16)),
+            })
+            result = Optimizer(_SMALL_CONFIG).run(
+                model,
+                weights_path=source,
+                weights_output=output,
+            )
+            self.assertTrue(output.is_file())
+            self.assertEqual(
+                result.converted_weights_path, output)
+            self.assertEqual(
+                result.weight_conversion["converted_count"], 2)
+            index = read_index(output)
+            entry = index["model.embed_tokens.weight"]
+            self.assertEqual(entry.dtype, "F16")
+            self.assertEqual(entry.precision, "float16")
+            self.assertEqual(
+                read_tensor_bytes(entry)[:2], b"\x00<")
+
+    def test_bf16_weight_overflow(self) -> None:
+        """UT-OPT-018：超出 FP16 范围的 BF16 权重报错。"""
+        model = build_tiny_model("bfloat16")
+        bits = int.from_bytes(
+            struct.pack("<f", 100000.0), "little") >> 16
+        data = struct.pack("<H", bits) * (100 * 16)
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "weights.safetensors"
+            write_safetensors(source, {
+                "model.embed_tokens.weight": (
+                    "BF16", (100, 16), data),
+            })
+            with self.assertRaises(BuildError) as context:
+                Optimizer(_SMALL_CONFIG).run(
+                    model,
+                    weights_path=source,
+                    weights_output=(
+                        Path(directory) / "weights_fp16.safetensors"),
+                )
+            self.assertIn(
+                "exceeds FP16 range", str(context.exception))
+
+    def test_bfloat16_target_skips_conversion(self) -> None:
+        """UT-OPT-019：目标 BF16 时不做权重转换。"""
+        model = build_tiny_model("bfloat16")
+        config = OptimizeConfig(
+            target_precision="bfloat16", max_num_tokens=4)
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "weights.safetensors"
+            output = Path(directory) / "weights_fp16.safetensors"
+            write_safetensors(source, {
+                "model.embed_tokens.weight": (
+                    "BF16", (100, 16),
+                    struct.pack("<H", 0x3F80) * 1600),
+                "lm_head.weight": (
+                    "BF16", (32, 16),
+                    struct.pack("<H", 0x3F80) * 512),
+            })
+            result = Optimizer(config).run(
+                model,
+                weights_path=source,
+                weights_output=output,
+            )
+            self.assertIsNone(result.converted_weights_path)
+            self.assertFalse(output.exists())
 
 
 class ShapePassTest(unittest.TestCase):

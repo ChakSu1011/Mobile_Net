@@ -27,16 +27,67 @@ PYTHONUTF8=1 python -m unittest ToolChain.optimizer.test_optimizer -v
 实际输出（末尾）：
 
 ```text
-Ran 18 tests in 0.087s
+Ran 21 tests in 0.150s
 
 OK
 ```
 
 结论：通过，退出码 0。
 
+### 2.1 真实权重转换验证
+
+命令：
+
+```bash
+PYTHONUTF8=1 python -m ToolChain.pipeline \
+  --config Models/Qwen3/config.json \
+  --weights Models/Qwen3/model.safetensors \
+  --target-precision float16
+```
+
+实际输出（末尾）：
+
+```text
+weights_available 310
+weights_total_bytes 1192099840
+ir_sha256 ebc16228db005814bbb331ab444d1a1ca501243102868ccb063f6463127c3483
+manifest_sha256 dd4c69c96d9a935dd8968771748c825867bf62fb5d295cc1d3fe4024e0d41b50
+```
+
+`optimize_report.json` 的 `weight_conversion`：
+
+```json
+{
+  "converted_count": 310,
+  "copied_count": 0,
+  "output_name": "weights_fp16.safetensors",
+  "source_count": 310,
+  "target_precision": "float16"
+}
+```
+
+补充校验（同一环境执行）：
+
+```text
+dtype BF16 shape (151936, 1024)
+numpy==python True
+first fp16 values (-0.00927734375, 0.03369140625, -0.07470703125, -0.01806640625)
+1.0 -> 003c 1.0
+converted==expected True
+packed==converted True
+packed_sha_matches True
+embed sample match True
+```
+
+结论：通过。numpy 加速路径与纯 Python 路径对真实 BF16 数据输出一致；
+`model.layers.0.self_attn.q_proj.weight` 的源转换结果、转换文件字节与
+模型包内字节完全一致，包内 SHA-256 与 manifest 一致；embedding 前
+1 MiB 抽样一致。
+
 ## 3. 覆盖范围
 
 - BF16 → FP16 等宽精度转换、`target_precision=keep`、非法精度转换报错；
+- BF16 权重字节转换、转换文件 dtype/数值、溢出报错、BF16 目标跳过转换；
 - linear、gather、RMSNorm、Add、GQA 的形状契约；
 - 311 个 activation 张量的静态形状完整性；
 - 生命周期计算与 256 B 对齐；
@@ -48,8 +99,12 @@ OK
 
 1. **显存计划为静态规划值**：`arena_bytes`、`peak_bytes` 基于
    `B=1`、`max_num_tokens=256` 的规划上界，不是设备实测峰值。
-2. **未做量化**：Precision Pass 只做浮点精度选择，INT8/INT4 仅有扩展点。
-3. **无真实权重**：优化对象是 Converter 记录的元数据，未验证真实权重
-   转换后的数值一致性。
-4. **不分配真实显存**：只输出逻辑偏移计划，未接入 Manager/Device。
-5. **仅 Windows 主机验证**：未在目标设备上执行内存规划与 kernel 测试。
+2. **未做量化**：Precision Pass 已定位为量化统一入口，INT8/INT4 仅有
+   扩展点，无实现与测试。
+3. **无全量数值基线**：仅对 1 个完整张量与 1 个 1 MiB 抽样做字节级
+   比对，未对 310 个张量逐一核对，也未与 Transformers 做数值基线对比；
+   FP16 舍入对生成质量的影响未评估。
+4. **溢出策略为硬失败**：有限值绝对值超过 `65504` 时抛 `BuildError`，
+   不 clamp、不缩放；接入其他模型时可能因个别极端权重中断构建。
+5. **不分配真实显存**：只输出逻辑偏移计划，未接入 Manager/Device。
+6. **仅 Windows 主机验证**：未在目标设备上执行内存规划与 kernel 测试。

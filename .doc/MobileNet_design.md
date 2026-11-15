@@ -456,13 +456,13 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 
 **职责**：在不改变数学语义的前提下，在 `ModelGraph` 深拷贝上完成精度、形状、显存三类优化，产出可由 Serializer 固化、可由 Loader 重建的图元数据。
 
-**输入**：`ModelGraph`、`OptimizeConfig`（目标精度、累加精度、batch_size、max_num_tokens、context_length、alignment、复用开关）、模型配置元数据。
+**输入**：`ModelGraph`、`OptimizeConfig`（目标精度、累加精度、batch_size、max_num_tokens、context_length、alignment、复用开关）、模型配置元数据、可选权重路径。
 
-**输出**：优化后的 `ModelGraph`、`MemoryPlan`、JSON 优化报告（精度表、形状表、显存计划、不变量检查结果）。
+**输出**：优化后的 `ModelGraph`、`MemoryPlan`、可选 BF16→FP16 转换权重文件、JSON 优化报告（精度表、形状表、显存计划、权重转换统计、不变量检查结果）。
 
 优化 Pass：
 
-1. **Precision Infer**：BF16 转 FP16；为每个激活与常量确定唯一精度，int64 输入保持不变；对 `rms_norm`、`linear`、`linear_swi_glu`、`linear_per_head_rms_norm_rope`、`mega_attention`、`rope` 写入 `accumulate_precision=float32`。拒绝改变元素大小的转换（如 FP32→FP16），因为本阶段不重排权重字节。后续量化能力统一在本阶段扩展，不新增独立 Pass。
+1. **Precision Infer**：BF16 转 FP16；为每个激活与常量确定唯一精度，int64 输入保持不变；对 `rms_norm`、`linear`、`linear_swi_glu`、`linear_per_head_rms_norm_rope`、`mega_attention`、`rope` 写入 `accumulate_precision=float32`。提供权重路径时，Precision Pass 负责实际执行 BF16→FP16 的权重字节转换并输出转换文件，Serializer 只打包转换后的字节；转换采用流式分块，溢出值报错。拒绝改变元素大小的精度元数据转换（如 FP32→FP16）。后续量化能力统一在本阶段扩展，不新增独立 Pass。
 2. **Shape Infer**：以 `B=batch_size`、`S=max_num_tokens` 为规划上界，按拓扑序逐 op 推导输出形状；校验 gather/linear/linear_swi_glu/linear_per_head_rms_norm_rope/rms_norm/rope/mega_attention/add 的形状契约与 GQA 比例；未知 op 或未解析符号直接报错。
 3. **Memory Manage**：基于静态依赖计算每个 Activation 的 `birth` 与 `last_use`，按 256 B 对齐做 first-fit 复用；输出每个张量的 offset、size、生命周期与峰值；图输入不进入 arena，图输出标记为不可复用；不执行 Dummy Run，也不分配真实显存。
 4. **Report**：输出精度、形状、显存偏移与生命周期摘要，并自动检查精度完整、形状完整、生命周期重叠区间不相交、偏移对齐、arena 覆盖峰值、常量字节一致等不变量；报告为 JSON，可被脚本稳定解析。
@@ -501,7 +501,7 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 
 - **容器格式**：magic `MNETMGF\0`、容器 version、flags（bit0 表示有 `weights.bin`）、manifest offset/length/SHA-256、weights offset/length/SHA-256；Loader 先校验头部与边界，再解析 manifest。
 - **manifest 内容**：直接嵌入 `ModelGraph.to_dict()`，附加 `ir_sha256` 与 `ir_line_count`；`ir_sha256` 由“按该 manifest 重建后的 Graph `dump_ir()`”计算，形成 Loader 自校验闭环。
-- **权重布局**：只打包 `weight_available=true` 且 shape/dtype/byte_size 匹配的常量；不转换 dtype，BF16 字节原样写入；每个权重按 256 B 对齐并计算 SHA-256；不可用权重写入 `reason`。
+- **权重布局**：只打包 `weight_available=true` 且 shape/dtype/byte_size 匹配的常量；Serializer 不转换 dtype，Precision Pass 已按目标精度生成转换文件时直接打包该文件；每个权重按 256 B 对齐并计算 SHA-256；不可用权重写入 `reason`。
 - **完整性校验**：manifest 整体 SHA-256 + 权重文件 SHA-256 + 逐权重 SHA-256；任何截断、篡改或版本不兼容均由 Loader 拒绝。
 - **I/O 绑定序列化**：manifest 记录 `inputs` 名称与 `outputs`（输出名、张量名）绑定；主机指针、设备 storage 不序列化，由 Engine 在运行时通过 `SetInput/SetOutput` 绑定。
 - **图重建**：按常量创建顺序、输入顺序、op 创建顺序、输出绑定顺序重放 Graph 构图 API，最后 `sort_op()`；不能以拓扑序替代 op 创建顺序。
@@ -1007,7 +1007,7 @@ Graph ──▶ Converter ──▶ Optimizer ──▶ Serializer ──▶ Loa
 | 后端操作封装不彻底，Loader/Destroy 出现专有 API 或资源泄漏 | 新后端接入仍需改上层；Destroy 泄漏 | 中 | 公共头隔离检查；所有权与释放顺序规范；TC-LOAD-01/TC-ENG-01 覆盖 Init 失败与重复 Destroy；CI 禁止上层 include 厂商头 |
 | H2D/D2H 拷贝或同步成为延迟瓶颈 | 首 Token 延迟与 Decode 吞吐不达标 | 中 | 主机缓冲复用；异步传输与计算重叠；减少同步点；按后端能力批量传输；性能基线覆盖 I/O 占比 |
 | model.mgf 格式演进 | 旧模型无法加载 | 低 | format_version 与容器 version 分离；向后兼容；迁移工具与文档 |
-| Qwen3 真实权重未入库 | 只能生成 metadata-only 包，无法验证权重字节与数值 | 高 | Serializer 支持 `weights_path`；权重到位后补打包与 SHA-256 测试；当前交付明确标注 metadata-only |
+| Qwen3 真实权重不入 Git | 仓库无法复现加权包；数值基线依赖本地权重 | 中 | 权重按规则仅本地保留；已用本地权重生成 FP16 包并做抽样字节校验；数值基线需在有 PyTorch 的环境补测 |
 | Agent 误解接口或跳过测试 | 返工、质量风险 | 中 | 模块设计文档先行；接口冻结；契约测试；四件套评审门禁 |
 | 真机/驱动资源不到位 | 测试阻塞 | 中 | 提前锁定参考机；准备备用设备；主机侧单测覆盖非设备逻辑 |
 | 性能目标定得过高 | 验收延期 | 中 | 初始目标可校准；阶段一启动时锁定；区分必须项与优化项 |

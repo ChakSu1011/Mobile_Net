@@ -2,16 +2,18 @@
 
 职责：
   把浮点常量与激活统一到目标精度，为数值敏感算子写入 FP32 累加属性，
-  保持整数输入不变，并输出精度统计。
+  保持整数输入不变，并输出精度统计；提供权重路径时执行 BF16→FP16
+  权重字节转换。
 
 边界：
-  - 不做量化、不重排权重、不改变张量字节数；
+  - 不做 INT8/INT4 量化；量化是后续扩展点；
   - 不推导 shape，不分配显存；
-  - 不修改 Graph对象，只修改 ``ModelGraph``。
+  - 不修改 Graph对象，只修改 ``ModelGraph`` 与转换权重文件。
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from ToolChain.common.dtypes import (
@@ -21,6 +23,10 @@ from ToolChain.common.dtypes import (
 from ToolChain.common.errors import BuildError
 from ToolChain.common.model_ir import ModelGraph
 from ToolChain.optimizer.config import OptimizeConfig
+from ToolChain.optimizer.weights import (
+    WeightConversionResult,
+    convert_weights_to_fp16,
+)
 
 _SENSITIVE_OPS = frozenset({
     "rms_norm",
@@ -42,18 +48,33 @@ class PrecisionPass:
           config：优化配置；构造时已校验。
         """
         self._config = config
+        self._weight_conversion: WeightConversionResult | None = None
 
-    def run(self, model_graph: ModelGraph) -> dict[str, Any]:
-        """执行精度转换。
+    @property
+    def weight_conversion(self) -> WeightConversionResult | None:
+        """返回本次权重转换结果；未转换时为 None。"""
+        return self._weight_conversion
+
+    def run(
+        self,
+        model_graph: ModelGraph,
+        *,
+        weights_path: Path | None = None,
+        weights_output: Path | None = None,
+    ) -> dict[str, Any]:
+        """执行精度转换与可选权重字节转换。
 
         参数：
-          model_graph：待修改的模型图；调用方应保证是深拷贝。
+          model_graph：待修改的模型图；调用方应保证是深拷贝；
+          weights_path：可选源 safetensors 文件或目录；
+          weights_output：转换后的 safetensors 输出路径。
 
         返回：
-          精度报告字典。
+          精度报告字典，包含 ``weight_conversion`` 字段。
 
         异常：
-          BuildError：常量精度未知、字节数会变化或属性精度不一致。
+          BuildError：常量精度未知、字节数会变化、属性精度不一致或
+            权重溢出/写出失败。
         """
         target = self._config.target_precision
         accumulate = self._config.accumulate_precision
@@ -97,6 +118,14 @@ class PrecisionPass:
                 op.attrs["accumulate_precision"] = accumulate
 
         self._verify(model_graph, target)
+        self._weight_conversion = None
+        if weights_path is not None and weights_output is not None:
+            self._weight_conversion = convert_weights_to_fp16(
+                model_graph,
+                weights_path,
+                weights_output,
+                target,
+            )
 
         histogram: dict[str, int] = {}
         for tensor in model_graph.tensors.values():
@@ -108,6 +137,10 @@ class PrecisionPass:
             "converted_tensors": converted,
             "kept_integer_tensors": kept_integer,
             "precision_histogram": dict(sorted(histogram.items())),
+            "weight_conversion": (
+                None if self._weight_conversion is None
+                else self._weight_conversion.to_dict()
+            ),
         }
 
     def _verify(self, model_graph: ModelGraph, target: str) -> None:

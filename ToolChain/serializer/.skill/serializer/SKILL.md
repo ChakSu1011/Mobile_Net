@@ -78,8 +78,9 @@ description: 把优化后的 ModelGraph、显存计划与可选权重打包为�
 
 ## 常见陷阱
 
-1. **默认优化目标是 FP16**：直接提供官方 BF16 权重会全部
-   `dtype mismatch`；改用 `--target-precision bfloat16`。
+1. **Serializer 不做 dtype 转换**：它只打包传入的权重字节。流水线会优先
+   传入 Precision Pass 生成的 FP16 转换文件；手工调用时若图精度是 FP16
+   而权重仍是 BF16，会全部 `dtype mismatch`。
 2. **把时间戳写进 manifest**：破坏字节确定性与哈希稳定性。
 3. **只比较 manifest 哈希**：IR 哈希必须由重建图计算，不能复用转换期
    缓存值。

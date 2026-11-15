@@ -104,13 +104,21 @@ def run_pipeline(
         adapter, config_path, weights_path=weights_path)
     write_conversion_outputs(
         conversion, work_dir / "converter")
-    optimization = Optimizer(config).run(conversion.model_graph)
+    converted_weights = (
+        work_dir / "optimizer" / "weights_fp16.safetensors")
+    optimization = Optimizer(config).run(
+        conversion.model_graph,
+        weights_path=weights_path,
+        weights_output=converted_weights,
+    )
     write_optimization_outputs(
         optimization, work_dir / "optimizer")
     serialization = serialize_package(
         optimization,
         output_dir,
-        weights_path=weights_path,
+        weights_path=(
+            optimization.converted_weights_path or weights_path
+        ),
         overwrite=overwrite,
     )
     package = load_package(output_dir, verify=True)

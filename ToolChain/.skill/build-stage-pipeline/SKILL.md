@@ -75,12 +75,16 @@ description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer 
   314（额外 2 个 Input op + 1 个 Output op）；不要混用两个口径。
 - **精度只做等宽转换**：BF16→FP16 允许（2 B→2 B）；FP32→FP16 改变元素
   大小时必须报错，禁止静默截断。
+- **权重转换归 Precision Pass**：目标 FP16 且提供源权重时，Precision Pass
+  流式转换 BF16 字节并写出 `weights_fp16.safetensors`，转换文件 dtype=F16；
+  有限值绝对值超过 65504 必须报错，禁止 clamp。
 - **Shape 先于 Memory**：Memory Pass 入口必须拒绝未解析 activation 形状，
   不允许在符号维上做显存规划。
 - **显存不重叠**：生命周期重叠的张量 `[offset, offset+size)` 不得相交；
   所有 offset 按 alignment 对齐；图输入与常量不进 arena，图输出不可复用。
-- **序列化不改字节**：Serializer 只打包权重原始字节，不做 dtype 转换；
-  因此源权重 dtype 必须与优化后图精度一致。
+- **序列化不改字节**：Serializer 只打包传入的权重字节，不做 dtype 转换；
+  流水线优先传入 Precision Pass 的转换文件，因此源权重是 BF16 也能得到
+  FP16 包；手工调用时必须自行保证图精度与权重 dtype 一致。
 - **IR 哈希闭环**：manifest 记录重建图 `dump_ir()` 的 SHA-256 与行数；
   Loader 重建后必须复算并比对。
 - **确定性**：相同输入生成字节一致的 `model.mgf`；manifest 用 canonical
@@ -113,7 +117,8 @@ description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer 
 ### 3. Optimizer
 
 - Precision Pass：按目标精度转换浮点张量；输入保持 `int64`；未知精度从
-  生产 op 的 `precision` 属性继承；元素大小变化报错。
+  生产 op 的 `precision` 属性继承；元素大小变化报错；提供权重路径且目标
+  为 FP16 时，按常量映射流式转换 BF16 权重并写出转换文件。
 - Shape Pass：把 `B`、`S` 绑定为规划值，按 op 规则推导输出形状；
   校验 linear K 维、GQA 比例、RMSNorm 整除、Add 同形；标记输出不可复用。
 - Memory Pass：按拓扑序计算 `birth`/`last_use`；输出绑定视为下标 `N`
@@ -149,7 +154,7 @@ PYTHONUTF8=1 python -m ToolChain.pipeline \
   --output Models/Qwen3/artifacts/qwen3_0_6b \
   --work-dir Models/Qwen3/artifacts/qwen3_0_6b_work \
   --weights /path/to/safetensors \
-  --target-precision bfloat16 \
+  --target-precision float16 \
   --max-num-tokens 256 \
   --context-length 40960
 ```
@@ -193,9 +198,11 @@ PYTHONUTF8=1 python -m unittest discover -s Models/Qwen3 -p 'test_*.py' -v
 2. **用 torch 读 safetensors**：Build 不依赖 torch。用
    `ToolChain/common/safetensors.py` 直接解析头部，否则会在无 PyTorch 环境失败，
    且 BF16 无法用 numpy 直接表达。
-3. **Serializer 期待 BF16 源权重**：默认优化目标是 FP16。直接给官方 BF16
-   权重会得到 `dtype mismatch` 且全部不可用；改用
-   `--target-precision bfloat16`，或先将权重转换为 FP16。
+3. **误解权重 dtype 链路**：Precision Pass 在 `--target-precision float16`
+   且提供 `--weights` 时会把 BF16 权重转换为
+   `work/optimizer/weights_fp16.safetensors`，Serializer 自动优先打包
+   该文件；若改回 `bfloat16`，则不转换并原样打包源权重。手工调用
+   Serializer 时不会自动转换，必须自行保证图精度与权重 dtype 一致。
 4. **忘记清输入 pitch**：Shape Pass 只应清输入 pitch；常量 pitch 必须保留，
    否则重建 Graph 时 `create_constant` 的 pitch 与原始图不一致，IR 哈希漂移。
 5. **报告里写时间戳**：serializer 的 `model.mgf` 和确定性测试要求字节稳定；

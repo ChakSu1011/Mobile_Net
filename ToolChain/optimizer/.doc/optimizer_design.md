@@ -23,7 +23,8 @@
 ### 1.2 目标
 
 1. 实现 Precision Infer：把 BF16 激活/权重策略转换为 FP16，记录 FP32
-   累加策略，保持 int64 输入不变。
+   累加策略，保持 int64 输入不变；当提供权重路径时，实际执行 BF16→FP16
+   权重字节转换并输出转换后的 safetensors。
 2. 实现 Shape Infer：以 `B=1`、`S=max_num_tokens` 为规划上界，推导所有
    激活张量形状并校验算子形状契约。
 3. 实现 Memory Manage：基于拓扑序生命周期做 Activation 复用排版，输出
@@ -35,7 +36,7 @@
 ### 1.3 非目标
 
 - 不修改 Graph 的图对象；不新增/删除 op。
-- 不实现量化（INT8/INT4）；只在策略结构中预留扩展字段。
+- 当前不实现 INT8/INT4 量化；Precision Pass 是后续量化的统一扩展点。
 - 不做 Dummy Run 真实执行；生命周期由静态依赖分析得到。
 - 不分配真实显存；只输出逻辑偏移计划。
 - 不处理 KV Cache、padding mask 与动态 batch > 1。
@@ -48,7 +49,8 @@
 | --- | --- | --- |
 | FR-OPT-01 | Precision Pass 必须把所有浮点激活与常量的目标精度统一为配置值（默认 `float16`） | 所有 activation/constant 的 `precision` 为目标值；int64 输入保持 `int64` |
 | FR-OPT-02 | Precision Pass 必须在数值敏感算子属性中写入 `accumulate_precision=float32` | `rms_norm`、`linear`、`linear_swi_glu`、`linear_per_head_rms_norm_rope`、`mega_attention`、`rope` 均带该属性 |
-| FR-OPT-03 | 精度转换不得改变张量字节数；源/目标元素大小不同的转换必须报错 | BF16→FP16 字节数不变；FP32→FP16 抛 `BuildError` |
+| FR-OPT-03 | 精度元数据转换不得改变张量字节数；源/目标元素大小不同的转换必须报错 | BF16→FP16 字节数不变；FP32→FP16 抛 `BuildError` |
+| FR-OPT-13 | 提供权重路径时，Precision Pass 必须把 BF16 权重字节转换为 FP16，并写出供 Serializer 使用的转换文件 | 转换文件 dtype=F16；310 个权重可打包；溢出值报错 |
 | FR-OPT-04 | Shape Pass 必须为每个 activation 推导出完整静态形状 | 不存在空 shape 或符号维 |
 | FR-OPT-05 | Shape Pass 必须校验算子形状契约（K 维、GQA 比例、RMSNorm 整除、Add 同形） | 非法形状抛 `BuildError` 并包含 op 名 |
 | FR-OPT-06 | Shape Pass 必须以 `max_num_tokens` 绑定 `S`，并校验 `max_num_tokens <= context_length` | 规划上下界写入报告与 `ModelGraph.metadata` |
@@ -64,7 +66,7 @@
 | 编号 | 类别 | 要求 |
 | --- | --- | --- |
 | NFR-OPT-01 | 确定性 | 两次运行产生逐字段一致的 `ModelGraph`、显存计划与报告（不含时间戳） |
-| NFR-OPT-02 | 性能 | Qwen3-0.6B 单次优化 < 5 s，内存增量 < 50 MB |
+| NFR-OPT-02 | 性能 | Qwen3-0.6B 激活/形状/显存优化 < 5 s；权重转换流式处理，内存增量 < 64 MB |
 | NFR-OPT-03 | 可诊断 | 错误包含 pass 名、op 名、张量名与实际/期望值 |
 | NFR-OPT-04 | 可组合 | 三个 Pass 可独立运行，也可按 Precision→Shape→Memory 顺序运行 |
 | NFR-OPT-05 | 规范 | Google Style 与中文注释；不依赖 torch/transformers |
@@ -106,7 +108,8 @@ Pipeline 在 `ModelGraph` 的深拷贝上执行，保证输入对象不被修改
 | 文件 | 职责 |
 | --- | --- |
 | `ToolChain/optimizer/__init__.py` | 导出 `Optimizer`、`OptimizeConfig`、`OptimizeResult` |
-| `ToolChain/optimizer/precision.py` | Precision Pass |
+| `ToolChain/optimizer/precision.py` | Precision Pass（精度元数据 + 权重转换） |
+| `ToolChain/optimizer/weights.py` | BF16→FP16 权重流式转换与转换文件写出 |
 | `ToolChain/optimizer/shape.py` | Shape Pass |
 | `ToolChain/optimizer/memory.py` | 生命周期分析与显存排版 |
 | `ToolChain/optimizer/report.py` | 报告结构与不变量检查 |
@@ -117,7 +120,8 @@ Pipeline 在 `ModelGraph` 的深拷贝上执行，保证输入对象不被修改
 
 1. 深拷贝输入 `ModelGraph`。
 2. Precision Pass：确定目标精度，改写张量精度与算子精度属性，
-   写入累加精度；校验字节数不变。
+   写入累加精度；校验字节数不变；提供权重路径时流式转换 BF16→FP16
+   并写出转换文件。
 3. Shape Pass：按拓扑序逐 op 推导输出形状并写回张量；校验形状契约。
 4. Memory Pass：计算生命周期、排序、first-fit 复用、生成 `MemoryPlan`。
 5. Report：汇总统计并执行不变量检查。
@@ -131,7 +135,7 @@ Pipeline 在 `ModelGraph` 的深拷贝上执行，保证输入对象不被修改
 | 形状推导 | 静态规则表 + 拓扑序 | 确定性、可测试、无需执行 | 新算子需补规则 |
 | 动态维 | 固定 `B=1`、`S=max_num_tokens` 规划 | 与首期 prefill 图一致 | 不支持动态 batch |
 | 显存复用 | 生命周期区间 + first-fit | 实现简单、可验证 | 非全局最优 |
-| 精度策略 | BF16→FP16，FP32 累加 | 与引擎主路径一致 | 数值需后续真机对齐 |
+| 精度策略 | 精度元数据 + 可选 BF16→FP16 权重转换，FP32 累加 | 与引擎主路径一致 | 数值需后续真机对齐 |
 | 报告格式 | JSON | 可审查、可脚本校验 | 体积大于二进制日志 |
 
 ## 4. 详细设计
@@ -180,6 +184,8 @@ class OptimizeResult:
     config: OptimizeConfig
     memory_plan: MemoryPlan
     report: dict[str, Any]
+    converted_weights_path: Path | None
+    weight_conversion: dict[str, Any]
 ```
 
 ### 4.2 接口定义
@@ -187,10 +193,14 @@ class OptimizeResult:
 ```python
 class Optimizer:
     def __init__(self, config: OptimizeConfig | None = None) -> None: ...
-    def run(self, model_graph: ModelGraph) -> OptimizeResult: ...
+    def run(self, model_graph: ModelGraph, *,
+            weights_path: Path | None = None,
+            weights_output: Path | None = None) -> OptimizeResult: ...
 
 class PrecisionPass:
-    def run(self, model_graph: ModelGraph) -> dict[str, Any]: ...
+    def run(self, model_graph: ModelGraph, *,
+            weights_path: Path | None = None,
+            weights_output: Path | None = None) -> dict[str, Any]: ...
 
 class ShapePass:
     def run(self, model_graph: ModelGraph) -> dict[str, Any]: ...
@@ -206,7 +216,7 @@ class MemoryPass:
 | 张量类别 | 处理 |
 | --- | --- |
 | `input.input_ids`、`input.position_ids` | 保持 `int64` |
-| constant（BF16） | 改为目标精度（FP16），`byte_size` 不变 |
+| constant（BF16） | 改为目标精度（FP16），`byte_size` 不变；提供权重时转换字节 |
 | activation | 改为目标精度 |
 | 图输出张量 | 跟随其生产 op |
 
@@ -228,7 +238,29 @@ class MemoryPass:
 同时把 op 的 `precision` 属性改为目标精度；保留 `bias=false`、
 `transpose_weight` 等既有属性。
 
-#### 4.3.3 不变量
+#### 4.3.3 权重字节转换
+
+当 `target_precision="float16"` 且提供 `weights_path` 时：
+
+1. 读取源 safetensors 索引，按 `ModelGraph.constants` 的 `weight_source`
+   映射到源张量；
+2. 对 dtype 为 BF16 的张量，按块读取原始字节，解码为 FP32，再按
+   round-to-nearest-even 转为 FP16；
+3. 对已经是 FP16 的张量原样复制；其他 dtype 原样复制，由 Serializer
+   在打包阶段报告 `dtype mismatch`；
+4. 写出转换后的 safetensors 到 `weights_output`，张量名、shape 保持
+   不变，dtype 为 F16；
+5. 转换文件只包含图中常量引用的源张量，按常量顺序写出，保证确定性；
+6. 转换采用流式分块，内存增量与单块大小相关，不一次性加载完整权重。
+
+数值策略：
+
+- 有限值绝对值超过 FP16 最大值 65504 时抛 `BuildError`，不静默 clamp；
+- NaN/Inf 按 BF16 原始语义保留；
+- 转换统计写入优化报告：`source_count`、`converted_count`、
+  `copied_count`、`target_precision`。
+
+#### 4.3.4 不变量
 
 - 所有非 int64 张量精度 == 目标精度（`keep` 时 == 源精度）；
 - `byte_size` 在转换前后相等；

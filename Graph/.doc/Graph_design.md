@@ -85,7 +85,7 @@ Runtime 端在端侧 Device 上加载并执行静态图。`Graph` 是 Runtime �
 | FR-05 | `CreateOutput` 创建只消费已有 tensor、不产生新 tensor 的输出 op，登记到输出列表。 | UT-C02、UT-P02 |
 | FR-06 | `SortOp` 从输出 op 出发做 post DFS，生成拓扑序 `op_list_`，constant 作为依赖叶子，不进入执行序列；重复调用结果稳定。 | UT-C02、UT-P02、UT-P08 |
 | FR-07 | 提供常量、输入 op、输出 op、Sample op、执行序列的只读查询。 | UT-C02、UT-C03、UT-P02 |
-| FR-14 | `CreateSample` 创建单输入、单输出的 `kSample` op，输出 tensor 名为 `<name>.out`；`attr` 未指定时默认 `method=argmax`、`axis=-1`、`precision=int64`；登记到 Sample 列表。 | UT-C02、UT-C04、UT-P11 |
+| FR-14 | `CreateSample` 创建单输入、单输出的 `kSample` op，输出 tensor 名为 `<name>.out`；`attr` 未指定时默认 `method=argmax`、`axis=-1`、`precision=int64`；登记到 Sample 列表。 | UT-C05、UT-P11 |
 | FR-08 | `GraphEnv` 以名称为键注册和查询共享 Storage，拒绝空名称和重复名称。 | UT-C03 |
 | FR-09 | `OpEnv` 提供 `Init`、`Forward`、`NeedTempData`；`MegaAttentionOpEnv` 作为派生示例。 | UT-C03 |
 | FR-10 | Python 绑定暴露 Graph、Tensor、Precision、Layout、DeviceType、OpType 和构图/排序/dump 接口；不暴露 Op、Storage、Shape。 | UT-P01 至 UT-P10 |

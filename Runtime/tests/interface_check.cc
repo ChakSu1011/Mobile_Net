@@ -13,6 +13,8 @@
 //   Runtime 下全部公共头文件、C++17 编译器。
 
 #include "Runtime/backend/backend.h"
+#include "Runtime/backend/kernel.h"
+#include "Runtime/backend/kernel_types.h"
 #include "Runtime/common/data_types.h"
 #include "Runtime/common/io_binder.h"
 #include "Runtime/common/kv_allocator.h"
@@ -27,7 +29,6 @@
 #include "Runtime/destroy/destroyer.h"
 #include "Runtime/engine/engine.h"
 #include "Runtime/executor/executor.h"
-#include "Runtime/kernel/kernel.h"
 #include "Runtime/kvcache/kv_cache_manager.h"
 #include "Runtime/loader/loader.h"
 #include "Runtime/scheduler/scheduler.h"

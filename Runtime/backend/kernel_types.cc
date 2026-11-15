@@ -1,46 +1,14 @@
-// 模块：Kernel 公共枚举实现
+// 模块：Backend/Kernel 公共枚举实现
 //
 // 职责：
-//   实现算子类型、拷贝方向、融合阶段与 RoPE 布局的名称查询。
+//   实现 I/O 拷贝方向、Decoder Block 融合阶段与 RoPE 布局的名称查询。
 //
 // 边界：
-//   不包含 Kernel 执行逻辑。
+//   不包含 Kernel 执行逻辑，也不定义算子类型。
 
-#include "Runtime/kernel/kernel_types.h"
+#include "Runtime/backend/kernel_types.h"
 
 namespace mobilenet {
-
-const char* OpTypeName(OpType op_type) {
-  switch (op_type) {
-    case OpType::kUnknown:
-      return "kUnknown";
-    case OpType::kInput:
-      return "kInput";
-    case OpType::kOutput:
-      return "kOutput";
-    case OpType::kEmbedding:
-      return "kEmbedding";
-    case OpType::kRmsNorm:
-      return "kRmsNorm";
-    case OpType::kQkvProjection:
-      return "kQkvProjection";
-    case OpType::kAttention:
-      return "kAttention";
-    case OpType::kResidualAdd:
-      return "kResidualAdd";
-    case OpType::kMlpGateUpAct:
-      return "kMlpGateUpAct";
-    case OpType::kMlpDownResidual:
-      return "kMlpDownResidual";
-    case OpType::kLmHead:
-      return "kLmHead";
-    case OpType::kSampling:
-      return "kSampling";
-    case OpType::kCast:
-      return "kCast";
-  }
-  return "kUnknown";
-}
 
 const char* CopyKindName(CopyKind copy_kind) {
   switch (copy_kind) {
@@ -86,11 +54,6 @@ const char* RopeLayoutName(RopeLayout layout) {
       return "kGptJ";
   }
   return "kUnknown";
-}
-
-bool IsComputeOp(OpType op_type) {
-  return op_type != OpType::kUnknown && op_type != OpType::kInput &&
-         op_type != OpType::kOutput;
 }
 
 }  // namespace mobilenet

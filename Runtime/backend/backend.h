@@ -13,7 +13,7 @@
 //
 // 依赖：
 //   Runtime/common/status.h、Runtime/common/data_types.h、
-//   Runtime/kernel/kernel.h、Graph/include/op_type.h。
+//   Runtime/backend/kernel.h、Graph/include/op_type.h。
 
 #ifndef MOBILENET_RUNTIME_BACKEND_BACKEND_H_
 #define MOBILENET_RUNTIME_BACKEND_BACKEND_H_
@@ -25,9 +25,9 @@
 #include <vector>
 
 #include "Graph/include/op_type.h"
+#include "Runtime/backend/kernel.h"
 #include "Runtime/common/data_types.h"
 #include "Runtime/common/status.h"
-#include "Runtime/kernel/kernel.h"
 
 namespace mobilenet {
 

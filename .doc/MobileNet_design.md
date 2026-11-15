@@ -211,7 +211,7 @@ Agent 智能体在服务侧的应用部署已经非常广泛，手机端或者�
 | 运行时核心层 | Executor | Packing、主机 I/O 绑定、按 `GetOrderlyOPList()` 驱动 OpEnv（H2D/计算/Sample/D2H）、结果回写 | C++，`Runtime/executor/` |
 | 运行时核心层 | Engine | 统一门面、生命周期、推理循环、线程模型，持有 Graph 与 OpEnv | C++，`Runtime/engine/` |
 | 运行时核心层 | Destroy | 资源有序释放（OpEnv、Kernel、Buffer、GraphEnv、Graph、Backend） | C++，`Runtime/destroy/` |
-| 执行后端层 | Kernel 公共契约 | Kernel/KernelContext/KernelDesc、OpType/DataType 能力描述 | C++，`Runtime/kernel/` |
+| 执行后端层 | Kernel 公共契约 | Kernel/KernelContext/KernelDesc、OpType/DataType 能力描述 | C++，`Runtime/backend/` |
 | 执行后端层 | Backend 框架 | Backend 抽象、后端注册表、运行时选择、能力校验 | C++，`Runtime/backend/`（公共部分） |
 | 执行后端层 | OCL 后端（含 Kernel） | OCL 设备/内存/队列、Kernel 编译缓存、Qwen3 算子 Kernel、后端自注册 | C++/OCL，`Runtime/backend/ocl/` |
 | 执行后端层 | 后端模板与契约测试 | 新后端骨架目录、统一一致性测试 | C++，`Runtime/backend/template/`、`Tests/backend_conformance/` |
@@ -266,9 +266,10 @@ MobileNet/
 │   ├── executor/
 │   ├── engine/
 │   ├── destroy/
-│   ├── kernel/            # Kernel 公共契约：Kernel/KernelContext/KernelDesc、OpType/DataType
-│   ├── backend/           # Backend 框架与后端插件目录
+│   ├── backend/           # Backend 框架、Kernel 公共契约与后端插件目录
 │   │   ├── backend.h/.cc  # Backend 抽象、配置、能力
+│   │   ├── kernel.h/.cc   # Kernel/KernelDesc 公共契约
+│   │   ├── kernel_types.h # Backend/Kernel 公共枚举
 │   │   ├── backend_registry.h/.cc  # 注册表与自注册宏
 │   │   ├── ocl/           # OpenCL 后端：Backend 实现、kernels、自注册、CMakeLists
 │   │   └── template/      # 新后端模板目录（复制后改名接入）
@@ -669,7 +670,7 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 **边界**：
 
 - 后端只负责设备、内存、Kernel 与权重预处理；不参与图优化、调度、KV 策略与采样。
-- 上层只依赖 `Runtime/backend/` 与 `Runtime/kernel/` 的公共契约，不得包含后端专有头文件。
+- 上层只依赖 `Runtime/backend/` 的公共契约（含 `backend/kernel.h`），不得包含后端专有头文件。
 - 首期只实现 OCL；其他后端只验证插件机制，不在阶段一验收。
 - 后端在编译期按目标平台选择并链接，不支持运行时热插拔。
 - 公共契约变更需架构评审并更新本文档；单个后端目录不得修改公共接口。
@@ -679,7 +680,7 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 
 | 层 | 内容 | 位置 |
 | --- | --- | --- |
-| Kernel 公共契约 | Kernel、KernelContext、KernelDesc、OpType/DataType | `Runtime/kernel/` |
+| Kernel 公共契约 | Kernel、KernelContext、KernelDesc、OpType/DataType | `Runtime/backend/` |
 | Backend 框架 | Backend、BackendConfig、BackendCapability、BackendRegistry | `Runtime/backend/` |
 | 后端实现 | Backend 派生类（含 H2D/D2H）+ 该后端全部 Kernel + 自注册 | `Runtime/backend/<name>/` |
 

@@ -23,7 +23,7 @@
 
 离线工具链（Converter → Optimizer → Serializer）已打通，Graph C++17 runtime IR 已实现（Input/Sample/Output、SortOp、GraphEnv/OpEnv）。首个模型包为 `Models/Qwen3/artifacts/qwen3_0_6b/`：图输入 2、常量 310、计算 op 312、activation 312、IR 633 行、FP16 权重约 1.19 GB。
 
-Runtime 目前只有 `common/`、`backend/backend.h`、`kernel/` 头文件；`engine/`、`loader/`、`scheduler/`、`kvcache/`、`destroy/`、`executor/` 尚未定义接口。RuntimeCore 与 ExecBackend 将并行开发，必须先冻结接口与数据契约。
+Runtime 目前只有 `common/`、`backend/backend.h`（含 `backend/kernel.h`）头文件；`engine/`、`loader/`、`scheduler/`、`kvcache/`、`destroy/`、`executor/` 尚未定义接口。RuntimeCore 与 ExecBackend 将并行开发，必须先冻结接口与数据契约。
 
 ### 1.2 目标
 
@@ -187,7 +187,7 @@ Status Engine::SetModules(EngineModules modules);
 | Destroy | `Runtime/destroy/` | RuntimeCore | `IDestroyer` | 逆序释放、幂等、回滚 | 资源创建 |
 | Executor | `Runtime/executor/` | ExecBackend | `IExecutor` | 消费 plan、绑定 I/O、按拓扑序驱动 OpEnv、回读 token | 调度、KV 分配、后端专有分支 |
 | Backend | `Runtime/backend/` | ExecBackend | `Backend` | 设备/上下文/缓冲/传输/权重转换/Kernel/同步/能力 | 调度、KV 策略、图语义 |
-| Kernel | `Runtime/kernel/` | ExecBackend | `Kernel` | 单节点执行、`KernelContext` | 图执行、内存管理 |
+| Kernel | `Runtime/backend/kernel.h` | ExecBackend | `Kernel` | 单节点执行、`KernelContext` | 图执行、内存管理 |
 | Graph | `Graph/` | ToolChain | `Graph`（类接口） | 图容器、构图、SortOp、查询、GraphEnv/OpEnv | 执行、显存分配、调度 |
 
 依赖方向：Common ← 所有模块；Loader → Graph/Backend/OpEnvFactory；Scheduler → KvAllocator；Engine → 全部；Executor → Graph/Backend/Kernel；Backend/Kernel → Common。**禁止反向依赖**。
@@ -888,8 +888,9 @@ Runtime/
 ├── engine/engine.h                 # Engine
 ├── destroy/destroyer.h             # IDestroyer
 ├── executor/executor.h             # IExecutor（ExecBackend）
-├── backend/backend.h               # Backend（ExecBackend）
-└── kernel/kernel.h                 # Kernel（ExecBackend）
+├── backend/backend.h               # Backend/Buffer/BackendCapability（ExecBackend）
+├── backend/kernel.h                # Kernel/KernelDesc 公共契约（ExecBackend）
+└── backend/kernel_types.h          # Backend/Kernel 公共枚举（ExecBackend）
 ```
 
 构建：后续阶段由 `Runtime/CMakeLists.txt` 链接 Graph 静态库（`GRAPH_BUILD_PYTHON=OFF`）；各模块独立 target 与测试 target。本阶段只要求头文件可 `-fsyntax-only`。
@@ -970,7 +971,8 @@ Runtime/
 | `Runtime/destroy/destroyer.h` | `IDestroyer/DestroyContext` |
 | `Runtime/executor/executor.h` | `IExecutor` |
 | `Runtime/backend/backend.h` | `Backend/Buffer/BackendCapability` |
-| `Runtime/kernel/kernel.h` | `Kernel/KernelDesc/KernelContext` |
+| `Runtime/backend/kernel.h` | `Kernel/KernelDesc/KernelContext` |
+| `Runtime/backend/kernel_types.h` | `CopyKind/BlockStage/RopeLayout` |
 
 ## 附录 B：跨终端契约
 
@@ -985,7 +987,7 @@ Runtime/
 | C5 | `IExecutor` 按本文件签名实现；不释放 KV、不做停止判定 |
 | C6 | KV/workspace 契约：每层 K/V 视图、slot 公式、GraphEnv shared storage 登记与回填 |
 | C7 | 错误码只接受 `Runtime/common/status.h` 的追加式扩展 |
-| C8 | 构建分工：RuntimeCore 维护 `Runtime/CMakeLists.txt`；ExecBackend 提供 executor/backend/kernel 子构建 |
+| C8 | 构建分工：RuntimeCore 维护 `Runtime/CMakeLists.txt`；ExecBackend 提供 executor/backend（含 backend/kernel）子构建 |
 | C9 | `BackendCapability.attention_block_size` 与 `kv_layout` 由 Attention Kernel 声明；KVCache 据此计算块大小与容量 |
 
 **与 ToolChain（G1–G2）**

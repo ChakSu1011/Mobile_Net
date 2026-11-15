@@ -8,22 +8,21 @@
 //   - 本文件不定义 Backend 接口（见 Runtime/backend/backend.h）；
 //   - 不定义 KernelContext 的字段（由 Executor 侧定义并构造），避免 Kernel
 //     公共头文件依赖 Graph 数据结构；
-//   - 算子类型统一使用 Graph 的 runtime_graph::OpType，不再使用
-//     kernel_types.h 中的遗留枚举。
+//   - 算子类型统一使用 Graph 的 runtime_graph::OpType。
 //
 // 依赖：
 //   Runtime/common/status.h、Runtime/common/data_types.h、
-//   Runtime/kernel/kernel_types.h、Graph/include/op_type.h。
+//   Runtime/backend/kernel_types.h、Graph/include/op_type.h。
 
-#ifndef MOBILENET_RUNTIME_KERNEL_KERNEL_H_
-#define MOBILENET_RUNTIME_KERNEL_KERNEL_H_
+#ifndef MOBILENET_RUNTIME_BACKEND_KERNEL_H_
+#define MOBILENET_RUNTIME_BACKEND_KERNEL_H_
 
 #include <string>
 
 #include "Graph/include/op_type.h"
+#include "Runtime/backend/kernel_types.h"
 #include "Runtime/common/data_types.h"
 #include "Runtime/common/status.h"
-#include "Runtime/kernel/kernel_types.h"
 
 namespace mobilenet {
 
@@ -85,4 +84,4 @@ class Kernel {
 
 }  // namespace mobilenet
 
-#endif  // MOBILENET_RUNTIME_KERNEL_KERNEL_H_
+#endif  // MOBILENET_RUNTIME_BACKEND_KERNEL_H_

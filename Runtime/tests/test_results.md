@@ -44,30 +44,31 @@ python -m ziglang c++ -std=c++17 -Wall -Wextra -I "d:/Mobile_Net" \
 实际输出：
 
 ```text
-header refs: 19
-OK   Runtime/backend/backend.h
-OK   Runtime/common/data_types.h
-OK   Runtime/common/io_binder.h
-OK   Runtime/common/kv_allocator.h
-OK   Runtime/common/kv_view.h
-OK   Runtime/common/model_config.h
-OK   Runtime/common/op_env_factory.h
-OK   Runtime/common/plan.h
-OK   Runtime/common/request.h
-OK   Runtime/common/resource_stack.h
-OK   Runtime/common/runtime_config.h
-OK   Runtime/common/status.h
-OK   Runtime/destroy/destroyer.h
-OK   Runtime/engine/engine.h
-OK   Runtime/executor/executor.h
-OK   Runtime/kernel/kernel.h
-OK   Runtime/kvcache/kv_cache_manager.h
-OK   Runtime/loader/loader.h
-OK   Runtime/scheduler/scheduler.h
+header refs: 20
+OK    Runtime/backend/backend.h
+OK    Runtime/backend/kernel.h
+OK    Runtime/backend/kernel_types.h
+OK    Runtime/common/data_types.h
+OK    Runtime/common/io_binder.h
+OK    Runtime/common/kv_allocator.h
+OK    Runtime/common/kv_view.h
+OK    Runtime/common/model_config.h
+OK    Runtime/common/op_env_factory.h
+OK    Runtime/common/plan.h
+OK    Runtime/common/request.h
+OK    Runtime/common/resource_stack.h
+OK    Runtime/common/runtime_config.h
+OK    Runtime/common/status.h
+OK    Runtime/destroy/destroyer.h
+OK    Runtime/engine/engine.h
+OK    Runtime/executor/executor.h
+OK    Runtime/kvcache/kv_cache_manager.h
+OK    Runtime/loader/loader.h
+OK    Runtime/scheduler/scheduler.h
 missing: []
 ```
 
-结论：文档引用的 19 个头文件全部存在，无缺失。
+结论：文档引用的 20 个头文件全部存在，无缺失。
 
 ### 5.2 TC-ARCH-03：依赖方向检查
 
@@ -102,10 +103,35 @@ missing: []
 的指针成员，满足“可动态绑定不同实现”的架构要求；`OpEnvFactory` 与
 `ResourceStack` 为内部辅助成员。
 
+### 5.4 目录迁移后的实现文件编译
+
+检查方式：编译与本次 `Runtime/kernel/` → `Runtime/backend/` 迁移相关的 `.cc`
+文件。
+
+命令：
+
+```bash
+for f in Runtime/common/status.cc Runtime/common/data_types.cc \
+         Runtime/backend/kernel_types.cc; do
+  python -m ziglang c++ -std=c++17 -Wall -Wextra -I "d:/Mobile_Net" \
+    -c "$f" -o "TempSpace/runtime_interface_check_20261116_070500/$(basename "$f" .cc).o"
+done
+```
+
+实际输出：
+
+```text
+OK Runtime/common/status.cc
+OK Runtime/common/data_types.cc
+OK Runtime/backend/kernel_types.cc
+```
+
+结论：迁移后的 Kernel 枚举实现与公共状态/类型实现均可编译，无警告。
+
 ## 6. 结论
 
 - 全部 Runtime 公共头文件（common、loader、scheduler、kvcache、engine、
-  destroy、executor、backend、kernel）编译通过，`-Wall -Wextra` 无警告。
+  destroy、executor、backend/kernel）编译通过，`-Wall -Wextra` 无警告。
 - 接口声明与 `Runtime/.doc/Runtime_design.md` 的接口清单一致。
 - 未覆盖项：链接、实现逻辑、运行时行为、设备后端、数值正确性。这些在
   后续阶段按模块补充测试结果。

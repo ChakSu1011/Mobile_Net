@@ -102,9 +102,9 @@ description: 从 Runtime 静态图设计出发，实现不依赖 torch/ATen 的 
 - `CreateInput`：legacy 写默认 `Storage{}`，显式重载把 precision/layout
   写入 `attr["storage"]`；输入 op 与 tensor 同名。
 - `CreateOutput`：只创建 `kOutput` op，不产生 tensor，写入默认 storage attr。
-- `CreateSample`：只创建 `kSample` op 与 `<name>.out` tensor；attr 缺少
-  `method`/`axis`/`precision` 时补 `argmax`/`-1`/`int64`；登记 Sample
-  列表；`CreateOp` 拒绝 `kSample`。
+- `CreateSample`：只创建唯一 `kSample` op 与 `<name>.out` tensor；attr
+  缺少 `method`/`axis`/`precision` 时补 `argmax`/`-1`/`int64`；重复创建
+  报错；`GetSampleOp()` 返回单指针；`CreateOp` 拒绝 `kSample`。
 - `SortOp`：清空执行序列；无输出返回状态错误；从输出做 post DFS；常量跳过；
   非 const 无 producer 报错；重复排序结果稳定。
 - 析构函数先清空所有 OpEnv，再让成员逆序析构。

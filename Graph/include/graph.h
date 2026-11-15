@@ -135,7 +135,7 @@ class Graph {
   //   INVALID_ARGUMENT。
   virtual Status CreateOutput(const std::string& name, Tensor* input);
 
-  // 创建 Sample op，默认 method=argmax、axis=-1、precision=int64，
+  // 创建唯一 Sample op，默认 method=argmax、axis=-1、precision=int64，
   // 并返回输出 token tensor。
   //
   // 参数：
@@ -143,8 +143,8 @@ class Graph {
   //   input：logits tensor，必须是当前 graph 持有的 tensor；
   //   output：输出参数，返回新创建的 <name>.out tensor，调用方不拥有所有权。
   // 返回：
-  //   成功返回 OK；参数非法、名称重复或 tensor 不属于当前 graph 时返回
-  //   INVALID_ARGUMENT。
+  //   成功返回 OK；参数非法、名称重复、已存在 Sample 或 tensor 不属于
+  //   当前 graph 时返回 INVALID_ARGUMENT。
   virtual Status CreateSample(const std::string& name, Tensor* input,
                               Tensor** output);
 
@@ -180,8 +180,8 @@ class Graph {
   // 返回所有输出 op。
   virtual const std::vector<Op*>& GetAllOutputOp();
 
-  // 返回所有 Sample op。
-  virtual const std::vector<Op*>& GetAllSampleOp();
+  // 返回唯一 Sample op；尚未创建时返回 nullptr。
+  virtual Op* GetSampleOp();
 
   // 返回拓扑排序后的执行 op 序列。
   virtual const std::vector<Op*>& GetOrderlyOPList();
@@ -221,7 +221,7 @@ class Graph {
   std::vector<Tensor*> constant_tensor_list_;
   std::vector<Op*> input_op_list_;
   std::vector<Op*> output_op_list_;
-  std::vector<Op*> sample_op_list_;
+  Op* sample_op_ = nullptr;
   std::map<std::string, std::unique_ptr<Op>> op_map_;
   std::map<std::string, std::unique_ptr<Tensor>> tensor_map_;
   std::map<std::string, std::unique_ptr<Tensor>> constant_tensor_map_;

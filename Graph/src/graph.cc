@@ -186,6 +186,12 @@ Status Graph::CreateSample(const std::string& name, Tensor* input,
   if (!status.ok()) {
     return status;
   }
+  if (sample_op_ != nullptr) {
+    return MakeStatus(
+        ErrorCode::kInvalidArgument,
+        "Graph::CreateSample: graph already has a sample op: " +
+            sample_op_->Name());
+  }
   if (output == nullptr) {
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "Graph::CreateSample: output must not be null");
@@ -226,7 +232,7 @@ Status Graph::CreateSample(const std::string& name, Tensor* input,
 
   op_map_.emplace(name, std::move(op));
   tensor_map_.emplace(tensor_name, std::move(tensor));
-  sample_op_list_.push_back(op_ptr);
+  sample_op_ = op_ptr;
   *output = tensor_ptr;
   return Status::Ok();
 }
@@ -262,7 +268,7 @@ const std::vector<Op*>& Graph::GetAllInputOp() { return input_op_list_; }
 
 const std::vector<Op*>& Graph::GetAllOutputOp() { return output_op_list_; }
 
-const std::vector<Op*>& Graph::GetAllSampleOp() { return sample_op_list_; }
+Op* Graph::GetSampleOp() { return sample_op_; }
 
 const std::vector<Op*>& Graph::GetOrderlyOPList() { return op_list_; }
 

@@ -152,12 +152,12 @@ $ echo $?
 
 ### 3.2 用例与实际覆盖
 
-C++ 测试文件包含 4 个测试函数和 119 个 `CHECK` 断言：
+C++ 测试文件包含 4 个测试函数和 121 个 `CHECK` 断言：
 
 | 用例 | 实际覆盖内容 | 结果 |
 |------|--------------|------|
 | `TestShape` | 默认 shape（`max_dim=0`、元素数 1）、dims/pitch 乘积、`max_dim` 越界、负维度、`int64_t` 溢出 | 通过 |
-| `TestGraphConstruction` | constant 的不可复用标记和空 producer、显式 input 的 attr storage、linear/add/sample/output 连接、Sample 默认 `argmax/-1/int64`、排序顺序 `input -> linear -> add -> sample -> output`、constant 不进入执行序列、`SetAttr`、空属性名失败、`SetOpEnv(nullptr)` 失败、重复 `SortOp` 稳定 | 通过 |
+| `TestGraphConstruction` | constant 的不可复用标记和空 producer、显式 input 的 attr storage、linear/add/sample/output 连接、Sample 默认 `argmax/-1/int64`、唯一性与重复创建失败、`GetSampleOp()`、排序顺序 `input -> linear -> add -> sample -> output`、constant 不进入执行序列、`SetAttr`、空属性名失败、`SetOpEnv(nullptr)` 失败、重复 `SortOp` 稳定 | 通过 |
 | `TestEnvironment` | GraphEnv 注册/查询/重复名、Graph 接管所有权、MegaAttentionOpEnv 的 `NeedTempData`/`Init`/未实现 `Forward`、`ClearOpEnv`、Graph 析构自动清理 OpEnv | 通过 |
 | `TestErrors` | 空图排序、空 op 名、0 输出、空输出参数、非法 op 类型（含 `kSample`）、重复 op、空源 tensor、重复常量名、空常量输出、非法 shape、外部 tensor、空输出名、Sample 空名/空输出/外部 tensor | 通过 |
 
@@ -360,7 +360,7 @@ Python display width <= 80: OK
 ## 9. 结论
 
 1. 干净构建 16/16 成功，无编译警告；
-2. C++ 单测 119 个 `CHECK` 断言全部通过，输出
+2. C++ 单测 121 个 `CHECK` 断言全部通过，输出
    `graph_test: ALL TESTS PASSED`；
 3. Python 单测 11/11 通过；
 4. CTest 2/2 通过；

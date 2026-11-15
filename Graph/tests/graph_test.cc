@@ -194,8 +194,8 @@ bool TestGraphConstruction() {
   CHECK(graph.CreateSample("sample", add_outputs[0], &sample_output).ok());
   CHECK(sample_output != nullptr);
   CHECK(sample_output->Name() == "sample.out");
-  CHECK(graph.GetAllSampleOp().size() == 1);
-  const Op* sample_op = graph.GetAllSampleOp()[0];
+  CHECK(graph.GetSampleOp() != nullptr);
+  const Op* sample_op = graph.GetSampleOp();
   CHECK(sample_op->Type() == OpType::kSample);
   const auto method_iterator = sample_op->Attrs().find("method");
   CHECK(method_iterator != sample_op->Attrs().end());
@@ -208,6 +208,10 @@ bool TestGraphConstruction() {
   CHECK(std::get<std::string>(precision_iterator->second) == "int64");
   CHECK(add_outputs[0]->DstOps().size() == 1);
   CHECK(add_outputs[0]->DstOps()[0]->Name() == "sample");
+
+  Tensor* second_sample = nullptr;
+  CHECK(!graph.CreateSample("sample2", add_outputs[0], &second_sample).ok());
+  CHECK(graph.GetSampleOp() == sample_op);
 
   CHECK(graph.CreateOutput("output", sample_output).ok());
   CHECK(graph.GetAllOutputOp().size() == 1);

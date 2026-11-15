@@ -201,7 +201,7 @@ Agent 智能体在服务侧的应用部署已经非常广泛，手机端或者�
 
 | 层次 | 模块 | 主要职责 | 实现与目录 |
 | --- | --- | --- | --- |
-| 图与契约层 | 融合算子图（Graph） | C++17 runtime IR：Graph/Op/Tensor/Storage/GraphEnv/OpEnv；模型无关的 op_type 与 attr、Input/Output op、后序 DFS 拓扑排序、常量依赖叶子；pybind11 最小构图接口与 `dump_ir()` 调试输出 | C++/pybind11，`Graph/` |
+| 图与契约层 | 融合算子图（Graph） | C++17 runtime IR：Graph/Op/Tensor/Storage/GraphEnv/OpEnv；模型无关的 op_type 与 attr、Input/Sample/Output op、后序 DFS 拓扑排序、常量依赖叶子；pybind11 最小构图接口与 `dump_ir()` 调试输出 | C++/pybind11，`Graph/` |
 | 离线工具链层 | Converter | 模型源码转换为 Graph，并旁路记录 ModelGraph | Python，`ToolChain/converter/` |
 | 离线工具链层 | Optimizer | 在 ModelGraph 上做精度推导、形状推导、显存编排、优化日志 | Python，`ToolChain/optimizer/` |
 | 离线工具链层 | Serializer | 把优化后的 ModelGraph 与权重序列化为 `model.mgf` 模型包 | Python，`ToolChain/serializer/` |
@@ -306,7 +306,7 @@ MobileNet/
 
 1. 文本经 Tokenizer 编码为 Token ID（阶段一可由测试程序直接提供 Token ID）。
 2. Session 或调用方构造 Request，通过 Engine 转发 Scheduler.Merge 进入 Waiting 队列。
-3. 推理循环中，Scheduler.Schedule 生成 ExecutionPlan；Executor 绑定主机输入输出，通过 Engine 把 host/device storage 写入 Input/Output op 的 attr，再按 `Graph::GetOrderlyOPList()` 逐 op 调用 `OpEnv::Forward()` 完成 H2D、计算与 D2H，随后采样；Scheduler.Update 回写新 Token 与状态。
+3. 推理循环中，Scheduler.Schedule 生成 ExecutionPlan；Executor 绑定主机输入输出，通过 Engine 把 host/device storage 写入 Input/Output op 的 attr，再按 `Graph::GetOrderlyOPList()` 逐 op 调用 `OpEnv::Forward()` 完成 H2D、计算、Sample 与 D2H；Scheduler.Update 回写新 Token 与状态。
 4. Prefill 完成后请求进入 Running；此后每个 Step 执行 Decode 生成一个 Token；满足 EOS、长度上限或 Stop 条件后结束并释放 KV。
 5. 输出 Token 经流式 Detokenize 转为文本片段，回调给 Session/APP。
 6. 取消、超时或异常时，请求进入 CANCELLED/FAILED，KV 与相关资源被回收。
@@ -372,13 +372,13 @@ APP          Tokenizer        Scheduler        Executor          GPU
 
 | 序号 | 设计文档 | 覆盖模块 | 主要依赖 | 建议顺序 |
 | --- | --- | --- | --- | --- |
-| 1 | [Graph 设计文档](../Graph/.doc/Graph_design.md) | C++17 runtime IR（Graph/Op/Tensor/Storage/GraphEnv/OpEnv）、Input/Output op、SortOp、pybind11 最小构图接口、dump_ir | 无 | 1 |
+| 1 | [Graph 设计文档](../Graph/.doc/Graph_design.md) | C++17 runtime IR（Graph/Op/Tensor/Storage/GraphEnv/OpEnv）、Input/Sample/Output op、SortOp、pybind11 最小构图接口、dump_ir | 无 | 1 |
 | 2 | [Converter 设计文档](../ToolChain/converter/.doc/converter_design.md) | Qwen3 Adapter、RecordingGraph、ModelGraph sidecar、权重映射 | 1 | 2 |
 | 3 | [Optimizer 设计文档](../ToolChain/optimizer/.doc/optimizer_design.md) | Precision/Shape/Memory Pass、显存复用、优化报告 | 1、2 | 3 |
 | 4 | [Serializer 设计文档](../ToolChain/serializer/.doc/serializer_design.md) | model.mgf 格式、manifest、权重打包、图重建校验 | 1、3 | 4 |
 | 5 | Loader 与 Backend 框架设计文档 | 模型包校验、Graph 重建、GraphEnv/OpEnv 创建、后端注册与选择、I/O 绑定、能力校验、权重转换与上传、资源所有权 | 4 | 5 |
 | 6 | OCL 后端与 Kernel 设计文档 | Backend 接口实现、Kernel 清单、编译缓存、精度策略、契约测试 | 1、5 | 6 |
-| 7 | Executor 设计文档 | Packing、主机 I/O 绑定、attention metadata、按 GetOrderlyOPList 驱动 OpEnv（H2D/计算/D2H）、采样、回写 | 5、6 | 7 |
+| 7 | Executor 设计文档 | Packing、主机 I/O 绑定、attention metadata、按 GetOrderlyOPList 驱动 OpEnv（H2D/计算/Sample/D2H）、回写 | 5、6 | 7 |
 | 8 | Scheduler 与 KVCache 设计文档 | 连续批处理、分页、抢占、公平性 | 5 | 7（可与 7 并行） |
 | 9 | Engine 与 Destroy 设计文档 | 门面、线程模型、生命周期、资源释放 | 7、8 | 8 |
 | 10 | Service 设计文档 | Tokenizer、PrefixCache、Session、流式输出 | 9 | 9 |
@@ -390,7 +390,7 @@ APP          Tokenizer        Scheduler        Executor          GPU
 
 ## 4.1 融合算子图（Graph）
 
-**职责**：Graph 提供全项目唯一的 C++17 runtime 静态图 IR，承载模型拓扑、Op、Tensor、constant、图输入输出与索引；提供构图、图边界注册、`SortOp()` 拓扑排序与查询接口。Graph 只表达“图是什么”和“对象如何连接”，不直接执行 kernel、不申请显存、不推导 shape/precision/layout，也不提供序列化与 Forward。运行时由 Engine 为每个计算 op 创建 `OpEnv`，Forward 阶段按 `GetOrderlyOPList()` 逐 op 调用 `OpEnv::Forward()`。
+**职责**：Graph 提供全项目唯一的 C++17 runtime 静态图 IR，承载模型拓扑、Op、Tensor、constant、图输入/输出与 Sample 节点及索引；提供构图、图边界注册、`SortOp()` 拓扑排序与查询接口。Graph 只表达“图是什么”和“对象如何连接”，不直接执行 kernel、不申请显存、不推导 shape/precision/layout，也不提供序列化与 Forward。运行时由 Engine 为每个计算 op（含 Sample）创建 `OpEnv`，Forward 阶段按 `GetOrderlyOPList()` 逐 op 调用 `OpEnv::Forward()`。
 
 **不负责**：算子设备实现（Kernel/Backend）、显存实际分配、请求调度与批处理决策、采样策略参数生成、shape/precision/layout 推导策略、模型包序列化。
 
@@ -411,7 +411,7 @@ APP          Tokenizer        Scheduler        Executor          GPU
 - **构图接口**：Python 侧仅暴露 `Graph(name)`、`create_input`、`create_constant`、`create_op`、`create_output`、`sort_op`、`dump_ir`。`create_op(name, src_tensors, out_cnt, op_type, attr)` 创建普通计算 op 与输出 tensor；输出命名固定为 `out_cnt==1` 时 `<op>.out`，否则 `<op>.out.<i>`。
 - **常量是依赖叶子**：`create_constant(name, dims, pitch, precision, layout, byte_size, data_ptr)` 创建 constant tensor，独立存入 `constant_tensor_map_`，不创建 producer op，不进入 `SortOp()` 的执行序列；Engine 初始化阶段通过 `GetAllConstantTensor()` 统一加载权重。
 - **拓扑排序**：`SortOp()` 从 `output_op_list_` 出发，沿 tensor 的生产者依赖做后序 DFS，将 graph op 按拓扑顺序写入 `op_list_`；生产者先于消费者，constant 遇到即停，不要求 producer op。
-- **I/O 边界**：`CreateInput(name)` 创建 Input op 并登记图输入；`CreateOutput(name, input)` 创建 Output op 并登记图输出，Output op 不产生新 tensor。Input/Output op 预置 `attr["storage"] = Storage{}`，Engine 在 Init/Forward 时通过 `SetInput()`/`SetOutput()` 覆盖该值，解绑时恢复默认值。
+- **I/O 边界**：`CreateInput(name)` 创建 Input op 并登记图输入；`CreateOutput(name, input)` 创建 Output op 并登记图输出，Output op 不产生新 tensor；`CreateSample(name, input, attr)` 创建默认 `argmax` 的 Sample op，输出 `<name>.out` token id，并登记到 Sample 列表。`CreateOp` 不得直接创建 `kInput`/`kOutput`/`kSample`。Input/Output op 预置 `attr["storage"] = Storage{}`，Engine 在 Init/Forward 时通过 `SetInput()`/`SetOutput()` 覆盖该值，解绑时恢复默认值。
 - **执行环境**：Graph 本身没有 `Forward()`。Engine 初始化阶段创建 `GraphEnv`，按 `OpType` 为每个计算 op 创建 `OpEnv` 并调用 `Op::SetOpEnv()`；Forward 阶段按 `GetOrderlyOPList()` 逐 op 调用 `OpEnv::Forward()`。`OpEnv` 从所属 op 的输入/输出 Tensor 的 `Storage` 读取 shape、precision、layout 与 data_ptr，不拥有 Op/Tensor，也不申请显存。
 - **I/O 执行**：Input/Output op 不产生计算 Kernel；对应的 I/O `OpEnv` 读取 `attr["storage"]` 完成 H2D/D2H。首版 Graph 只提供 `OpEnv` 抽象与 `MegaAttentionOpEnv` 示例，I/O OpEnv 与真实算子 OpEnv 由后续引擎/后端实现接入。
 - **融合表达**：融合体现为 `OpType` 与 `attr`（例如 `kLinearRmsNormRope`、`kLinearPerHeadRMSNormRope` 等融合类型）；具体融合规则由模型组图文档与 Converter 决定，Graph 只承载融合结果，不自动识别或改写算子。
@@ -449,7 +449,7 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 - **融合算子表达**：使用 Graph 的 `OpType`（如 `gather`、`linear`、`linear_swi_glu`、`rms_norm`、`rope`、`mega_attention`、`add`、`linear_per_head_rms_norm_rope`）与 `attr` 表达算子；Qwen3 的 Q/K path 使用 `linear_per_head_rms_norm_rope` 融合 linear、per-head RMSNorm 与 RoPE，融合规则在模型组图文档中定义，Graph 只承载结果。
 - **权重映射**：逐常量记录图内名称、HF/Transformers 参数名、shape、dtype、byte_size 与是否可用；转换期不读取或变换权重数值。
 - **运行参数合并**：官方 `config.json` 与 `generation_config.json` 已有参数（上下文、词表、采样、eos/pad 等）只从官方文件读取；`input/inference_config.json` 只声明引擎补充的 `max_num_tokens`、`max_batch_size`、`repetition_penalty`、`seed`，重复声明官方字段直接报错。`max_num_tokens` 表示一次推理 Step 内所有请求累加的 token 预算；单请求生成上限由运行时按 `context_length - prompt_length` 推导，不写入配置。合并结果写入 `ModelGraph.metadata` 并随模型包交付。
-- **I/O op**：在模型子图外层统一生成 Input/Output op；Input 记录 `int64`、`row_major` 与符号形状 `[B,S]`，Output 绑定最终 logits 张量；主机指针与设备 storage 由运行时绑定，不进入转换产物。
+- **I/O 与 Sample op**：在模型子图外层统一生成 Input/Output op，并在 LM Head 与 Output 之间默认插入 Sample op（`method=argmax`）；Input 记录 `int64`、`row_major` 与符号形状 `[B,S]`，Sample 将 `[B,S,V]` logits 转为 `[B,S]`、`int64` token，Output 绑定 token 张量；主机指针与设备 storage 由运行时绑定，不进入转换产物。
 - **不静默降级**：不支持的算子、缺失权重映射或非法属性直接报错并列出位置，禁止悄悄换成低效路径。
 
 **异常**：模型结构不支持、常量缺少 HF 映射、权重文件损坏、属性非 JSON 安全、运行参数非法或缺失、Graph 构图失败。
@@ -598,8 +598,8 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 
 1. 构建主机输入：Token ID、Position ID、attention metadata（序列长度、Block Table、Slot Mapping、阶段标记）、逐请求采样参数；按输入名映射到 Graph 的 Input op。
 2. 通过 Engine 的 `SetInput()`/`SetOutput()` 把 host/device storage 写入 Input/Output op 的 `attr["storage"]`；解码阶段的 KV 视图与 attention metadata 写入对应计算 op 的 attr 或 `OpEnv` 可访问的上下文字段。
-3. 按 `Graph::GetOrderlyOPList()` 顺序逐 op 调用 `op->GetOpEnv()->Forward()`：Input op 的 I/O OpEnv 执行 H2D，计算 op 的 OpEnv 调用对应 Kernel，Output op 的 I/O OpEnv 执行 D2H；Prefill 与 Decode 使用对应 Attention Kernel。
-4. 在 `Backend::Synchronize` 后读取主机输出，收集 Token、logits 与停止标记；调用采样逻辑生成 Token。
+3. 按 `Graph::GetOrderlyOPList()` 顺序逐 op 调用 `op->GetOpEnv()->Forward()`：Input op 的 I/O OpEnv 执行 H2D，计算 op（含默认 Argmax Sample）的 OpEnv 调用对应 Kernel，Output op 的 I/O OpEnv 执行 D2H；Prefill 与 Decode 使用对应 Attention Kernel。
+4. 在 `Backend::Synchronize` 后读取主机输出 Token 与停止标记；调试模式可额外导出 `lm_head.out` logits 用于对齐。
 5. 回写 Scheduler.Update；释放 Step 临时资源；记录耗时、Token 数与显存占用。
 
 设计要点：

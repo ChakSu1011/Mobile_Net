@@ -38,11 +38,14 @@ INFERENCE_FILE = "inference_config.json"
 
 _ENGINE_FIELDS = frozenset({
     "max_num_tokens",
-    "max_new_tokens",
     "max_batch_size",
     "repetition_penalty",
     "seed",
 })
+
+_DERIVED_FIELDS = {
+    "max_new_tokens": "context_length - prompt_length",
+}
 
 _REPEATED_FIELDS = {
     "context_length": "config.json.max_position_embeddings",
@@ -73,8 +76,7 @@ class InferenceConfig:
     属性：
       context_length：单请求上下文上限，来自官方 config；
       vocab_size：词表大小，来自官方 config；
-      max_num_tokens：单 Step prefill token 规划上界；
-      max_new_tokens：单请求最多生成的 token 数；
+      max_num_tokens：一次推理 Step 内所有请求累加的 token 预算；
       max_batch_size：规划 batch 上界；
       do_sample：是否采样，来自 generation_config；
       temperature：采样温度；
@@ -90,7 +92,6 @@ class InferenceConfig:
     context_length: int
     vocab_size: int
     max_num_tokens: int
-    max_new_tokens: int
     max_batch_size: int
     do_sample: bool
     temperature: float
@@ -112,7 +113,6 @@ class InferenceConfig:
             "context_length": self.context_length,
             "vocab_size": self.vocab_size,
             "max_num_tokens": self.max_num_tokens,
-            "max_new_tokens": self.max_new_tokens,
             "max_batch_size": self.max_batch_size,
             "do_sample": self.do_sample,
             "temperature": self.temperature,
@@ -387,16 +387,24 @@ def _validate_authored(
             "official parameter must be read from "
             f"{_REPEATED_FIELDS[key]}, not redeclared",
         )
-    unknown = sorted(keys - _ENGINE_FIELDS - set(_REPEATED_FIELDS))
+    derived = sorted(keys & set(_DERIVED_FIELDS))
+    if derived:
+        key = derived[0]
+        raise _error(
+            source,
+            key,
+            "is derived at runtime from "
+            f"{_DERIVED_FIELDS[key]}",
+        )
+    unknown = sorted(
+        keys - _ENGINE_FIELDS - set(_REPEATED_FIELDS)
+        - set(_DERIVED_FIELDS))
     if unknown:
         raise _error(
             source, unknown[0], "unknown field")
 
     max_num_tokens = _require_int(
         data, "max_num_tokens", source,
-        minimum=1, maximum=context_length)
-    max_new_tokens = _require_int(
-        data, "max_new_tokens", source,
         minimum=1, maximum=context_length)
     max_batch_size = _require_int(
         data, "max_batch_size", source, minimum=1)
@@ -406,7 +414,6 @@ def _validate_authored(
     seed = _require_int(data, "seed", source, minimum=0)
     return {
         "max_num_tokens": max_num_tokens,
-        "max_new_tokens": max_new_tokens,
         "max_batch_size": max_batch_size,
         "repetition_penalty": repetition_penalty,
         "seed": seed,
@@ -540,7 +547,6 @@ def load_inference_config(
         context_length=max_position_embeddings,
         vocab_size=vocab_size,
         max_num_tokens=engine["max_num_tokens"],
-        max_new_tokens=engine["max_new_tokens"],
         max_batch_size=engine["max_batch_size"],
         do_sample=do_sample,
         temperature=temperature,

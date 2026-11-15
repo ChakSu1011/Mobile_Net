@@ -40,7 +40,6 @@ def _valid_inference_config(**overrides) -> dict:
     """
     data = {
         "max_num_tokens": 256,
-        "max_new_tokens": 2048,
         "max_batch_size": 1,
         "repetition_penalty": 1.0,
         "seed": 0,
@@ -225,7 +224,6 @@ class InferenceConfigTest(unittest.TestCase):
         self.assertEqual(data["context_length"], 40960)
         self.assertEqual(data["vocab_size"], 151936)
         self.assertEqual(data["max_num_tokens"], 256)
-        self.assertEqual(data["max_new_tokens"], 2048)
         self.assertEqual(data["max_batch_size"], 1)
         self.assertTrue(data["do_sample"])
         self.assertEqual(data["temperature"], 0.6)
@@ -273,6 +271,21 @@ class InferenceConfigTest(unittest.TestCase):
             with self.assertRaises(BuildError) as context:
                 convert("qwen3", config_path)
         self.assertIn("max_num_tokens", str(context.exception))
+
+    def test_derived_max_new_tokens(self) -> None:
+        """UT-CONV-020：max_new_tokens 由运行时推导，禁止配置。"""
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = self._write_model_dir(
+                directory,
+                inference=_valid_inference_config(
+                    max_new_tokens=16),
+            )
+            with self.assertRaises(BuildError) as context:
+                convert("qwen3", config_path)
+        self.assertIn(
+            "context_length - prompt_length",
+            str(context.exception),
+        )
 
     def test_null_generation_values(self) -> None:
         """UT-CONV-019：官方采样字段为 null 时使用缺省值。"""

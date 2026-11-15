@@ -177,8 +177,8 @@ Converter 不引入第二套可执行图。`RecordingGraph` 的每个方法先�
   `tensors`（name→TensorMeta）、`ops`（创建顺序）、`metadata`。
 - `InferenceConfig`：有效运行参数，包含官方来源字段（context_length、
   vocab_size、do_sample、temperature、top_k、top_p、bos/eos/pad、
-  stop_token_ids）与引擎补充字段（max_num_tokens、max_new_tokens、
-  max_batch_size、repetition_penalty、seed）。
+  stop_token_ids）与引擎补充字段（max_num_tokens、max_batch_size、
+  repetition_penalty、seed）。
 
 ### 4.2 接口定义
 
@@ -315,11 +315,14 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 
 | 字段 | 类型 | 约束 | 含义 |
 | --- | --- | --- | --- |
-| `max_num_tokens` | int | > 0 且 <= `max_position_embeddings` | 单 Step prefill 的 token 规划上界，绑定符号维 `S` |
-| `max_new_tokens` | int | > 0 且 <= `max_position_embeddings` | 单请求最多生成的 token 数 |
+| `max_num_tokens` | int | > 0 且 <= `max_position_embeddings` | 一次推理 Step 内所有请求累加的 token 预算，绑定符号维 `S` |
 | `max_batch_size` | int | > 0 | 规划 batch 上界；Qwen3 首期为 1 |
 | `repetition_penalty` | number | > 0 | 重复惩罚 |
 | `seed` | int | >= 0 | 随机种子；0 表示由引擎选择非固定种子 |
+
+单请求生成上限不在本文件中配置：运行时按
+`context_length - prompt_length` 推导；`max_num_tokens` 是 Step 级预算，
+不是单请求生成长度。`max_new_tokens` 属于派生字段，写入即报错。
 
 官方来源字段与读取顺序：
 
@@ -334,7 +337,7 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 | `temperature` | `generation_config.json.temperature` | 缺失或 null 时为 1.0 |
 | `top_k` | `generation_config.json.top_k` | 缺失或 null 时为 0（关闭） |
 | `top_p` | `generation_config.json.top_p` | 缺失或 null 时为 1.0（关闭） |
-| `stop_token_ids` | 由 `eos_token_id` 规范化得到 | 允许为空，此时仅靠 `max_new_tokens` 停止 |
+| `stop_token_ids` | 由 `eos_token_id` 规范化得到 | 允许为空，此时仅靠上下文窗口上限停止 |
 
 加载与校验规则：
 
@@ -344,7 +347,8 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 2. 显式传入路径时，相对路径按模型目录解析；文件不存在或 JSON 非法时抛
    `BuildError`，不得静默忽略。
 3. 新配置文件字段缺失、未知字段、类型错误（含 bool 冒充 int）、越界或
-   `seed` 为负时抛 `BuildError`；所有错误信息包含文件路径与字段名。
+   `seed` 为负时抛 `BuildError`；`max_new_tokens` 属运行时派生字段，
+   写入即报错；所有错误信息包含文件路径与字段名。
 4. 官方 `generation_config.json` 存在但字段类型或取值非法时抛
    `BuildError`；文件缺失时按上表缺省行为处理。
 5. 合并后的有效配置写入 `ModelGraph.metadata["inference_config"]`，随
@@ -354,10 +358,10 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 构建默认值联动：
 
 - 流水线未显式传入优化配置时，用有效配置的 `max_batch_size`、
-  `max_num_tokens`、`context_length` 初始化 `OptimizeConfig`，使运行时
-  输入上界与图的形状规划一致。
+  `max_num_tokens`、`context_length` 初始化 `OptimizeConfig`，使 Step
+  token 预算与图的形状规划一致。
 - CLI 显式给出的优化参数优先，只覆盖显式字段，其余字段仍取有效配置。
-- `max_new_tokens`、采样字段与 Token ID 只记录，不参与 build。
+- 采样字段、Token ID 与运行时派生的单请求生成上限只记录，不参与 build。
 
 ### 4.4 异常与错误处理
 
@@ -438,7 +442,8 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 | UT-CONV-017 | 官方 generation_config 非法 | `top_p=2.0` | `BuildError` |
 | UT-CONV-018 | 未知字段 | 输入配置含 `extra` | `BuildError` |
 | UT-CONV-019 | 官方字段为 null | `temperature=null` 等 | 使用缺省值，转换成功 |
-| UT-CONV-020 | build 默认值联动 | 输入配置 max token | `OptimizeConfig` 采用配置值 |
+| UT-CONV-020 | 派生字段被配置 | 输入配置含 `max_new_tokens` | `BuildError`，提示由 `context_length - prompt_length` 推导 |
+| UT-CONV-021 | build 默认值联动 | 输入配置 max token | `OptimizeConfig` 采用配置值 |
 
 ### 6.3 测试环境
 

@@ -27,7 +27,7 @@ PYTHONUTF8=1 python -m unittest ToolChain.converter.test_converter -v
 实际输出（末尾）：
 
 ```text
-Ran 20 tests in 0.105s
+Ran 21 tests in 0.150s
 
 OK
 ```
@@ -43,7 +43,6 @@ Qwen3 有效运行参数（`ConversionResult.inference_config.to_dict()`）：
   "context_length": 40960,
   "vocab_size": 151936,
   "max_num_tokens": 256,
-  "max_new_tokens": 2048,
   "max_batch_size": 1,
   "do_sample": true,
   "temperature": 0.6,
@@ -59,13 +58,15 @@ Qwen3 有效运行参数（`ConversionResult.inference_config.to_dict()`）：
 
 其中 `context_length`/`vocab_size` 来自 `config.json`，
 `do_sample`/`temperature`/`top_k`/`top_p`/`eos`/`pad` 来自
-`generation_config.json`；`max_num_tokens`/`max_new_tokens`/
-`max_batch_size`/`repetition_penalty`/`seed` 来自
-`Models/Qwen3/input/inference_config.json`。
+`generation_config.json`；`max_num_tokens`/`max_batch_size`/
+`repetition_penalty`/`seed` 来自
+`Models/Qwen3/input/inference_config.json`。`max_num_tokens` 表示单 Step
+所有请求累加的 token 预算；单请求生成上限由运行时按
+`context_length - prompt_length` 推导。
 
 结论：通过。官方字段未被重复声明；重复声明 `temperature`、未知字段、
-`max_num_tokens` 越界与官方 `top_p=2.0` 均被拒绝；官方采样字段为
-`null` 时按缺省值处理。
+`max_num_tokens` 越界、官方 `top_p=2.0` 与派生字段 `max_new_tokens`
+均被拒绝；官方采样字段为 `null` 时按缺省值处理。
 
 ## 3. 覆盖范围
 
@@ -76,8 +77,8 @@ Qwen3 有效运行参数（`ConversionResult.inference_config.to_dict()`）：
 - 310 个常量的 Hugging Face 权重名映射；
 - tied / untied LM Head 处理；
 - `ModelGraph` JSON 往返与权重缺失降级；
-- 输入配置与官方 config/generation_config 合并、缺失降级、null 缺省与
-  错误路径；
+- 输入配置与官方 config/generation_config 合并、缺失降级、null 缺省、
+  派生字段拒绝与错误路径；
 - 非 JSON 属性、重复名称、外部 tensor 等错误路径。
 
 ## 4. 未覆盖项与风险

@@ -135,7 +135,6 @@ class PipelineTest(unittest.TestCase):
         (input_dir / "inference_config.json").write_text(
             json.dumps({
                 "max_num_tokens": 8,
-                "max_new_tokens": 16,
                 "max_batch_size": 2,
                 "repetition_penalty": 1.0,
                 "seed": 0,

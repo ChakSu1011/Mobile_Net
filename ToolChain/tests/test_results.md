@@ -117,7 +117,7 @@ constants 310
 weights_available 310
 weights_total_bytes 1192099840
 ir_sha256 ebc16228db005814bbb331ab444d1a1ca501243102868ccb063f6463127c3483
-manifest_sha256 e307b7207a7d63eff6b3a821fb12dc476a3b42df53ddc9a6fdae87dac165d3a8
+manifest_sha256 e8a2ec7472441239bcb7d0901e64c3ab01d4410d2c315eb4ea362d4f857fad23
 package D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b
 work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
 ```
@@ -126,12 +126,12 @@ work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
 
 | 路径 | 大小 | 说明 |
 | --- | --- | --- |
-| `Models/Qwen3/artifacts/qwen3_0_6b/model.mgf` | 385,169 B | 112 B 头 + 规范化 JSON manifest，含权重表与运行参数 |
+| `Models/Qwen3/artifacts/qwen3_0_6b/model.mgf` | 385,147 B | 112 B 头 + 规范化 JSON manifest，含权重表与运行参数 |
 | `Models/Qwen3/artifacts/qwen3_0_6b/weights.bin` | 1,192,099,840 B | FP16 权重打包，按 256 B 对齐 |
 | `Models/Qwen3/artifacts/qwen3_0_6b/compile_report.json` | 1,204 B | 构建摘要、IR 哈希、显存计划、验证结果 |
-| `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/model_graph.json` | 419,014 B | 转换后元数据，含 `metadata.inference_config` |
-| `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/conversion_report.json` | 84,062 B | 权重映射、运行参数与转换摘要 |
-| `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/model_graph.json` | 444,020 B | 优化后元数据 |
+| `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/model_graph.json` | 418,983 B | 转换后元数据，含 `metadata.inference_config` |
+| `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/conversion_report.json` | 84,033 B | 权重映射、运行参数与转换摘要 |
+| `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/model_graph.json` | 443,989 B | 优化后元数据 |
 | `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/optimize_report.json` | 1,819 B | 精度/形状/显存、权重转换与不变量报告 |
 | `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/weights_fp16.safetensors` | 1,192,134,752 B | Precision Pass 流式转换的 FP16 权重文件 |
 
@@ -155,7 +155,7 @@ work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
     "peak_bytes": 78315520
   },
   "verification": {
-    "manifest_sha256": "e307b7207a7d63eff6b3a821fb12dc476a3b42df53ddc9a6fdae87dac165d3a8",
+    "manifest_sha256": "e8a2ec7472441239bcb7d0901e64c3ab01d4410d2c315eb4ea362d4f857fad23",
     "package_reloaded": true
   },
   "weights": {
@@ -175,7 +175,6 @@ work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
   "context_length": 40960,
   "do_sample": true,
   "max_batch_size": 1,
-  "max_new_tokens": 2048,
   "max_num_tokens": 256,
   "pad_token_id": 151643,
   "repetition_penalty": 1.0,
@@ -190,7 +189,9 @@ work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
 
 官方 `config.json`/`generation_config.json` 字段与
 `Models/Qwen3/input/inference_config.json` 的引擎字段已合并；重复声明、
-未知字段与越界值均被 Converter 拒绝。
+未知字段与越界值均被 Converter 拒绝。`max_num_tokens` 表示单 Step 所有
+请求累加的 token 预算；单请求生成上限由运行时按
+`context_length - prompt_length` 推导，`max_new_tokens` 不进入配置。
 
 权重转换统计（`optimize_report.json`）：
 
@@ -225,7 +226,7 @@ PYTHONUTF8=1 python -m compileall -q ToolChain Models/Qwen3
 
 | 套件 | 用例数 | 主要覆盖 |
 | --- | --- | --- |
-| `ToolChain.converter.test_converter` | 20 | UT-CONV-001 ~ 019，含输入配置 |
+| `ToolChain.converter.test_converter` | 21 | UT-CONV-001 ~ 020，含输入配置 |
 | `ToolChain.optimizer.test_optimizer` | 21 | UT-OPT-001 ~ 019，含权重转换 |
 | `ToolChain.serializer.test_serializer` | 13 | UT-SER-001 ~ 012 |
 | `ToolChain.test_pipeline` | 8 | 端到端、确定性、复用开关、CLI、输入配置默认值 |

@@ -31,8 +31,10 @@ description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer 
 2. Graph Python 扩展（`Graph/build/python/`）。
 3. 可选的 safetensors 权重文件或目录；不提供时生成 metadata-only 包。
 4. 模型 `input/inference_config.json`（可选）：`max_num_tokens`、
-   `max_new_tokens`、`max_batch_size`、`repetition_penalty`、`seed`；
-   官方 `config.json` 与 `generation_config.json` 已有参数直接读取。
+   `max_batch_size`、`repetition_penalty`、`seed`；官方 `config.json` 与
+   `generation_config.json` 已有参数直接读取。`max_num_tokens` 是单 Step
+   所有请求累加的 token 预算；单请求生成上限由运行时按
+   `context_length - prompt_length` 推导。
 5. 优化配置：`target_precision`、`max_num_tokens`、`context_length`、
    `batch_size`、`alignment`、`enable_reuse`。
 6. 设计文档：六段式（背景与目标、需求分析、概要设计、详细设计、实施步骤、

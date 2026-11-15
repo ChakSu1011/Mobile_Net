@@ -28,7 +28,9 @@ description: 把模型配置（首期 Qwen3-0.6B）转换为 Graph 可执行静�
 1. 模型 `config.json`（Transformers 风格）。
 2. 模型官方 `generation_config.json`（可选）：采样默认值与 eos/pad。
 3. 模型 `input/inference_config.json`（可选）：`max_num_tokens`、
-   `max_new_tokens`、`max_batch_size`、`repetition_penalty`、`seed`。
+   `max_batch_size`、`repetition_penalty`、`seed`。`max_num_tokens` 是
+   单 Step 所有请求累加的 token 预算；单请求生成上限由运行时按
+   `context_length - prompt_length` 推导，不写入配置。
 4. Graph Python 扩展 `_graph` 与公共模块 `mobilenet_runtime_graph`。
 5. 可选 safetensors 文件或目录；只读取头部索引，不读取数据区。
 6. 模型 Builder：首期为 `Models/Qwen3/qwen3_graph_builder.py`。
@@ -63,7 +65,8 @@ description: 把模型配置（首期 Qwen3-0.6B）转换为 Graph 可执行静�
   只从 `config.json` / `generation_config.json` 读取；新配置重复声明即
   报错，禁止两处配置漂移。
 - **输入配置校验**：新配置字段固定、全部必填、不接受未知字段；
-  `max_num_tokens`/`max_new_tokens` 不得超过官方最大位置数。
+  `max_num_tokens` 不得超过官方最大位置数；`max_new_tokens` 是运行时
+  派生字段，写入即报错。
 
 ## 标准流程
 
@@ -112,3 +115,7 @@ description: 把模型配置（首期 Qwen3-0.6B）转换为 Graph 可执行静�
    悄悄使用默认值。
 9. **bool 冒充 int**：JSON 的 `true` 不能作为 `max_num_tokens`；校验时
    必须显式排除 bool。
+10. **误配 `max_new_tokens`**：单请求生成上限由运行时按
+    `context_length - prompt_length` 推导，模型输入配置不接受该字段。
+11. **把 `max_num_tokens` 当单请求长度**：它是单 Step 所有请求累加的
+    token 预算，不是单个请求的 prompt 或生成长度。

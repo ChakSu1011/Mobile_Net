@@ -448,7 +448,7 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 - **RecordingGraph**：对 `create_input/create_constant/create_op/create_output/sort_op/dump_ir` 做透明代理；每个方法先转发原生 Graph，成功后再记录元数据，防止“图已创建但元数据缺失”。`ModelGraph` 不是第二套可执行图。
 - **融合算子表达**：使用 Graph 的 `OpType`（如 `gather`、`linear`、`linear_swi_glu`、`rms_norm`、`rope`、`mega_attention`、`add`、`linear_per_head_rms_norm_rope`）与 `attr` 表达算子；Qwen3 的 Q/K path 使用 `linear_per_head_rms_norm_rope` 融合 linear、per-head RMSNorm 与 RoPE，融合规则在模型组图文档中定义，Graph 只承载结果。
 - **权重映射**：逐常量记录图内名称、HF/Transformers 参数名、shape、dtype、byte_size 与是否可用；转换期不读取或变换权重数值。
-- **运行参数合并**：官方 `config.json` 与 `generation_config.json` 已有参数（上下文、词表、采样、eos/pad 等）只从官方文件读取；`input/inference_config.json` 只声明引擎补充的 `max_num_tokens`、`max_new_tokens`、`max_batch_size`、`repetition_penalty`、`seed`，重复声明官方字段直接报错。合并结果写入 `ModelGraph.metadata` 并随模型包交付。
+- **运行参数合并**：官方 `config.json` 与 `generation_config.json` 已有参数（上下文、词表、采样、eos/pad 等）只从官方文件读取；`input/inference_config.json` 只声明引擎补充的 `max_num_tokens`、`max_batch_size`、`repetition_penalty`、`seed`，重复声明官方字段直接报错。`max_num_tokens` 表示一次推理 Step 内所有请求累加的 token 预算；单请求生成上限由运行时按 `context_length - prompt_length` 推导，不写入配置。合并结果写入 `ModelGraph.metadata` 并随模型包交付。
 - **I/O op**：在模型子图外层统一生成 Input/Output op；Input 记录 `int64`、`row_major` 与符号形状 `[B,S]`，Output 绑定最终 logits 张量；主机指针与设备 storage 由运行时绑定，不进入转换产物。
 - **不静默降级**：不支持的算子、缺失权重映射或非法属性直接报错并列出位置，禁止悄悄换成低效路径。
 
@@ -550,7 +550,7 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 
 **职责**：请求级调度，决定每个 Step 执行哪些请求、哪些 Token，并维护请求状态。
 
-**输入**：Request（prompt token ids、max_new_tokens、采样参数、优先级、到达时间）、KV 预算、Token 预算。
+**输入**：Request（prompt token ids、采样参数、优先级、到达时间；单请求生成上限按 `context_length - prompt_length` 推导）、KV 预算、Token 预算。
 
 **输出**：ExecutionPlan。
 
@@ -567,7 +567,7 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 - **Prefill 优先**：Waiting 请求优先 Prefill；Decode 按轮转或到达顺序推进，避免饿死。
 - **分块 Prefill（可选）**：超长 Prompt 分块执行，避免单步阻塞已有请求的 Decode。
 - **抢占**：KV 不足时选择牺牲者（低优先级/最新请求优先），首版采用重计算抢占，请求回到 Waiting。
-- **停止条件**：EOS、max_new_tokens、Stop Token、调用方取消、超时。
+- **停止条件**：EOS、上下文窗口上限、Stop Token、调用方取消、超时。
 
 **异常**：请求 ID 非法、状态非法、预算配置非法、KV 分配失败。
 
@@ -794,7 +794,7 @@ Engine.Load(config)
 
 | 结构 | 关键字段 | 说明 |
 | --- | --- | --- |
-| Request | id、prompt_ids、max_new_tokens、sampling_params、priority、state、arrival_time | 一次生成请求 |
+| Request | id、prompt_ids、sampling_params、priority、state、arrival_time | 一次生成请求；生成长度上限由 `context_length - prompt_length` 推导 |
 | ExecutionPlan | step_id、entries[]、token_budget_used | 单 Step 调度结果 |
 | PlanEntry | request_id、phase（PREFILL/DECODE）、token_range、block_table、sampling_params | 请求在本 Step 的执行片段 |
 | Graph | op_list、constant_tensor_list、input_op_list、output_op_list、op_map、tensor_map、constant_tensor_map、graph_env | 全项目唯一可执行图；提供构图、SortOp 与查询接口 |

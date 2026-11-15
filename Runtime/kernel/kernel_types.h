@@ -16,11 +16,13 @@
 
 namespace mobilenet {
 
-// 融合节点算子类型。
+// 融合节点算子类型（遗留）。
 //
 // 说明：
 //   kInput/kOutput 是图边界节点；其余为可执行的计算节点。
 //   kCast 用于纯拷贝/类型转换路径与测试，不参与模型级融合规则。
+//   注意：Runtime 公共接口已统一使用 Graph 的 runtime_graph::OpType；
+//   本枚举仅保留供旧代码迁移，不得在新接口中使用。
 enum class OpType {
   kUnknown = 0,
   kInput = 1,

@@ -38,6 +38,17 @@ enum class ErrorCode {
   kInternal = 8,
   kUnsupportedDtype = 9,
   kUnsupportedLayout = 10,
+  // 加载期错误：模型包损坏、格式不兼容与文件读取失败。
+  kInvalidModelFile = 11,
+  kIoError = 12,
+  // 资源与后端错误：设备显存不足、后端未注册或初始化失败。
+  kDeviceOom = 13,
+  kUnsupportedBackend = 14,
+  kBackendInitError = 15,
+  // 请求级错误：非法请求 ID、超时与调用方取消。
+  kRequestNotFound = 16,
+  kTimeout = 17,
+  kCancelled = 18,
 };
 
 // 返回错误码的稳定字符串名称。

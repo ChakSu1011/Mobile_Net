@@ -36,6 +36,22 @@ const char* ErrorCodeName(ErrorCode code) {
       return "UNSUPPORTED_DTYPE";
     case ErrorCode::kUnsupportedLayout:
       return "UNSUPPORTED_LAYOUT";
+    case ErrorCode::kInvalidModelFile:
+      return "INVALID_MODEL_FILE";
+    case ErrorCode::kIoError:
+      return "IO_ERROR";
+    case ErrorCode::kDeviceOom:
+      return "DEVICE_OOM";
+    case ErrorCode::kUnsupportedBackend:
+      return "UNSUPPORTED_BACKEND";
+    case ErrorCode::kBackendInitError:
+      return "BACKEND_INIT_ERROR";
+    case ErrorCode::kRequestNotFound:
+      return "REQUEST_NOT_FOUND";
+    case ErrorCode::kTimeout:
+      return "TIMEOUT";
+    case ErrorCode::kCancelled:
+      return "CANCELLED";
   }
   return "UNKNOWN";
 }

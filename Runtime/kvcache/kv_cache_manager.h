@@ -45,7 +45,8 @@ class IKVCache : public KvAllocator {
   // 初始化 KV 池。
   //
   // 参数：
-  //   backend：后端实例，用于创建 KV 缓冲，非空；
+  //   backend：后端实例，用于创建 KV 缓冲，非空；只借用，生命周期由
+  //            Executor 保证；
   //   spec：块大小/层数/KV 头数/头维度/精度；
   //   kv_budget_bytes：KV 预算（字节）；
   //   resource_stack：缓冲释放登记栈，非空。

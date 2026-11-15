@@ -8,7 +8,8 @@
 // 边界：
 //   - 不做调度、KV 分配或停止判定；
 //   - 不释放 KV、不调用 Scheduler；
-//   - 不包含后端专有头文件或条件分支。
+//   - 不包含后端专有头文件或条件分支；
+//   - 持有 Backend 的所有权，并在 Deinit 中释放。
 //
 // 依赖：
 //   Runtime/common/plan.h、kv_view.h、io_binder.h、Graph、Backend、Kernel。
@@ -38,26 +39,33 @@ class IoBinder;
 //
 // 功能：
 //   Engine 在 Load 阶段调用 Init，在每步调用 Execute，在 Destroy 阶段调用
-//   Deinit。描述符与 Graph 生命周期由 Engine 保证。
+//   Deinit。Graph 生命周期由 Engine 保证；Backend 所有权由 Executor 接管。
 //
 // 边界：
 //   - 只允许单推理线程调用；
-//   - Execute 必须完成 H2D/计算/D2H 与 Synchronize 后才返回；
-//   - 失败时 result 中的请求标记为失败，不抛异常。
+//   - Execute 必须完成 I/O 绑定、逐 op Forward、Synchronize 后才返回；
+//   - 失败时 result 中的请求标记为失败，不抛异常；
+//   - Backend 必须比所有 OpEnv/Kernel 活得更久。
 class IExecutor {
  public:
   virtual ~IExecutor() = default;
 
-  // 初始化执行器。
+  // 初始化执行器并接管 Backend。
   //
   // 参数：
-  //   backend：后端实例，非空；
-  //   graph：已重建并绑定 OpEnv 的图，非空；
-  //   io_binder：Engine 实现的 I/O 绑定接口，非空。
+  //   backend：后端实例，非空；所有权移交给 Executor；
+  //   graph：已重建并绑定 OpEnv 的图，非空；Executor 只借用；
+  //   io_binder：Engine 实现的 I/O 绑定接口，非空；Executor 只借用。
   // 返回：
   //   成功返回 kOk；缺少 I/O op 或算子返回 kUnsupportedOp。
-  virtual Status Init(Backend* backend, runtime_graph::Graph* graph,
-                      IoBinder* io_binder) = 0;
+  virtual Status Init(std::unique_ptr<Backend> backend,
+                      runtime_graph::Graph* graph, IoBinder* io_binder) = 0;
+
+  // 返回拥有的 Backend 指针。
+  //
+  // 返回：
+  //   未初始化时返回 nullptr；否则返回非拥有指针，调用方不得释放。
+  virtual Backend* backend() = 0;
 
   // 执行一个 Step。
   //
@@ -72,10 +80,10 @@ class IExecutor {
                          const KvCacheView& kv_view,
                          StepResult* result) = 0;
 
-  // 反初始化执行器。
+  // 反初始化执行器并释放 Backend。
   //
   // 返回：
-  //   成功返回 kOk；幂等。
+  //   成功返回 kOk；幂等。内部依次执行 Backend::Deinit 与释放。
   virtual Status Deinit() = 0;
 };
 

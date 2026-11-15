@@ -147,13 +147,14 @@ class IScheduler {
   //   成功返回 kOk；请求不存在返回 kRequestNotFound；已结束请求幂等忽略。
   // 说明：
   //   追加输出 token 并判停；不推进 num_computed_tokens（后者在 Schedule
-  //   时按已调度 token 推进）。
+  //   时按已调度 token 推进）。请求进入终态时，实现必须通过 KvAllocator::
+  //   Release 释放其 KV；Engine 不重复释放。
   virtual Status Update(uint64_t request_id,
                         const std::vector<int64_t>& tokens,
                         RequestState executor_status,
                         UpdateResult* result) = 0;
 
-  // 取消请求。
+  // 取消请求并释放其 KV。
   //
   // 参数：
   //   request_id：请求 ID。
@@ -161,7 +162,7 @@ class IScheduler {
   //   成功返回 kOk；请求不存在返回 kRequestNotFound。
   virtual Status Stop(uint64_t request_id) = 0;
 
-  // 标记请求失败。
+  // 标记请求失败并释放其 KV。
   //
   // 参数：
   //   request_id：请求 ID；

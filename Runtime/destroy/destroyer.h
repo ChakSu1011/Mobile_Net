@@ -42,7 +42,10 @@ class IExecutor;
 //   Engine 保证。
 //
 // 边界：
+//   - backend 为借用指针：Executor 已初始化时取 executor->backend()，
+//     否则取 Engine::Load 中的局部 Backend；
 //   - backend_initialized 为 false 时跳过 Synchronize/Deinit；
+//   - executor_initialized 为 true 时由 Executor::Deinit 释放 Backend；
 //   - resource_stack 为空时跳过缓冲释放；
 //   - 各指针允许为空（部分加载失败场景）。
 struct DestroyContext {
@@ -52,13 +55,13 @@ struct DestroyContext {
   // KV 管理器；用于释放块与缓冲。
   IKVCache* kv_cache = nullptr;
 
-  // 执行器；用于反初始化。
+  // 执行器；用于反初始化并在需要时释放 Backend。
   IExecutor* executor = nullptr;
 
   // 图；用于 ClearOpEnv/ClearGraphEnv。
   runtime_graph::Graph* graph = nullptr;
 
-  // 后端；用于 Synchronize/Deinit。
+  // 后端借用指针；用于 Synchronize，或在 Executor 未初始化时直接 Deinit。
   Backend* backend = nullptr;
 
   // 资源释放栈。
@@ -66,6 +69,9 @@ struct DestroyContext {
 
   // 后端是否已成功初始化。
   bool backend_initialized = false;
+
+  // Executor 是否已完成 Init（即是否持有 Backend 所有权）。
+  bool executor_initialized = false;
 };
 
 // Destroy 统一接口。
@@ -76,7 +82,8 @@ struct DestroyContext {
 // 边界：
 //   - 幂等：重复调用安全；
 //   - 单个释放失败记录并继续，最终返回首个错误；
-//   - 不阻塞推理线程；调用方（Engine）负责先停线程。
+//   - 不阻塞推理线程；调用方（Engine）负责先停线程；
+//   - Backend 的最终释放由 Executor::Deinit 完成（若已初始化）。
 class IDestroyer {
  public:
   virtual ~IDestroyer() = default;

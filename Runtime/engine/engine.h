@@ -1,19 +1,21 @@
 // 模块：Runtime Engine 总接口
 //
 // 职责：
-//   作为 Runtime 的唯一门面与总接口：持有 Loader/Graph/Backend/Scheduler/
-//   Executor/KVCache/Destroy 成员指针，编排加载、单步推理、请求生命周期与
-//   资源释放；对外提供 token 级 API 供阶段二 Service 层调用。
+//   作为 Runtime 的唯一门面与总接口：持有 Loader/Graph/Scheduler/Executor/
+//   KVCache/Destroy 成员指针（Backend 由 Executor 持有），编排加载、单步
+//   推理、请求生命周期与资源释放；对外提供 token 级 API 供 Service 层调用。
 //
 // 边界：
 //   - 不实现调度、KV、执行、后端算法，只通过统一接口编排；
 //   - 不接触文本/Tokenizer；
-//   - 不直接调用 OpEnv/Kernel；执行链经 IExecutor 进入。
+//   - 不直接调用 OpEnv/Kernel，也不直接持有 Backend；
+//   - 执行链经 IExecutor 进入，Backend 所有权归 Executor。
 //
 // 依赖：
-//   Runtime/common/*、Runtime/loader/loader.h、Runtime/scheduler/scheduler.h、
-//   Runtime/kvcache/kv_cache_manager.h、Runtime/executor/executor.h、
-//   Runtime/destroy/destroyer.h、Graph/include/storage.h。
+//   Runtime/common/*、Runtime/scheduler/scheduler.h、
+//   Runtime/executor/executor.h、Runtime/destroy/destroyer.h、
+//   Graph/include/storage.h；ILoader/IKVCache/Graph 使用指针成员，由
+//   Engine.cc 包含其完整定义。
 
 #ifndef MOBILENET_RUNTIME_ENGINE_ENGINE_H_
 #define MOBILENET_RUNTIME_ENGINE_ENGINE_H_
@@ -31,7 +33,6 @@
 #include "Graph/include/storage.h"
 #include "Runtime/common/io_binder.h"
 #include "Runtime/common/model_config.h"
-#include "Runtime/common/op_env_factory.h"
 #include "Runtime/common/plan.h"
 #include "Runtime/common/request.h"
 #include "Runtime/common/resource_stack.h"
@@ -39,19 +40,18 @@
 #include "Runtime/common/status.h"
 #include "Runtime/destroy/destroyer.h"
 #include "Runtime/executor/executor.h"
-#include "Runtime/kvcache/kv_cache_manager.h"
-#include "Runtime/loader/loader.h"
 #include "Runtime/scheduler/scheduler.h"
 
 namespace mobilenet {
-
-class Backend;
 
 namespace runtime_graph {
 class Graph;
 }  // namespace runtime_graph
 
 namespace runtime {
+
+class ILoader;
+class IKVCache;
 
 // Engine 生命周期状态。
 //
@@ -86,20 +86,15 @@ struct EngineConfig {
 //
 // 边界：
 //   - 只在 Engine CREATED 状态注入；
-//   - Graph/Backend 由 Loader 产出，不在本结构中；
+//   - Loader/KVCache 由 Engine 内部创建，不在此注入；
+//   - Graph/Backend 由 Loader 产出：Graph 归 Engine，Backend 归 Executor；
 //   - 注入后所有权移交 Engine。
 struct EngineModules {
-  // 加载器实现；为空时使用默认实现。
-  std::unique_ptr<ILoader> loader;
-
   // 调度器实现；为空时使用默认实现。
   std::unique_ptr<IScheduler> scheduler;
 
   // 执行器实现；为空时使用默认实现（ExecBackend）。
   std::unique_ptr<IExecutor> executor;
-
-  // KVCache 实现；为空时使用默认实现。
-  std::unique_ptr<IKVCache> kv_cache;
 
   // Destroy 实现；为空时使用默认实现。
   std::unique_ptr<IDestroyer> destroyer;
@@ -293,17 +288,16 @@ class Engine final : public IoBinder {
   RuntimeConfig runtime_config_;
   ModelConfig model_config_;
 
-  // 模块成员：全部以指针形式持有，便于替换实现。
+  // 模块成员：以指针形式持有，便于替换实现。
+  // Backend 不在 Engine 中：由 Loader 创建后移交 Executor 持有。
   std::unique_ptr<ILoader> loader_;
   std::unique_ptr<runtime_graph::Graph> graph_;
-  std::unique_ptr<Backend> backend_;
   std::unique_ptr<IScheduler> scheduler_;
   std::unique_ptr<IExecutor> executor_;
   std::unique_ptr<IKVCache> kv_cache_;
   std::unique_ptr<IDestroyer> destroyer_;
 
   // 内部辅助对象。
-  std::unique_ptr<OpEnvFactory> op_env_factory_;
   std::unique_ptr<ResourceStack> resource_stack_;
 
   // 回调与统计。

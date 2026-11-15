@@ -5,6 +5,8 @@
 //   ExecBackend 提供，负责把 Op/Backend/GraphEnv 组合成可执行 OpEnv。
 //
 // 边界：
+//   - 工厂由 Loader 内部创建与使用，不作为 Engine 成员，也不出现在 Engine
+//     对外接口；
 //   - 工厂不拥有 Op/Backend/GraphEnv，只借用；
 //   - 工厂不决定调度、KV 或 Graph 拓扑；
 //   - 创建失败必须保证不泄漏部分构造的 OpEnv/Kernel。

@@ -97,7 +97,7 @@ Agent 智能体在服务侧的应用部署已经非常广泛，手机端或者�
 | FR-1.10 | Scheduler 实现 Continuous Batching；维护 Waiting/Running 队列；对上层提供 Merge（添加请求）、Update（回写生成 Token 与状态）、Stop（结束请求）接口。 | 多请求并发正确、无串扰；取消与超时生效。 | TC-SCHED-01、TC-SCHED-02 |
 | FR-1.11 | KVCache Manager 实现 Paged Attention 的 KV Block 分配、追加、回收与 Block Table 管理，支持多请求并发与显存不足时的抢占。 | 块分配不变量成立；OOM 时触发抢占并可恢复。 | TC-KV-01 |
 | FR-1.12 | Executor 按调度计划构建主机输入/输出绑定与 ForwardContext；通过 Engine 的 I/O 绑定接口写入 Input/Output op 的 storage attr，随后按 Graph::GetOrderlyOPList() 逐 op 调用 OpEnv::Forward()，完成 Input H2D、计算与 Output D2H；经 Backend/Kernel 公共接口提交节点执行；优先对 Waiting 请求做 Prefill，再对 Running 请求做 Decode；同一 Step 内按 Token 维度 Packing 多请求；采样 op 输出 Token。 | 单请求/多请求结果与参考一致；H2D/D2H 往返正确；Kernel 独立对齐通过；Executor 无后端专有代码；不直接修改 Graph 拓扑。 | TC-EXEC-01、TC-KERNEL-01 |
-| FR-1.13 | Engine 聚合 Loader、Scheduler、KVCache Manager、Executor、Destroy，持有 Backend、Graph 与各 op 的 OpEnv，对上层提供统一的 Load、Schedule、Execute、Destroy 接口与生命周期管理。 | 生命周期状态正确；Backend、Graph 与 OpEnv 生命周期正确；接口可重复调用且错误可诊断。 | TC-ENG-01 |
+| FR-1.13 | Engine 聚合 Loader、Scheduler、KVCache Manager、Executor、Destroy，持有 Graph 与各 op 的 OpEnv（Backend 由 Executor 持有），对上层提供统一的 Load、Schedule、Execute、Destroy 接口与生命周期管理。 | 生命周期状态正确；Backend、Graph 与 OpEnv 生命周期正确；接口可重复调用且错误可诊断。 | TC-ENG-01 |
 | FR-1.14 | Destroy 按依赖顺序释放各 op 的 OpEnv、Kernel、Buffer（含输入/输出设备缓冲）、GraphEnv、Graph、Backend 与主机资源；释放接口可重复调用，不产生内存、设备或线程资源泄漏。 | 反复 Load/Destroy 无泄漏；后端句柄计数归零；Destroy 幂等。 | TC-ENG-01 |
 
 ### 2.2.2 阶段二：大语言模型服务框架
@@ -591,7 +591,7 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 
 **职责**：执行 ExecutionPlan，构建主机输入/输出绑定与 ForwardContext，按 Graph 拓扑序驱动 OpEnv，完成 H2D、图执行、D2H 与采样。
 
-**输入**：ExecutionPlan、Graph `Graph`（非拥有）、Backend（非拥有）、KVCache 视图、主机输入/输出缓冲、采样参数。
+**输入**：ExecutionPlan、Graph `Graph`（非拥有）、Backend（拥有）、KVCache 视图、主机输入/输出缓冲、采样参数。
 
 **输出**：每个请求的新 Token（调试模式可输出 logits）、执行统计。
 
@@ -617,7 +617,7 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 
 ### 4.3.5 Engine
 
-**职责**：统一门面与生命周期管理，聚合 Loader、Scheduler、KVCache Manager、Executor、Destroy，并持有 Backend、Graph、GraphEnv 与各 op 的 OpEnv。
+**职责**：统一门面与生命周期管理，聚合 Loader、Scheduler、KVCache Manager、Executor、Destroy，并持有 Graph、GraphEnv 与各 op 的 OpEnv；Backend 由 Executor 持有。
 
 接口：
 
@@ -634,7 +634,7 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 - **调用方线程**：Merge/Stop 线程安全；结果通过回调、事件或队列返回。
 - **状态机**：CREATED → LOADED → RUNNING → DESTROYED；非法状态调用返回错误码。
 - **模块注入**：各模块通过接口构造，支持 mock 与替换；Engine 不实现具体算法。
-- **后端与图所有权**：Engine 持有 Backend 与 Graph；Loader 在 Load 时创建并移交；Op 通过 `unique_ptr<OpEnv>` 持有执行环境，Executor 仅持有非拥有指针；Destroy 时由 Engine 统一释放。
+- **后端与图所有权**：Engine 持有 Graph；Loader 在 Load 时创建 Graph 并移交 Engine，创建 Backend 并移交 Executor；Op 通过 `unique_ptr<OpEnv>` 持有执行环境；Executor 拥有 Backend、仅持有 Graph 非拥有指针；Destroy 时由 Engine 编排、Executor::Deinit 释放 Backend。
 - **主机 I/O 缓冲所有权**：`host_inputs`/`host_outputs` 由 Executor 持有并在 Step 内复用；Engine、Graph 与 OpEnv 不持有主机缓冲。
 
 **异常**：状态错误、线程启动/停止失败、模块初始化失败、推理循环异常退出。
@@ -712,13 +712,13 @@ Engine.Load(config)
   → Backend::Init
   → Loader: 读取 model.mgf → 重建 Graph → ConvertParam / CreateKernel / CreateBuffer
   → Engine: 创建 GraphEnv 与各 op 的 OpEnv → Op::SetOpEnv
-  → Engine 注入 Backend 与 Graph 到 Executor
+  → Engine 将 Graph 与 Backend 注入 Executor（Backend 所有权移交 Executor）
   → Executor: for op in Graph.GetOrderlyOPList(): op.GetOpEnv()->Forward()
   → Backend::Synchronize
 ```
 
 - **选择时机**：加载期；`RuntimeConfig.backend` 缺省 `"ocl"`；未知后端返回 `UNSUPPORTED_BACKEND`，不进入推理。
-- **注册与调用路径**：BackendRegistry 只负责名称→工厂；Loader 创建后端并重建 Graph；Engine 创建 GraphEnv/OpEnv 并注入 Executor。Executor 通过 `GetOrderlyOPList()` 与 `OpEnv::Forward()` 触发后端执行，不持有注册表、不感知后端类型。
+- **注册与调用路径**：BackendRegistry 只负责名称→工厂；Loader 创建后端并重建 Graph；Engine 创建 GraphEnv/OpEnv 并把 Backend 所有权移交 Executor。Executor 通过 `GetOrderlyOPList()` 与 `OpEnv::Forward()` 触发后端执行，不持有注册表、不感知后端类型。
 - **能力校验**：逐计算 op 创建 OpEnv/Kernel；I/O op 校验传输方向；缺算子、缺精度、缺传输方向、对齐不满足在加载期失败并定位 op，不做静默降级。
 - **多实例**：每个 Engine 一个 Backend 与 Graph；`device_id` 预留多设备选择。
 
@@ -743,11 +743,11 @@ Engine.Load(config)
 ### 4.4.7 资源封装与释放
 
 - Loader/Destroy 只做编排，不直接调用设备 API；上下文、显存、H2D/D2H、权重转换、Kernel、同步全部经 Backend。
-- Backend 实例与 Graph 由 Loader 创建并移交 Engine；Op 持有 `OpEnv`，OpEnv 持有 Kernel 执行环境；Executor 持有 Backend/Graph 非拥有指针；Buffer/Kernel 句柄由 Backend 创建，运行时对象通过 Backend 释放。
+- Backend 实例与 Graph 由 Loader 创建：Graph 移交 Engine，Backend 移交 Executor 持有；Op 持有 `OpEnv`，OpEnv 持有 Kernel 执行环境；Executor 拥有 Backend、仅持有 Graph 非拥有指针；Buffer/Kernel 句柄由 Backend 创建，运行时对象通过 Backend 释放。
 - Input/Output op 的设备缓冲由 Loader 创建、Destroy 释放；主机输入/输出缓冲由 Executor 持有，Backend 只在执行期间使用，不保留指针。
-- 释放顺序：停止调度 → Synchronize → 逐 op `ClearOpEnv()` → DestroyBuffer → `Graph::ClearGraphEnv()` → Deinit → 销毁 Graph 与 Backend。
+- 释放顺序：停止调度 → Synchronize → 逐 op `ClearOpEnv()` → DestroyBuffer → `Graph::ClearGraphEnv()` → Executor::Deinit（Backend::Deinit + 释放 Backend）→ 销毁 Graph 与 Executor。
 - `Backend::Init` 全有或全无；`Deinit` 幂等；部分加载失败与正常 Destroy 使用同一逆序回滚路径。
-- Backend 调用由 Engine 串行化，不要求内部线程安全。
+- Backend 调用由 Engine 的推理线程串行执行，不要求内部线程安全。
 
 ### 4.4.8 异常与错误处理
 

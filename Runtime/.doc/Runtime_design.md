@@ -2,9 +2,10 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | v0.2 |
-| 文档状态 | 架构设计（接口冻结稿） |
+| 文档版本 | v0.3 |
+| 文档状态 | 架构设计（接口冻结稿，Option A 已确认） |
 | 编写日期 | 2026-11-16 |
+| 变更摘要 | v0.3：Engine→Executor→Backend 所有权；Backend/KVCache/OpEnvFactory 不暴露给 Engine；Kernel 契约迁至 `Runtime/backend/`；Scheduler 统一释放 KV |
 | 模块 | `Runtime/` |
 | 权威位置 | `Runtime/.doc/Runtime_design.md` |
 | 上游文档 | [`.doc/MobileNet_design.md`](../../.doc/MobileNet_design.md)、[`Graph/.doc/Graph_design.md`](../../Graph/.doc/Graph_design.md) |
@@ -114,8 +115,8 @@ Runtime 目前只有 `common/`、`backend/backend.h`（含 `backend/kernel.h`）
                                         │ Engine 对外 API（token 级）
 ┌───────────────────────────────────────▼──────────────────────────────────────────────────┐
 │ Engine（总接口/门面/生命周期/推理循环/IO 绑定）                                            │
-│  成员指针：ILoader / Graph / Backend / IScheduler / IExecutor / IKVCache / IDestroyer     │
-│  内部辅助：OpEnvFactory / ResourceStack                                                   │
+│  成员指针：ILoader / Graph / IScheduler / IExecutor / IKVCache / IDestroyer               │
+│  内部辅助：ResourceStack                                                                  │
 └───────┬───────────────┬───────────────┬───────────────┬───────────────┬──────────────────┘
         │               │               │               │               │
    ┌────▼────┐    ┌─────▼─────┐   ┌─────▼─────┐   ┌─────▼─────┐   ┌─────▼─────┐
@@ -123,43 +124,41 @@ Runtime 目前只有 `common/`、`backend/backend.h`（含 `backend/kernel.h`）
    └────┬────┘    └─────┬─────┘   └─────┬─────┘   └─────┬─────┘   └───────────┘
         │               │               │               │
         ▼               ▼               ▼               ▼
-   Graph/Backend    KvAllocator     BlockPool      Graph::GetOrderlyOPList
-   OpEnvFactory                                    → Op::GetOpEnv
+   Graph/Backend    KvAllocator     BlockPool      Backend（Executor 拥有）
+   OpEnvFactory                                    Graph::GetOrderlyOPList
+                                                   → Op::GetOpEnv
                                                    → OpEnv::Forward
                                                    → Kernel::Execute
-                                                   → Backend（ExecBackend）
+                                                   → Backend 设备调用
 ```
 
 ### 3.2 Engine 组合与接口注入
 
-Engine 是 Runtime 的唯一总接口；所有模块以 `std::unique_ptr<接口>` 成员持有，便于替换实现（例如不同版本的 Scheduler）。
+Engine 是 Runtime 的唯一总接口；核心模块以 `std::unique_ptr<接口>` 成员持有，便于替换实现（例如不同版本的 Scheduler）。
 
 ```cpp
 class Engine final : public IoBinder {
  private:
   EngineState state_ = EngineState::kCreated;
 
-  std::unique_ptr<ILoader> loader_;
-  std::unique_ptr<runtime_graph::Graph> graph_;      // 由 Loader 产出，Engine 持有
-  std::unique_ptr<Backend> backend_;                 // 由 Loader 产出，Engine 持有
-  std::unique_ptr<IScheduler> scheduler_;
-  std::unique_ptr<IExecutor> executor_;
-  std::unique_ptr<IKVCache> kv_cache_;
-  std::unique_ptr<IDestroyer> destroyer_;
-
-  std::unique_ptr<OpEnvFactory> op_env_factory_;     // 内部辅助
+  std::unique_ptr<ILoader> loader_;                  // 内部创建；加载期使用
+  std::unique_ptr<runtime_graph::Graph> graph_;      // Loader 产出，Engine 持有
+  std::unique_ptr<IScheduler> scheduler_;            // 可注入
+  std::unique_ptr<IExecutor> executor_;              // 可注入；拥有 Backend
+  std::unique_ptr<IKVCache> kv_cache_;               // Engine 内部创建并持有
+  std::unique_ptr<IDestroyer> destroyer_;            // 可注入
   std::unique_ptr<ResourceStack> resource_stack_;    // 内部辅助
 };
 ```
+
+注意：**Backend 不是 Engine 的成员**；它由 Loader 创建、以 `unique_ptr` 移交给 Executor 持有。OpEnvFactory 也不是 Engine 成员，而是 Loader 的内部工具。
 
 注入机制：
 
 ```cpp
 struct EngineModules {
-  std::unique_ptr<ILoader> loader;
   std::unique_ptr<IScheduler> scheduler;
   std::unique_ptr<IExecutor> executor;
-  std::unique_ptr<IKVCache> kv_cache;
   std::unique_ptr<IDestroyer> destroyer;
 };
 
@@ -170,10 +169,11 @@ Status Engine::SetModules(EngineModules modules);
 规则：
 
 1. `SetModules` 只在 `CREATED` 状态有效；`LOADED/RUNNING` 返回 `kStateError`。
-2. 未注入的模块由 Engine 在 `Load` 时用默认工厂创建；已注入的模块由 Engine 接管所有权。
-3. `Graph` 与 `Backend` 的内容依赖模型包，不能预先注入；由 `ILoader::Load` 产出后移交 Engine。测试可注入 Fake Loader 产出 Fake Graph/Backend。
-4. `OpEnvFactory` 由 Engine 持有并传给 Loader；缺省实现由 ExecBackend 提供（`CreateDefaultOpEnvFactory`）。
+2. Scheduler/Executor/Destroyer 可注入；未注入时由 Engine 创建默认实现。Loader 与 KVCache 由 Engine 内部创建，不对外注入。
+3. `Graph` 与 `Backend` 依赖模型包，不能预先注入：`ILoader::Load` 产出后，Graph 移交 Engine，Backend 移交 Executor。
+4. `OpEnvFactory` 由 Loader 内部创建并用于逐 op 生成 OpEnv；Engine 不持有该工厂。
 5. `ResourceStack` 由 Engine 持有并传给 Loader/KVCache/Destroyer，负责逆序回滚与释放。
+6. Backend/KVCache/OpEnvFactory 不出现在 Engine 对外接口签名中。
 
 ### 3.3 模块划分与所有权
 
@@ -190,7 +190,7 @@ Status Engine::SetModules(EngineModules modules);
 | Kernel | `Runtime/backend/kernel.h` | ExecBackend | `Kernel` | 单节点执行、`KernelContext` | 图执行、内存管理 |
 | Graph | `Graph/` | ToolChain | `Graph`（类接口） | 图容器、构图、SortOp、查询、GraphEnv/OpEnv | 执行、显存分配、调度 |
 
-依赖方向：Common ← 所有模块；Loader → Graph/Backend/OpEnvFactory；Scheduler → KvAllocator；Engine → 全部；Executor → Graph/Backend/Kernel；Backend/Kernel → Common。**禁止反向依赖**。
+依赖方向：Common ← 所有模块；Loader → Graph/Backend/OpEnvFactory；Scheduler → KvAllocator；Engine → ILoader/Graph/IScheduler/IExecutor/IKVCache/IDestroyer；Executor → Graph/Backend/Kernel；Backend/Kernel → Common。**Backend 由 Executor 持有**；禁止反向依赖。
 
 ### 3.4 关键流程
 
@@ -198,8 +198,8 @@ Status Engine::SetModules(EngineModules modules);
 
 ```text
 Engine.Load(config)
-  → 确保模块存在（未注入则创建默认实现）
-  → loader_->Load(config, op_env_factory, resource_stack, &result)
+  → 确保模块存在（Scheduler/Executor/Destroyer 未注入则创建默认；Loader/KVCache 内部创建）
+  → loader_->Load(config, resource_stack, &result)
       1 读头/校验 magic/version/manifest SHA
       2 JSON 解析 manifest
       3 统计交叉校验
@@ -208,14 +208,19 @@ Engine.Load(config)
       6 BackendRegistry::Create → Init → Capability 校验
       7 权重流式上传（可选逐项 SHA-256）
       8 分配 arena / I/O 缓冲并绑定 storage
-      9 GraphEnv + 逐 op OpEnv（工厂）→ Init 登记 workspace → 分配回填
-  → Engine 接管 result.graph / result.backend / result.model
-  → kv_cache_->Init(backend_, spec, kv_budget, resource_stack)
-  → scheduler_->Init(scheduler_config, kv_cache_, model_config)
-  → executor_->Init(backend_, graph_, this)
+      9 GraphEnv + 逐 op OpEnv（Loader 内部 op_env_factory）→ Init 登记 workspace → 分配回填
+  → graph_ = std::move(result.graph)
+  → kv_cache_->Init(result.backend.get(), spec, kv_budget, resource_stack)  // 借用
+  → scheduler_->Init(scheduler_config, kv_cache_.get(), result.model)
+  → executor_->Init(std::move(result.backend), graph_.get(), this)          // 所有权移交
   → state = LOADED
 任一步失败：destroyer_->Destroy(...) 逆序回滚，state = CREATED
 ```
+
+回滚上下文：Executor 尚未 Init 时，`DestroyContext.backend` 取
+`result.backend.get()`、`executor_initialized=false`，由 Destroyer 直接
+`Backend::Deinit`；Executor 已 Init 时，`backend` 取 `executor_->backend()`、
+`executor_initialized=true`，由 `Executor::Deinit` 释放 Backend。
 
 **单步推理**
 
@@ -225,7 +230,8 @@ Engine.RunOnce
   → kv_cache_->BuildView(&kv_view)
   → executor_->Execute(plan, kv_view, &step_result)
   → 逐请求 scheduler_->Update(id, tokens, status, &update_result)
-  → update_result.finished：kv_cache_->Release(id) + TokenCallback
+       └─ 终态：Scheduler 通过 KvAllocator::Release 释放 KV
+  → update_result.finished：TokenCallback
   → StepStats
 ```
 
@@ -242,8 +248,15 @@ WAITING ──Schedule──▶ RUNNING ──停止──▶ FINISHED
 **销毁流程**
 
 ```text
-Destroy：停线程 → Synchronize → 逐 op ClearOpEnv → ResourceStack.Clear()
-        → Graph.ClearGraphEnv → Backend.Deinit → 释放 Graph/Backend → DESTROYED
+Engine.Destroy
+  → 停推理线程 / join
+  → destroyer_->Destroy(context)
+       → Synchronize（经 Executor::backend()）
+       → 逐 op ClearOpEnv()（Kernel 经 Backend 释放）
+       → ResourceStack.Clear()（KV/arena/IO/权重缓冲经 Backend 释放）
+       → Graph.ClearGraphEnv()
+       → Executor.Deinit()（Backend.Deinit + 释放 Backend）
+  → DESTROYED
 ```
 
 ### 3.5 逐层调用链（Engine → 算子）
@@ -251,18 +264,28 @@ Destroy：停线程 → Synchronize → 逐 op ClearOpEnv → ResourceStack.Clea
 ```text
 Engine::RunOnce
   → IScheduler::Schedule
+  → IKVCache::BuildView
   → IExecutor::Execute
+      → IoBinder::SetInput / SetOutput
       → Graph::GetOrderlyOPList()
       → Op::GetOpEnv()
       → OpEnv::Forward()
           → Kernel::Execute(KernelContext)
               → Backend 设备调用（由 Kernel 实现）
-      → Graph::GetSampleOp() / Output op 回读
+      → Backend::Synchronize
+      → 读 sample.out
   → IScheduler::Update
-  → IKVCache::Release
+      → 终态：KvAllocator::Release
+  → TokenCallback
 ```
 
-约束：Engine 不直接调用 OpEnv/Kernel；Executor 不调用 Scheduler/KVCache 的分配接口；Kernel 不知道 Graph/Scheduler 存在。
+约束：
+
+- Engine 不直接调用 OpEnv/Kernel，也不直接引用 Backend；
+- Executor 是唯一遍历 `GetOrderlyOPList()` 并调用 `OpEnv::Forward()` 的对象；
+- Backend 不知道 Graph/OpEnv，只提供设备能力与 Kernel 工厂；
+- Kernel 不知道 Graph/Scheduler 存在；
+- KV 的 Reserve/Release 都发生在 Scheduler 内（经 `KvAllocator`）。
 
 ### 3.6 线程模型
 
@@ -499,6 +522,8 @@ class ResourceStack {
 };
 ```
 
+其中 `OpEnvFactory` 由 Loader 内部创建与使用，不作为 Engine 成员；`ResourceStack` 由 Engine 持有并传给 Loader/KVCache/Destroyer。
+
 ### 4.2 模块统一接口
 
 #### 4.2.1 `ILoader`（`Runtime/loader/loader.h`）
@@ -518,11 +543,13 @@ struct LoadResult {
 class ILoader {
  public:
   virtual ~ILoader() = default;
-  virtual Status Load(const LoadConfig& config, OpEnvFactory* op_env_factory,
-                      ResourceStack* resource_stack, LoadResult* result) = 0;
+  virtual Status Load(const LoadConfig& config, ResourceStack* resource_stack,
+                      LoadResult* result) = 0;
 };
 std::unique_ptr<ILoader> CreateDefaultLoader();
 ```
+
+说明：Loader 在内部创建 `OpEnvFactory`（`CreateDefaultOpEnvFactory`，ExecBackend 实现），不向 Engine 暴露；`LoadResult.backend` 由 Engine 移交给 Executor。
 
 #### 4.2.2 `IScheduler`（`Runtime/scheduler/scheduler.h`）
 
@@ -566,6 +593,8 @@ class IScheduler {
 std::unique_ptr<IScheduler> CreateDefaultScheduler();
 ```
 
+说明：Scheduler 持有 `KvAllocator*`，在 `Update/Stop/Fail` 使请求进入终态时调用 `KvAllocator::Release`；Engine 不重复释放。
+
 #### 4.2.3 `IKVCache`（`Runtime/kvcache/kv_cache_manager.h`）
 
 ```cpp
@@ -580,21 +609,27 @@ class IKVCache : public KvAllocator {
 std::unique_ptr<IKVCache> CreateDefaultKVCache();
 ```
 
+说明：`IKVCache::Init` 的 `Backend*` 为借用指针；Backend 生命周期由 Executor 保证。
+
 #### 4.2.4 `IExecutor`（`Runtime/executor/executor.h`，ExecBackend 实现）
 
 ```cpp
 class IExecutor {
  public:
   virtual ~IExecutor() = default;
-  virtual Status Init(Backend* backend, runtime_graph::Graph* graph,
+  virtual Status Init(std::unique_ptr<Backend> backend,
+                      runtime_graph::Graph* graph,
                       IoBinder* io_binder) = 0;
+  virtual Backend* backend() = 0;   // 非拥有访问；未初始化返回 nullptr
   virtual Status Execute(const ExecutionPlan& plan,
                          const KvCacheView& kv_view,
                          StepResult* result) = 0;
-  virtual Status Deinit() = 0;
+  virtual Status Deinit() = 0;      // Backend::Deinit + 释放 Backend
 };
 std::unique_ptr<IExecutor> CreateDefaultExecutor();
 ```
+
+说明：Executor 是 Backend 的唯一所有者；`Deinit` 负责 `Backend::Deinit` 并释放；OpEnv/KVCache 只借用 Backend。
 
 #### 4.2.5 `IDestroyer`（`Runtime/destroy/destroyer.h`）
 
@@ -604,9 +639,10 @@ struct DestroyContext {
   IKVCache* kv_cache = nullptr;
   IExecutor* executor = nullptr;
   runtime_graph::Graph* graph = nullptr;
-  Backend* backend = nullptr;
+  Backend* backend = nullptr;   // 借用；Executor 拥有时由 executor->backend() 提供
   ResourceStack* resource_stack = nullptr;
   bool backend_initialized = false;
+  bool executor_initialized = false;
 };
 
 class IDestroyer {
@@ -707,6 +743,33 @@ Graph 由 ToolChain 维护，Runtime 只使用以下接口，不修改：
 | `Op::SetOpEnv/ClearOpEnv/GetOpEnv` | OpEnv 挂载 | Loader/Executor/Destroy |
 | `DumpIr` | IR 哈希 | Loader（需 ToolChain 暴露 C++ 接口） |
 
+#### 4.4.1 OpEnv 与 Backend 的关系
+
+```text
+Graph
+ └── Op（op_type/attr/src/dst）
+      └── OpEnv（unique_ptr，Graph 侧）
+           ├── Op*        （非拥有）
+           ├── GraphEnv*  （非拥有）
+           ├── Backend*   （非拥有）
+           └── Kernel     （unique_ptr，由 Backend::CreateKernel 创建）
+
+Backend（Executor 拥有）
+ ├── 设备/上下文/队列
+ ├── CreateBuffer/DestroyBuffer
+ ├── Upload/Download
+ └── CreateKernel/DestroyKernel ──► OclKernel/VulkanKernel/...
+```
+
+规则：
+
+1. OpEnv 是 Graph IR 的节点执行环境，由 Op 通过 `unique_ptr` 持有；Backend 不知道 OpEnv 的存在。
+2. OpEnv 由 Loader 通过 `OpEnvFactory` 创建，`Init(GraphEnv*)` 时经 `Backend::CreateKernel` 获得 Kernel。
+3. Executor 按拓扑序调用 `OpEnv::Forward()`；OpEnv 组装 `KernelContext` 并调用 `Kernel::Execute()`；Kernel 使用 Backend 提供的设备资源。
+4. Input/Output 的 I/O OpEnv 直接调用 `Backend::Upload/Download`；计算 OpEnv 只调用 Kernel。
+5. 销毁顺序：先 `Op::ClearOpEnv()`（Kernel 经 Backend 释放），再释放缓冲，最后 `Backend::Deinit()`；Backend 必须比所有 OpEnv/Kernel 活得更久。
+6. 一个通用 `KernelOpEnv` 可服务所有后端；后端差异收敛在 `Kernel` 实现，OpEnv 不直接调用厂商 API。
+
 ### 4.5 Engine 对外接口
 
 ```cpp
@@ -755,15 +818,15 @@ Engine 对外接口与模块统一接口的对应关系：
 
 | Engine 对外接口 | 内部调用链 |
 | --- | --- |
-| `SetModules` | 替换 `loader_/scheduler_/executor_/kv_cache_/destroyer_` 指针 |
-| `Load` | `loader_->Load` → `kv_cache_->Init` → `scheduler_->Init` → `executor_->Init` |
+| `SetModules` | 替换 `scheduler_/executor_/destroyer_` 指针 |
+| `Load` | `loader_->Load` → `kv_cache_->Init` → `scheduler_->Init` → `executor_->Init(std::move(backend))` |
 | `Start` | 状态迁移；threaded 时启动推理线程 |
 | `AddRequest` | `scheduler_->Merge` |
 | `CancelRequest` | `scheduler_->Stop` |
 | `Update` | `scheduler_->Update` |
-| `RunOnce` | `scheduler_->Schedule` → `kv_cache_->BuildView` → `executor_->Execute` → `scheduler_->Update` → `kv_cache_->Release` |
+| `RunOnce` | `scheduler_->Schedule` → `kv_cache_->BuildView` → `executor_->Execute` → `scheduler_->Update`（终态由 Scheduler 释放 KV） |
 | `RunUntilIdle` | 循环 `RunOnce` 直到 `scheduler_->HasRequests()` 为 false |
-| `Destroy` | 停线程 → `destroyer_->Destroy` |
+| `Destroy` | 停线程 → `destroyer_->Destroy`（Executor::Deinit 释放 Backend） |
 | `SetInput/SetOutput` | 校验后写入 Input/Output op 的 `attr["storage"]` |
 | `stats` | 汇总 `scheduler_->Stats()`、`kv_cache_->Stats()` 与本地计数 |
 
@@ -774,16 +837,18 @@ Engine 对外接口与模块统一接口的对应关系：
 | Service → Engine | Load/Start/AddRequest/CancelRequest/Update/RunOnce/RunUntilIdle/Destroy/SetTokenCallback/Stats | Request、StepStats、EngineStats | 唯一对外入口 |
 | Engine → ILoader | `Load` | LoadConfig → LoadResult | 加载期一次性 |
 | Loader → Graph | Create*/SortOp/DumpIr/SetGraphEnv | Graph 对象、Storage | 重建与校验 |
-| Loader → Backend | Init/Capability/CreateBuffer/ConvertParam/Upload/Deinit | BufferDesc、ParamDesc | 零设备 API |
-| Loader → OpEnvFactory | `Create` | Op/Backend/GraphEnv → OpEnv | 逐 op 创建 |
+| Loader → Backend | Init/Capability/CreateBuffer/ConvertParam/Upload；失败回滚时 Deinit | BufferDesc、ParamDesc | 零设备 API |
+| Loader → OpEnvFactory | `Create` | Op/Backend/GraphEnv → OpEnv | Loader 内部，逐 op 创建 |
 | Loader → ResourceStack | `Push` | 释放闭包 | 逆序回滚 |
 | Engine → IScheduler | Init/Merge/Schedule/Update/Stop/Fail/Snapshot/Stats | Request、ExecutionPlan、UpdateResult | 单推理线程 |
 | Scheduler → KvAllocator | Reserve/Release/GetBlockTable/GetSlots/FreeBlocks/BlockSize | 块号、slot | 失败零副作用 |
-| Engine → IKVCache | Init/BuildView/Stats/Release | KvCacheSpec、KvCacheView | 每步/结束时 |
-| Engine → IExecutor | Init/Execute/Deinit | ExecutionPlan、KvCacheView → StepResult | 每步 |
+| Engine → IKVCache | Init/BuildView/Stats | KvCacheSpec、KvCacheView | 加载 / 每步 |
+| Engine → IExecutor | Init(std::unique_ptr<Backend>)/Execute/Deinit | ExecutionPlan、KvCacheView → StepResult | 加载 / 每步 |
+| Executor → Backend | Synchronize | — | 每步结束 |
 | Executor → IoBinder | SetInput/SetOutput | host Storage | 每步 |
 | Executor → Graph | GetOrderlyOPList/GetSampleOp/GetAllInputOp/GetAllOutputOp | Op/Tensor | 只读 |
 | Executor → OpEnv | Forward | 无参（OpEnv 自读 storage） | 拓扑序 |
+| OpEnv → Backend | CreateKernel/DestroyKernel；I/O OpEnv：Upload/Download | KernelDesc/Kernel、Storage | 加载 / H2D/D2H |
 | OpEnv → Kernel | Execute | KernelContext | 单节点 |
 | OpEnv → GraphEnv | GetSharedStorage | workspace | Init 登记、Forward 读 |
 | Engine → IDestroyer | Destroy | DestroyContext | 结束/回滚 |
@@ -793,11 +858,14 @@ Engine 对外接口与模块统一接口的对应关系：
 
 | 资源 | 所有者 | 创建者 | 使用者 | 释放者 |
 | --- | --- | --- | --- | --- |
+| Loader/Scheduler/KVCache/Destroyer | Engine | Engine | — | Engine |
 | Graph | Engine | Loader | Executor/OpEnv（借用） | Engine（Destroy） |
 | GraphEnv | Graph | Loader | OpEnv | Graph.ClearGraphEnv |
-| OpEnv | Op（unique_ptr） | Loader（工厂） | Executor | Op.ClearOpEnv |
-| Backend | Engine | Loader（Registry） | Loader/Executor/OpEnv | Engine（Deinit） |
-| 设备缓冲 | Engine（句柄） | Loader/KVCache | OpEnv/Kernel | ResourceStack |
+| Op | Graph | Loader | Executor | Graph |
+| OpEnv | Op（unique_ptr） | Loader（OpEnvFactory） | Executor | Op.ClearOpEnv |
+| Kernel | OpEnv（unique_ptr） | Backend | OpEnv | Backend.DestroyKernel（OpEnv 析构） |
+| Backend | **Executor** | Loader（移交） | Loader/KVCache/Executor/OpEnv | Executor::Deinit |
+| 设备缓冲 | Engine（ResourceStack 句柄） | Loader/KVCache | OpEnv/Kernel | ResourceStack → Backend |
 | 权重常驻缓冲 | Engine | Loader | Kernel | ResourceStack |
 | 主机 I/O 缓冲 | Executor | Executor | Backend | Executor |
 | Request/Plan | Scheduler | Scheduler | Engine/Executor（值/快照） | Scheduler |
@@ -809,13 +877,13 @@ Engine 对外接口与模块统一接口的对应关系：
 | 数据 | 生产者 | 消费者 | 传递方式 | 生命周期 |
 | --- | --- | --- | --- | --- |
 | `LoadConfig` | Engine | ILoader | 值 | Load 期间 |
-| `LoadResult` | ILoader | Engine | 值（含 unique_ptr 移交） | Load 后由 Engine 持有 |
+| `LoadResult` | ILoader | Engine | 值（Graph 移交 Engine；Backend 再移交 Executor） | Load 后由 Engine/Executor 持有 |
 | `Request` | Service/Engine | IScheduler | 值 | 请求生命周期 |
 | `ExecutionPlan` | IScheduler | IExecutor/Engine | 值（不可变快照） | 单步 |
-| `KvCacheView` | IKVCache | IExecutor | 值（裸指针视图） | 单步 |
+| `KvCacheView` | IKVCache | Engine → IExecutor | 值（裸指针视图） | 单步 |
 | `StepResult` | IExecutor | Engine | 值 | 单步 |
 | `UpdateResult` | IScheduler | Engine | 值 | 单次 Update |
-| `DestroyContext` | Engine | IDestroyer | 值（裸指针） | Destroy 期间 |
+| `DestroyContext` | Engine | IDestroyer | 值（裸指针；Backend 借用自 Executor） | Destroy 期间 |
 | `StepStats` | Engine/Executor | Service/日志 | 值 | 单步 |
 | `EngineStats` | Engine | Service | 值 | 累计/查询 |
 
@@ -926,10 +994,10 @@ Runtime/
 
 | 用例 | 方法 | 通过标准 |
 | --- | --- | --- |
-| TC-ARCH-01 | 用 C++17 编译器对“包含全部头文件”的 TU 做 `-fsyntax-only` | 零错误、零警告（项目告警级别） |
+| TC-ARCH-01 | 用 C++17 编译器对“包含全部头文件”的 TU 做编译检查 | 零错误、零警告（项目告警级别） |
 | TC-ARCH-02 | 逐项核对本文件接口与头文件签名 | 完全一致；扩展点字段存在 |
 | TC-ARCH-03 | 依赖方向扫描 | 无反向依赖；common 不依赖 Graph/Backend |
-| TC-ARCH-04 | Engine 成员与调用矩阵核对 | 7 个模块均为 `unique_ptr`；调用链可追溯 |
+| TC-ARCH-04 | Engine 成员与调用矩阵核对 | Loader/Graph/Scheduler/Executor/KVCache/Destroyer 均为 `unique_ptr`；Backend 归 Executor；OpEnvFactory 归 Loader；调用链可追溯 |
 
 验证记录见 [`Runtime/tests/test_results.md`](../tests/test_results.md)。
 
@@ -983,8 +1051,8 @@ Runtime/
 | C1 | Backend 全生命周期与 Buffer 接口（Init/Deinit/Capability/CreateBuffer/DestroyBuffer/ConvertParam/Upload/Download/CreateKernel/DestroyKernel/Synchronize） |
 | C2 | `KernelDesc.op_type` 与 `BackendCapability.supported_ops` 统一使用 `runtime_graph::OpType` |
 | C3 | 枚举去重：图侧使用 `runtime_graph::{Precision,Layout,DeviceType}`；`DataType` 仅作后端边界类型 |
-| C4 | `OpEnvFactory` 由 ExecBackend 实现并暴露 `CreateDefaultOpEnvFactory()` |
-| C5 | `IExecutor` 按本文件签名实现；不释放 KV、不做停止判定 |
+| C4 | `OpEnvFactory` 由 ExecBackend 实现并暴露 `CreateDefaultOpEnvFactory()`；由 Loader 内部创建使用，不作为 Engine 成员 |
+| C5 | `IExecutor` 按本文件签名实现（含 `Init(std::unique_ptr<Backend>)` 与 `backend()`）；持有 Backend 所有权；不释放 KV、不做停止判定 |
 | C6 | KV/workspace 契约：每层 K/V 视图、slot 公式、GraphEnv shared storage 登记与回填 |
 | C7 | 错误码只接受 `Runtime/common/status.h` 的追加式扩展 |
 | C8 | 构建分工：RuntimeCore 维护 `Runtime/CMakeLists.txt`；ExecBackend 提供 executor/backend（含 backend/kernel）子构建 |

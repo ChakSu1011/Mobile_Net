@@ -34,6 +34,9 @@ python -m ziglang c++ -std=c++17 -Wall -Wextra -I "d:/Mobile_Net" \
 
 退出码：`0`。
 
+复核：按选项 A（Engine → Executor → Backend 所有权）同步接口后再次执行同一
+命令，输出仍为空，退出码 `0`。
+
 ## 5. 其他接口检查
 
 ### 5.1 TC-ARCH-02：文档接口与头文件一致性
@@ -90,18 +93,22 @@ missing: []
 实际输出（节选）：
 
 ```text
-297:  std::unique_ptr<ILoader> loader_;
-298:  std::unique_ptr<runtime_graph::Graph> graph_;
-299:  std::unique_ptr<Backend> backend_;
-300:  std::unique_ptr<IScheduler> scheduler_;
-301:  std::unique_ptr<IExecutor> executor_;
-302:  std::unique_ptr<IKVCache> kv_cache_;
-303:  std::unique_ptr<IDestroyer> destroyer_;
+295:  std::unique_ptr<ILoader> loader_;
+296:  std::unique_ptr<runtime_graph::Graph> graph_;
+297:  std::unique_ptr<IScheduler> scheduler_;
+298:  std::unique_ptr<IExecutor> executor_;
+299:  std::unique_ptr<IKVCache> kv_cache_;
+300:  std::unique_ptr<IDestroyer> destroyer_;
+303:  std::unique_ptr<ResourceStack> resource_stack_;
 ```
 
-结论：Loader/Graph/Backend/Scheduler/Executor/KVCache/Destroy 均为 Engine
-的指针成员，满足“可动态绑定不同实现”的架构要求；`OpEnvFactory` 与
-`ResourceStack` 为内部辅助成员。
+结论：
+
+- Loader/Graph/Scheduler/Executor/KVCache/Destroyer 为 Engine 的指针成员，
+  可通过 `EngineModules` 替换 Scheduler/Executor/Destroyer；
+- **Backend 不是 Engine 成员**，由 Loader 创建后移交 Executor 持有；
+- **OpEnvFactory 不是 Engine 成员**，由 Loader 内部创建；
+- `ResourceStack` 为 Engine 内部辅助成员。
 
 ### 5.4 目录迁移后的实现文件编译
 

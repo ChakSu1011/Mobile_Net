@@ -8,6 +8,7 @@
 // 边界：
 //   - 不做请求调度、KV 策略或设备 API 直调；
 //   - 不实现 Graph 构图语义（使用 Graph 公共接口）；
+//   - OpEnvFactory 为 Loader 内部工具，不暴露给 Engine；
 //   - 失败时必须把已创建资源登记到 ResourceStack，不留下半初始化状态。
 //
 // 依赖：
@@ -23,7 +24,6 @@
 #include "Graph/include/graph.h"
 #include "Runtime/backend/backend.h"
 #include "Runtime/common/model_config.h"
-#include "Runtime/common/op_env_factory.h"
 #include "Runtime/common/resource_stack.h"
 #include "Runtime/common/runtime_config.h"
 #include "Runtime/common/status.h"
@@ -60,7 +60,7 @@ struct LoadResult {
   // 重建并校验通过的图。
   std::unique_ptr<runtime_graph::Graph> graph;
 
-  // 初始化完成的后端。
+  // 初始化完成的后端；Engine 接管后移交 Executor 持有。
   std::unique_ptr<Backend> backend;
 
   // 从 manifest 解析的模型配置。
@@ -79,12 +79,14 @@ struct LoadResult {
 // Loader 统一接口。
 //
 // 功能：
-//   Engine 在 Load 阶段调用一次，完成全部加载期编排。
+//   Engine 在 Load 阶段调用一次，完成全部加载期编排；Loader 内部创建
+//   OpEnvFactory（ExecBackend 提供默认实现）并逐 op 生成 OpEnv。
 //
 // 边界：
 //   - 只允许在创建后单线程调用；
 //   - 不持有长期状态；加载完成后由 Engine 析构；
-//   - 失败时返回错误码，已创建资源由 ResourceStack 逆序释放。
+//   - 失败时返回错误码，已创建资源由 ResourceStack 逆序释放；
+//   - 不向 Engine 暴露 OpEnvFactory。
 class ILoader {
  public:
   virtual ~ILoader() = default;
@@ -93,7 +95,6 @@ class ILoader {
   //
   // 参数：
   //   config：包目录与运行参数；
-  //   op_env_factory：逐 op 创建 OpEnv 的工厂，非空；
   //   resource_stack：资源登记栈，非空；Loader 创建的设备缓冲/OpEnv 等必须
   //                   登记以便失败回滚与正常销毁；
   //   result：输出参数，成功时写入 Graph/Backend/ModelConfig。
@@ -101,8 +102,8 @@ class ILoader {
   //   成功返回 kOk；包损坏/哈希不一致返回 kInvalidModelFile；后端错误返回
   //   kUnsupportedBackend/kBackendInitError/kUnsupportedOp；显存不足返回
   //   kDeviceOom；其它失败返回对应错误码。
-  virtual Status Load(const LoadConfig& config, OpEnvFactory* op_env_factory,
-                      ResourceStack* resource_stack, LoadResult* result) = 0;
+  virtual Status Load(const LoadConfig& config, ResourceStack* resource_stack,
+                      LoadResult* result) = 0;
 };
 
 // 创建默认 Loader。

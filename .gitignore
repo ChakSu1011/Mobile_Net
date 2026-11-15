@@ -4,16 +4,11 @@ Reference/
 # 代码 review / 功能校对临时输出（不提交 Git/GitHub）
 TempSpace/
 
-# 大模型权重与分词器文件（保留在本地，不提交 Git/GitHub）
-Models/Qwen3/model.safetensors
-Models/Qwen3/*.safetensors.index.json
-Models/Qwen3/tokenizer.json
-Models/Qwen3/merges.txt
-Models/Qwen3/vocab.json
+# 模型目录（仅本地保存，不提交 Git/GitHub）
+Models/
 
-# 构建产物（ToolChain 源码与模型包仍需入库，只忽略编译输出与中间文件）
+# 构建产物（ToolChain 源码仍需入库，只忽略编译输出与中间文件）
 Graph/build/
-Models/*/artifacts/*_work/
 ToolChain/*.log
 
 # Python 缓存

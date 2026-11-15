@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import tempfile
 import unittest
@@ -115,6 +116,64 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertTrue(
             (self.directory / "package4" / "model.mgf").is_file())
+
+    def _write_inference_config(self, root: Path) -> Path:
+        """写出带输入配置的临时模型目录。
+
+        参数：
+          root：临时模型目录。
+
+        返回：
+          config.json 路径。
+        """
+        data = json.loads(
+            _QWEN3_CONFIG.read_text(encoding="utf-8"))
+        config_path = root / "config.json"
+        config_path.write_text(json.dumps(data), encoding="utf-8")
+        input_dir = root / "input"
+        input_dir.mkdir()
+        (input_dir / "inference_config.json").write_text(
+            json.dumps({
+                "max_num_tokens": 8,
+                "max_new_tokens": 16,
+                "max_batch_size": 2,
+                "repetition_penalty": 1.0,
+                "seed": 0,
+            }),
+            encoding="utf-8",
+        )
+        return config_path
+
+    def test_inference_config_drives_planning(self) -> None:
+        """输入配置的 runtime 作为优化默认值。"""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = self._write_inference_config(root)
+            result = run_pipeline(
+                config_path=config_path,
+                output_dir=root / "package",
+                work_dir=root / "work",
+            )
+        config = result.optimization.config
+        self.assertEqual(config.max_num_tokens, 8)
+        self.assertEqual(config.context_length, 40960)
+        self.assertEqual(config.batch_size, 2)
+
+    def test_optimize_overrides(self) -> None:
+        """显式覆盖字段优先，其余字段仍取输入配置。"""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config_path = self._write_inference_config(root)
+            result = run_pipeline(
+                config_path=config_path,
+                output_dir=root / "package",
+                work_dir=root / "work",
+                optimize_overrides={"max_num_tokens": 4},
+            )
+        config = result.optimization.config
+        self.assertEqual(config.max_num_tokens, 4)
+        self.assertEqual(config.context_length, 40960)
+        self.assertEqual(config.batch_size, 2)
 
 
 if __name__ == "__main__":

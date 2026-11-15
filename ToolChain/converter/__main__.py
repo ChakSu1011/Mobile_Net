@@ -54,6 +54,12 @@ def main(argv: list[str] | None = None) -> int:
         help="optional safetensors file or directory",
     )
     parser.add_argument(
+        "--inference-config",
+        type=Path,
+        default=None,
+        help="optional input/inference_config.json path",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         required=True,
@@ -65,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
         args.adapter,
         args.config,
         weights_path=args.weights,
+        inference_config_path=args.inference_config,
     )
     paths = write_conversion_outputs(result, args.output)
     summary = result.model_graph.summary()
@@ -76,6 +83,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"outputs {summary['outputs']}")
     print(f"total_tensors {summary['total_tensors']}")
     print(f"constant_bytes {summary['constant_bytes']}")
+    print(
+        "inference_config "
+        f"{'yes' if result.inference_config is not None else 'none'}")
     print(f"model_graph {paths['model_graph']}")
     print(f"report {paths['report']}")
     return 0

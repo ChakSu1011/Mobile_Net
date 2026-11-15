@@ -21,6 +21,10 @@ from ToolChain.common.errors import BuildError
 from ToolChain.common.graph_api import load_graph_api
 from ToolChain.common.model_ir import Dim, ModelGraph
 from ToolChain.common.safetensors import SafetensorsEntry, read_index
+from ToolChain.converter.inference_config import (
+    InferenceConfig,
+    load_inference_config,
+)
 from ToolChain.converter.recording_graph import RecordingGraph
 from ToolChain.converter.result import ConversionResult
 
@@ -97,16 +101,22 @@ class Qwen3Adapter:
         self,
         config_path: Path,
         weights_path: Path | None = None,
+        inference_config_path: Path | None = None,
     ) -> None:
         """保存配置与权重路径。
 
         参数：
           config_path：Transformers 风格 Qwen3 config.json；
-          weights_path：可选 safetensors 文件或目录。
+          weights_path：可选 safetensors 文件或目录；
+          inference_config_path：可选输入配置路径；省略时自动发现
+            ``input/inference_config.json``。
         """
         self._config_path = Path(config_path)
         self._weights_path = (
             None if weights_path is None else Path(weights_path))
+        self._inference_config_path = (
+            None if inference_config_path is None
+            else Path(inference_config_path))
 
     def build(self) -> ConversionResult:
         """构建并返回转换结果。
@@ -121,6 +131,13 @@ class Qwen3Adapter:
         """
         config = Qwen3Config.from_json(self._config_path)
         config.validate()
+        inference_config = load_inference_config(
+            self._config_path.parent,
+            config_path=self._config_path,
+            vocab_size=config.vocab_size,
+            max_position_embeddings=config.max_position_embeddings,
+            inference_config_path=self._inference_config_path,
+        )
         graph_api = load_graph_api()
         recording = RecordingGraph(
             graph_api.Graph(GRAPH_NAME),
@@ -144,11 +161,13 @@ class Qwen3Adapter:
         model_graph = recording.finish()
         weight_index = self._read_weight_index()
         self._annotate(
-            model_graph, config, builder, weight_index)
+            model_graph, config, builder, weight_index,
+            inference_config)
         return ConversionResult(
             graph=recording.adapted_graph,
             model_graph=model_graph,
             adapter=self.name,
+            inference_config=inference_config,
         )
 
     def _read_weight_index(
@@ -174,6 +193,7 @@ class Qwen3Adapter:
         config: Qwen3Config,
         builder: Qwen3GraphBuilder,
         weight_index: dict[str, SafetensorsEntry] | None,
+        inference_config: InferenceConfig | None,
     ) -> None:
         """补充输入形状、权重映射与模型配置元数据。
 
@@ -181,7 +201,8 @@ class Qwen3Adapter:
           model_graph：待补充的模型图；
           config：Qwen3 配置；
           builder：已完成构图的 Builder；
-          weight_index：可选权重索引。
+          weight_index：可选权重索引；
+          inference_config：合并后的运行参数；无输入配置时为 None。
 
         异常：
           BuildError：常量缺少 HF 映射。
@@ -232,4 +253,8 @@ class Qwen3Adapter:
             },
             "weights_supplied": weight_index is not None,
             "weight_issues": issues,
+            "inference_config": (
+                None if inference_config is None
+                else inference_config.to_dict()
+            ),
         })

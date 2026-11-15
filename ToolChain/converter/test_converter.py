@@ -29,6 +29,26 @@ _QWEN3_CONFIG = (
     _REPOSITORY_ROOT / "Models" / "Qwen3" / "config.json")
 
 
+def _valid_inference_config(**overrides) -> dict:
+    """返回合法的引擎输入配置字典。
+
+    参数：
+      overrides：需要覆盖的字段。
+
+    返回：
+      扁平配置字典，含全部必填字段。
+    """
+    data = {
+        "max_num_tokens": 256,
+        "max_new_tokens": 2048,
+        "max_batch_size": 1,
+        "repetition_penalty": 1.0,
+        "seed": 0,
+    }
+    data.update(overrides)
+    return data
+
+
 def _build_demo_graph(graph, api) -> None:
     """在给定 Graph 或 RecordingGraph 上构建演示图。
 
@@ -154,6 +174,148 @@ class RecordingGraphTest(unittest.TestCase):
             self.model.outputs[0].tensor, "linear.out")
         self.assertFalse(
             self.model.tensor("linear.out").reusable)
+
+
+class InferenceConfigTest(unittest.TestCase):
+    """运行时输入配置测试。"""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        """执行一次 Qwen3 转换并缓存结果。"""
+        cls.conversion = convert("qwen3", _QWEN3_CONFIG)
+
+    def _write_model_dir(
+        self,
+        directory: str,
+        *,
+        inference: dict | None = None,
+        generation: dict | None = None,
+    ) -> Path:
+        """在临时目录写出最小模型配置。
+
+        参数：
+          directory：临时目录；
+          inference：可选输入配置字典；
+          generation：可选 generation_config 字典。
+
+        返回：
+          config.json 路径。
+        """
+        root = Path(directory)
+        data = json.loads(
+            _QWEN3_CONFIG.read_text(encoding="utf-8"))
+        config_path = root / "config.json"
+        config_path.write_text(
+            json.dumps(data), encoding="utf-8")
+        if generation is not None:
+            (root / "generation_config.json").write_text(
+                json.dumps(generation), encoding="utf-8")
+        if inference is not None:
+            input_dir = root / "input"
+            input_dir.mkdir()
+            (input_dir / "inference_config.json").write_text(
+                json.dumps(inference), encoding="utf-8")
+        return config_path
+
+    def test_merged_values(self) -> None:
+        """UT-CONV-013：合并官方 config 与引擎输入配置。"""
+        config = self.conversion.inference_config
+        self.assertIsNotNone(config)
+        data = config.to_dict()
+        self.assertEqual(data["context_length"], 40960)
+        self.assertEqual(data["vocab_size"], 151936)
+        self.assertEqual(data["max_num_tokens"], 256)
+        self.assertEqual(data["max_new_tokens"], 2048)
+        self.assertEqual(data["max_batch_size"], 1)
+        self.assertTrue(data["do_sample"])
+        self.assertEqual(data["temperature"], 0.6)
+        self.assertEqual(data["top_k"], 20)
+        self.assertEqual(data["top_p"], 0.95)
+        self.assertEqual(data["repetition_penalty"], 1.0)
+        self.assertEqual(data["seed"], 0)
+        self.assertEqual(data["stop_token_ids"], [151645, 151643])
+        self.assertEqual(data["bos_token_id"], 151643)
+        self.assertEqual(data["pad_token_id"], 151643)
+        self.assertEqual(
+            self.conversion.model_graph.metadata[
+                "inference_config"],
+            data,
+        )
+
+    def test_missing_inference_config(self) -> None:
+        """UT-CONV-014：缺少输入配置时保持兼容。"""
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = self._write_model_dir(directory)
+            conversion = convert("qwen3", config_path)
+        self.assertIsNone(conversion.inference_config)
+        self.assertIsNone(
+            conversion.model_graph.metadata["inference_config"])
+
+    def test_repeated_official_field(self) -> None:
+        """UT-CONV-015：官方参数不得在新配置重复声明。"""
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = self._write_model_dir(
+                directory,
+                inference=_valid_inference_config(temperature=0.5),
+            )
+            with self.assertRaises(BuildError) as context:
+                convert("qwen3", config_path)
+        self.assertIn("must be read from", str(context.exception))
+
+    def test_out_of_range(self) -> None:
+        """UT-CONV-016：max_num_tokens 超出上下文时报错。"""
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = self._write_model_dir(
+                directory,
+                inference=_valid_inference_config(
+                    max_num_tokens=999999),
+            )
+            with self.assertRaises(BuildError) as context:
+                convert("qwen3", config_path)
+        self.assertIn("max_num_tokens", str(context.exception))
+
+    def test_null_generation_values(self) -> None:
+        """UT-CONV-019：官方采样字段为 null 时使用缺省值。"""
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = self._write_model_dir(
+                directory,
+                inference=_valid_inference_config(),
+                generation={
+                    "do_sample": None,
+                    "temperature": None,
+                    "top_k": None,
+                    "top_p": None,
+                },
+            )
+            conversion = convert("qwen3", config_path)
+        config = conversion.inference_config
+        self.assertFalse(config.do_sample)
+        self.assertEqual(config.temperature, 1.0)
+        self.assertEqual(config.top_k, 0)
+        self.assertEqual(config.top_p, 1.0)
+
+    def test_invalid_generation_config(self) -> None:
+        """UT-CONV-017：官方采样参数非法时报错。"""
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = self._write_model_dir(
+                directory,
+                inference=_valid_inference_config(),
+                generation={"top_p": 2.0},
+            )
+            with self.assertRaises(BuildError) as context:
+                convert("qwen3", config_path)
+        self.assertIn("top_p", str(context.exception))
+
+    def test_unknown_field(self) -> None:
+        """UT-CONV-018：未知字段报错。"""
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = self._write_model_dir(
+                directory,
+                inference=_valid_inference_config(extra=1),
+            )
+            with self.assertRaises(BuildError) as context:
+                convert("qwen3", config_path)
+        self.assertIn("unknown field", str(context.exception))
 
 
 class Qwen3ConversionTest(unittest.TestCase):

@@ -15,16 +15,22 @@ from ToolChain.converter.converter import (
     convert_qwen3,
     write_conversion_outputs,
 )
+from ToolChain.converter.inference_config import (
+    InferenceConfig,
+    load_inference_config,
+)
 from ToolChain.converter.qwen3_adapter import Qwen3Adapter
 from ToolChain.converter.recording_graph import RecordingGraph
 from ToolChain.converter.result import ConversionResult
 
 __all__ = [
     "ConversionResult",
+    "InferenceConfig",
     "Qwen3Adapter",
     "RecordingGraph",
     "conversion_report",
     "convert",
     "convert_qwen3",
+    "load_inference_config",
     "write_conversion_outputs",
 ]

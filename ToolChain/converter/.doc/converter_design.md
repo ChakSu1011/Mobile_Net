@@ -37,12 +37,17 @@
 5. 支持权重目录探测：只读取 safetensors 头信息，登记权重是否可用，
    不加载真实权重内容。
 6. 提供命令行转换入口、单元测试与可复现的转换报告。
+7. 读取并校验模型目录下的运行时输入配置
+   `input/inference_config.json`，只补充官方 `config.json` 与
+   `generation_config.json` 没有的引擎参数，并合并为有效运行参数写入
+   `ModelGraph.metadata`。
 
 ### 1.3 非目标
 
 - 不实现精度推导、形状推导与显存规划（属于 Optimizer）。
 - 不实现模型包序列化与反序列化（属于 Serializer）。
 - 不执行数值推理、不加载权重内容、不校验数值正确性。
+- 不实现 Tokenization、采样执行或对话模板；输入配置只记录默认参数。
 - 不实现 Qwen3 之外的模型 Adapter；Adapter 注册机制预留。
 - 不支持 MoE、VL、KV Cache、padding mask 等扩展结构。
 
@@ -61,6 +66,7 @@
 | FR-CONV-07 | `ModelGraph` 必须支持规范化 JSON 保存/加载往返 | 保存后加载，`to_dict()` 逐字段一致 |
 | FR-CONV-08 | 提供 CLI：输入 config 与可选权重目录，输出 `model_graph.json` 与转换摘要 | 命令退出码 0；输出文件存在且可被 Optimizer 加载 |
 | FR-CONV-09 | 对非法模型结构、重复名称、未知 op 类型、非法属性值必须给出带上下文的 `BuildError` | 错误信息包含阶段与对象名；不产生半成品文件 |
+| FR-CONV-10 | 读取并校验 `Models/<模型>/input/inference_config.json`，只声明官方 config 没有的引擎参数；官方 `config.json` 与 `generation_config.json` 已有参数直接读取，不得重复声明 | 有效配置包含官方 context/vocab/采样/eos 与引擎 max token 参数；重复或未知字段报错；缺失文件时保持兼容 |
 
 ### 2.2 非功能需求
 
@@ -72,6 +78,7 @@
 | NFR-CONV-04 | 内存 | 只记录元数据；不复制权重字节；峰值内存与图规模线性相关 |
 | NFR-CONV-05 | 规范 | Python 代码遵循 Google Style；模块/类/函数含中文注释 |
 | NFR-CONV-06 | 可测试性 | 核心逻辑不依赖 torch/transformers；单元测试可在纯 CPU 环境运行 |
+| NFR-CONV-07 | 单一事实源 | 官方 config 已有参数不得在新配置重复声明；合并结果确定、可审查 |
 
 ### 2.3 约束条件
 
@@ -91,26 +98,29 @@
 | AC-CONV-04 | 权重映射 | 310 个 constant 均有 HF 权重名与形状；tied 别名有记录 |
 | AC-CONV-05 | 往返 | `ModelGraph` JSON 保存/加载后 `to_dict()` 相等 |
 | AC-CONV-06 | 错误路径 | 非法配置、重复名称、坏属性均抛出 `BuildError` 或 `ValueError` |
+| AC-CONV-07 | 输入配置 | 有效配置合并官方 `config.json`/`generation_config.json`；仅声明引擎参数；非法字段、越界与类型错误均被拒绝 |
 
 ## 3. 概要设计
 
 ### 3.1 总体架构
 
 ```text
-config.json ─────────────┐
-                         ▼
-                  Qwen3Adapter
-                         │ 创建
-                         ▼
+config.json ─────────────────┐
+generation_config.json ──────┤
+input/inference_config.json ─┤
+                             ▼
+                   Qwen3Adapter（合并与校验）
+                          │ 创建
+                          ▼
    Graph.Graph ◀── RecordingGraph ──▶ ModelGraph（旁路记录）
-                         │                        │
-                         ▼                        ▼
-                  dump_ir()/sort_op()      model_graph.json
-                         │                        │
-                         └──────────┬─────────────┘
-                                    ▼
-                             ConversionResult
-                          （graph + model_graph）
+                          │                        │
+                          ▼                        ▼
+                   dump_ir()/sort_op()      model_graph.json
+                          │                        │
+                          └──────────┬─────────────┘
+                                     ▼
+                              ConversionResult
+                       （graph + model_graph + inference_config）
 ```
 
 Converter 不引入第二套可执行图。`RecordingGraph` 的每个方法先转发给
@@ -124,13 +134,15 @@ Converter 不引入第二套可执行图。`RecordingGraph` 的每个方法先�
 | `ToolChain/converter/__init__.py` | 导出 `convert_qwen3`、`ConversionResult`、`RecordingGraph` |
 | `ToolChain/converter/recording_graph.py` | 构图代理与元数据记录 |
 | `ToolChain/converter/qwen3_adapter.py` | Qwen3 配置加载、builder 调用、权重映射 |
+| `ToolChain/converter/inference_config.py` | 运行时输入配置加载、官方 config 合并与校验 |
 | `ToolChain/converter/converter.py` | Adapter 注册、转换编排、报告生成 |
 | `ToolChain/converter/__main__.py` | 命令行入口 |
 | `ToolChain/common/model_ir.py` | `ModelGraph`、`TensorMeta`、`OpMeta`、`IOBinding` |
 
 ### 3.3 关键流程
 
-1. 加载并校验 `Qwen3Config`。
+1. 加载并校验 `Qwen3Config`；读取官方 `generation_config.json` 与
+   `input/inference_config.json`，合并为有效运行参数。
 2. 创建 `Graph.Graph` 与 `RecordingGraph`。
 3. 通过注入的 `graph_factory` 让 `Qwen3GraphBuilder` 使用 RecordingGraph。
 4. Builder 依次登记常量、输入、计算 op、输出，并调用 `sort_op()`。
@@ -163,6 +175,10 @@ Converter 不引入第二套可执行图。`RecordingGraph` 的每个方法先�
 - `IOBinding`：`name`（输出 op 名）、`tensor`（被输出张量名）。
 - `ModelGraph`：`name`、`adapter`、`inputs`、`constants`、`outputs`、
   `tensors`（name→TensorMeta）、`ops`（创建顺序）、`metadata`。
+- `InferenceConfig`：有效运行参数，包含官方来源字段（context_length、
+  vocab_size、do_sample、temperature、top_k、top_p、bos/eos/pad、
+  stop_token_ids）与引擎补充字段（max_num_tokens、max_new_tokens、
+  max_batch_size、repetition_penalty、seed）。
 
 ### 4.2 接口定义
 
@@ -187,7 +203,18 @@ def convert_qwen3(
     config_path: Path,
     *,
     weights_path: Path | None = None,
+    inference_config_path: Path | None = None,
 ) -> ConversionResult: ...
+
+
+def load_inference_config(
+    model_dir: Path,
+    *,
+    config_path: Path,
+    vocab_size: int,
+    max_position_embeddings: int,
+    inference_config_path: Path | None = None,
+) -> InferenceConfig | None: ...
 ```
 
 `ConversionResult` 为冻结数据类：
@@ -197,6 +224,8 @@ def convert_qwen3(
 class ConversionResult:
     graph: Any
     model_graph: ModelGraph
+    adapter: str
+    inference_config: InferenceConfig | None
 ```
 
 ### 4.3 算法与流程
@@ -276,6 +305,60 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 - 从输出出发的 DFS 可覆盖所有计算 op，且无环；
 - 常量不出现在 op 的输出中。
 
+#### 4.3.7 运行时输入配置
+
+模型目录下的 `input/inference_config.json` 面向使用引擎运行模型的开发者，
+只声明官方 `config.json` 与 `generation_config.json` 没有的引擎参数。
+官方已有参数直接读取，不得在新配置中重复声明，避免两处配置漂移。
+
+新配置文件是扁平 JSON 对象，字段固定、全部必填、不接受未知字段：
+
+| 字段 | 类型 | 约束 | 含义 |
+| --- | --- | --- | --- |
+| `max_num_tokens` | int | > 0 且 <= `max_position_embeddings` | 单 Step prefill 的 token 规划上界，绑定符号维 `S` |
+| `max_new_tokens` | int | > 0 且 <= `max_position_embeddings` | 单请求最多生成的 token 数 |
+| `max_batch_size` | int | > 0 | 规划 batch 上界；Qwen3 首期为 1 |
+| `repetition_penalty` | number | > 0 | 重复惩罚 |
+| `seed` | int | >= 0 | 随机种子；0 表示由引擎选择非固定种子 |
+
+官方来源字段与读取顺序：
+
+| 有效字段 | 官方来源 | 缺省行为 |
+| --- | --- | --- |
+| `context_length` | `config.json.max_position_embeddings` | 缺失时使用 `Qwen3Config` 默认值 |
+| `vocab_size` | `config.json.vocab_size` | 缺失时使用 `Qwen3Config` 默认值 |
+| `bos_token_id` | `generation_config.json.bos_token_id` | 回退 `config.json.bos_token_id`；仍缺失为 null |
+| `pad_token_id` | `generation_config.json.pad_token_id` | 回退 `config.json.pad_token_id`；仍缺失为 null |
+| `eos_token_id` | `generation_config.json.eos_token_id` | 回退 `config.json.eos_token_id`；支持 int 或 int[] |
+| `do_sample` | `generation_config.json.do_sample` | 缺失或 null 时为 false |
+| `temperature` | `generation_config.json.temperature` | 缺失或 null 时为 1.0 |
+| `top_k` | `generation_config.json.top_k` | 缺失或 null 时为 0（关闭） |
+| `top_p` | `generation_config.json.top_p` | 缺失或 null 时为 1.0（关闭） |
+| `stop_token_ids` | 由 `eos_token_id` 规范化得到 | 允许为空，此时仅靠 `max_new_tokens` 停止 |
+
+加载与校验规则：
+
+1. 默认路径为 `<config.json 所在目录>/input/inference_config.json`；
+   文件不存在时返回 None，`ModelGraph.metadata["inference_config"]=null`，
+   旧模型目录仍可转换。
+2. 显式传入路径时，相对路径按模型目录解析；文件不存在或 JSON 非法时抛
+   `BuildError`，不得静默忽略。
+3. 新配置文件字段缺失、未知字段、类型错误（含 bool 冒充 int）、越界或
+   `seed` 为负时抛 `BuildError`；所有错误信息包含文件路径与字段名。
+4. 官方 `generation_config.json` 存在但字段类型或取值非法时抛
+   `BuildError`；文件缺失时按上表缺省行为处理。
+5. 合并后的有效配置写入 `ModelGraph.metadata["inference_config"]`，随
+   `model.mgf` manifest 的 `graph.metadata` 一起交付；转换报告同时输出。
+6. 该配置不参与构图，不改变 op、tensor 或权重映射。
+
+构建默认值联动：
+
+- 流水线未显式传入优化配置时，用有效配置的 `max_batch_size`、
+  `max_num_tokens`、`context_length` 初始化 `OptimizeConfig`，使运行时
+  输入上界与图的形状规划一致。
+- CLI 显式给出的优化参数优先，只覆盖显式字段，其余字段仍取有效配置。
+- `max_new_tokens`、采样字段与 Token ID 只记录，不参与 build。
+
 ### 4.4 异常与错误处理
 
 | 场景 | 异常 | 信息 |
@@ -284,6 +367,8 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 | 未知 OpType | `BuildError` | 枚举名 |
 | 属性值非 JSON 安全 | `BuildError` | op 名、属性名、类型 |
 | 配置非法 | `ValueError` | 由 `Qwen3Config.validate()` 抛出 |
+| 输入配置缺失、字段未知/缺失、类型或范围非法 | `BuildError` | 文件路径与字段名 |
+| 官方 `generation_config.json` 非法 | `BuildError` | 文件路径与字段名 |
 | 图构造失败 | `RuntimeError` | 由 Graph 抛出，原样传播 |
 | 输出路径不可写 | `OSError` | 文件路径 |
 
@@ -294,6 +379,7 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 - 记录层只保存名字与小型元数据，不复制 Storage。
 - Qwen3 图规模 623 个 tensor、311 个计算 op（IR 中另有 3 个 I/O op）；记录开销为 O(V+E)。
 - 权重探测只读 safetensors 头部；不触碰权重数据区。
+- 输入配置只读取少量 JSON 字段，合并结果规模固定，不随模型规模增长。
 - 转换完成后 `ModelGraph` 与 Graph 同时存活；调用方负责释放。
 
 ## 5. 实施步骤
@@ -307,6 +393,7 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 | P5 | 实现转换编排与 CLI | P4 | `converter.py`、`__main__.py` |
 | P6 | 编写单元测试并修复问题 | P5 | `test_converter.py` |
 | P7 | 输出转换报告与测试结果 | P6 | `tests/test_results.md` |
+| P8 | 实现输入配置加载与 build 默认值联动 | P5 | `inference_config.py`、pipeline 集成 |
 
 风险与应对：
 
@@ -315,6 +402,10 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 - **Graph 枚举名称变化**：用显式映射表并在未知类型时报错。
 - **safetensors 版本差异**：只依赖文件格式规范（8 字节头长度 + JSON 头 +
   数据区），不依赖 Hugging Face 运行时库；遇到未知 dtype 显式报错。
+- **官方 config 字段演进**：只读取本设计列出的字段，缺失时按缺省行为处理；
+  未知官方字段忽略，不因厂商新增字段中断构建。
+- **输入配置与官方配置漂移**：新配置禁止重复声明官方字段；未知字段直接
+  报错，避免开发者误以为覆盖生效。
 
 ## 6. 测试与验证设计
 
@@ -340,6 +431,14 @@ Qwen3 图内常量名到 Transformers 参数名的映射：
 | UT-CONV-010 | JSON 往返 | 转换结果 | `to_dict()` 相等 |
 | UT-CONV-011 | 缺失权重 | 不存在的目录 | 全部 `weight_available=false`，不报错 |
 | UT-CONV-012 | 自校验失败 | 构造坏 ModelGraph | `BuildError` 且信息含对象名 |
+| UT-CONV-013 | 输入配置合并 | Qwen3 配置与 generation_config | 有效配置含官方采样/eos 与引擎 max token 字段 |
+| UT-CONV-014 | 输入配置缺失 | 临时模型目录无 `input/` | `inference_config=None`，转换成功 |
+| UT-CONV-015 | 输入配置未知字段 | 新配置含 `temperature` | `BuildError`，提示重复声明 |
+| UT-CONV-016 | 输入配置取值越界 | `max_num_tokens` 超上下文 | `BuildError` 且信息含字段名 |
+| UT-CONV-017 | 官方 generation_config 非法 | `top_p=2.0` | `BuildError` |
+| UT-CONV-018 | 未知字段 | 输入配置含 `extra` | `BuildError` |
+| UT-CONV-019 | 官方字段为 null | `temperature=null` 等 | 使用缺省值，转换成功 |
+| UT-CONV-020 | build 默认值联动 | 输入配置 max token | `OptimizeConfig` 采用配置值 |
 
 ### 6.3 测试环境
 

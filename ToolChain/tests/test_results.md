@@ -35,7 +35,7 @@ PYTHONUTF8=1 python -m unittest ToolChain.test_pipeline -v
 实际输出（末尾）：
 
 ```text
-Ran 6 tests in 0.513s
+Ran 8 tests in 0.757s
 
 OK
 adapter qwen3
@@ -55,7 +55,8 @@ work_dir C:\Users\18626\AppData\Local\Temp\pipeline_czoxd9rs\work4
 
 结论：通过。覆盖包计数、目录布局（仅 `model.mgf` 与
 `compile_report.json`）、work 目录中间产物、字节级确定性、
-关闭复用后 arena 增大、CLI 入口返回码。
+关闭复用后 arena 增大、CLI 入口返回码、输入配置 runtime 作为优化
+默认值，以及显式覆盖字段优先。
 
 ### 2.3 Qwen3 组图回归测试
 
@@ -116,7 +117,7 @@ constants 310
 weights_available 310
 weights_total_bytes 1192099840
 ir_sha256 ebc16228db005814bbb331ab444d1a1ca501243102868ccb063f6463127c3483
-manifest_sha256 dd4c69c96d9a935dd8968771748c825867bf62fb5d295cc1d3fe4024e0d41b50
+manifest_sha256 e307b7207a7d63eff6b3a821fb12dc476a3b42df53ddc9a6fdae87dac165d3a8
 package D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b
 work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
 ```
@@ -125,12 +126,12 @@ work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
 
 | 路径 | 大小 | 说明 |
 | --- | --- | --- |
-| `Models/Qwen3/artifacts/qwen3_0_6b/model.mgf` | 384,873 B | 112 B 头 + 规范化 JSON manifest，含权重表 |
+| `Models/Qwen3/artifacts/qwen3_0_6b/model.mgf` | 385,169 B | 112 B 头 + 规范化 JSON manifest，含权重表与运行参数 |
 | `Models/Qwen3/artifacts/qwen3_0_6b/weights.bin` | 1,192,099,840 B | FP16 权重打包，按 256 B 对齐 |
 | `Models/Qwen3/artifacts/qwen3_0_6b/compile_report.json` | 1,204 B | 构建摘要、IR 哈希、显存计划、验证结果 |
-| `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/model_graph.json` | 418,551 B | 转换后元数据 |
-| `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/conversion_report.json` | 83,637 B | 权重映射与转换摘要 |
-| `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/model_graph.json` | 443,557 B | 优化后元数据 |
+| `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/model_graph.json` | 419,014 B | 转换后元数据，含 `metadata.inference_config` |
+| `Models/Qwen3/artifacts/qwen3_0_6b_work/converter/conversion_report.json` | 84,062 B | 权重映射、运行参数与转换摘要 |
+| `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/model_graph.json` | 444,020 B | 优化后元数据 |
 | `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/optimize_report.json` | 1,819 B | 精度/形状/显存、权重转换与不变量报告 |
 | `Models/Qwen3/artifacts/qwen3_0_6b_work/optimizer/weights_fp16.safetensors` | 1,192,134,752 B | Precision Pass 流式转换的 FP16 权重文件 |
 
@@ -154,7 +155,7 @@ work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
     "peak_bytes": 78315520
   },
   "verification": {
-    "manifest_sha256": "dd4c69c96d9a935dd8968771748c825867bf62fb5d295cc1d3fe4024e0d41b50",
+    "manifest_sha256": "e307b7207a7d63eff6b3a821fb12dc476a3b42df53ddc9a6fdae87dac165d3a8",
     "package_reloaded": true
   },
   "weights": {
@@ -165,6 +166,31 @@ work_dir D:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_work
   }
 }
 ```
+
+有效运行参数（manifest `graph.metadata.inference_config`）：
+
+```json
+{
+  "bos_token_id": 151643,
+  "context_length": 40960,
+  "do_sample": true,
+  "max_batch_size": 1,
+  "max_new_tokens": 2048,
+  "max_num_tokens": 256,
+  "pad_token_id": 151643,
+  "repetition_penalty": 1.0,
+  "seed": 0,
+  "stop_token_ids": [151645, 151643],
+  "temperature": 0.6,
+  "top_k": 20,
+  "top_p": 0.95,
+  "vocab_size": 151936
+}
+```
+
+官方 `config.json`/`generation_config.json` 字段与
+`Models/Qwen3/input/inference_config.json` 的引擎字段已合并；重复声明、
+未知字段与越界值均被 Converter 拒绝。
 
 权重转换统计（`optimize_report.json`）：
 
@@ -199,10 +225,10 @@ PYTHONUTF8=1 python -m compileall -q ToolChain Models/Qwen3
 
 | 套件 | 用例数 | 主要覆盖 |
 | --- | --- | --- |
-| `ToolChain.converter.test_converter` | 13 | UT-CONV-001 ~ 012 |
+| `ToolChain.converter.test_converter` | 20 | UT-CONV-001 ~ 019，含输入配置 |
 | `ToolChain.optimizer.test_optimizer` | 21 | UT-OPT-001 ~ 019，含权重转换 |
 | `ToolChain.serializer.test_serializer` | 13 | UT-SER-001 ~ 012 |
-| `ToolChain.test_pipeline` | 6 | 端到端、确定性、复用开关、CLI |
+| `ToolChain.test_pipeline` | 8 | 端到端、确定性、复用开关、CLI、输入配置默认值 |
 | `Models/Qwen3/test_qwen3_graph.py` | 12 | 组图结构、权重形状、配置、IR 稳定性 |
 | `graph_test.exe` | C++ 全量 | Graph/SortOp/I/O/dump_ir |
 
@@ -226,5 +252,10 @@ PYTHONUTF8=1 python -m compileall -q ToolChain Models/Qwen3
    实测峰值。
 6. **未做量化**：Precision Pass 已定位为后续量化统一入口，INT8/INT4
    仅有设计扩展点，无实现与测试。
-7. **测试环境为 Windows 主机**：未在 Android arm64 设备或 OpenCL
+7. **运行参数未实测**：`input/inference_config.json` 只完成合并与校验，
+   未在 Executor 中验证采样、停止条件与 `seed=0` 的引擎语义；官方
+   `generation_config.json` 缺失时的缺省采样策略也未做端到端推理验证。
+8. **输入配置无版本字段**：当前格式固定且拒绝未知字段；未来不兼容变更
+   需要新增兼容策略或更换文件名，不能静默改变语义。
+9. **测试环境为 Windows 主机**：未在 Android arm64 设备或 OpenCL
    后端上执行加载与推理测试。

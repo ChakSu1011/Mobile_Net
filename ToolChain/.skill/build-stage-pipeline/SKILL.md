@@ -30,9 +30,12 @@ description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer 
    `Models/Qwen3/config.json`。
 2. Graph Python 扩展（`Graph/build/python/`）。
 3. 可选的 safetensors 权重文件或目录；不提供时生成 metadata-only 包。
-4. 优化配置：`target_precision`、`max_num_tokens`、`context_length`、
-   `alignment`、`enable_reuse`。
-5. 设计文档：六段式（背景与目标、需求分析、概要设计、详细设计、实施步骤、
+4. 模型 `input/inference_config.json`（可选）：`max_num_tokens`、
+   `max_new_tokens`、`max_batch_size`、`repetition_penalty`、`seed`；
+   官方 `config.json` 与 `generation_config.json` 已有参数直接读取。
+5. 优化配置：`target_precision`、`max_num_tokens`、`context_length`、
+   `batch_size`、`alignment`、`enable_reuse`。
+6. 设计文档：六段式（背景与目标、需求分析、概要设计、详细设计、实施步骤、
    测试与验证设计）。
 
 ## 输出（四件套）
@@ -78,6 +81,9 @@ description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer 
 - **权重转换归 Precision Pass**：目标 FP16 且提供源权重时，Precision Pass
   流式转换 BF16 字节并写出 `weights_fp16.safetensors`，转换文件 dtype=F16；
   有限值绝对值超过 65504 必须报错，禁止 clamp。
+- **运行参数单一事实源**：官方 config 已有的 context、vocab、采样、eos
+  只从官方文件读取；`input/inference_config.json` 只声明引擎补充字段。
+  未显式传优化参数时，其 runtime 作为 `OptimizeConfig` 默认值。
 - **Shape 先于 Memory**：Memory Pass 入口必须拒绝未解析 activation 形状，
   不允许在符号维上做显存规划。
 - **显存不重叠**：生命周期重叠的张量 `[offset, offset+size)` 不得相交；
@@ -110,6 +116,9 @@ description: 把模型 config（首期 Qwen3-0.6B）经 Converter → Optimizer 
   `graph_factory` 注入代理，不复制层结构。
 - 记录每个常量的 Hugging Face 权重名、shape、dtype 与来源；
   `tie_word_embeddings=true` 时记录 `tied_weights`，不创建独立 LM Head 常量。
+- 读取并校验 `input/inference_config.json`，与官方 `config.json`、
+  `generation_config.json` 合并为有效运行参数，写入
+  `metadata.inference_config`；重复声明官方字段直接报错。
 - 输入统一注记 `[B,S]`、`int64`、`row_major`，清空 pitch。
 - 可选 safetensors 探测只读头部（8 字节头长度 + JSON 头），不读数据区，
   不依赖 torch/numpy；dtype/shape 不匹配写入 `weight_issues`。
@@ -186,6 +195,9 @@ PYTHONUTF8=1 python -m unittest discover -s Models/Qwen3 -p 'test_*.py' -v
 - [ ] manifest 是 canonical JSON；两次构建字节一致。
 - [ ] 重建图 IR SHA-256 与行数和 manifest 一致。
 - [ ] 无权重时生成 metadata-only 包且不残留 `weights.bin`。
+- [ ] 输入配置只含引擎字段；manifest 含合并后的
+      `graph.metadata.inference_config`。
+- [ ] 未显式传优化参数时，`OptimizeConfig` 采用输入配置 runtime。
 - [ ] 包目录只含 `model.mgf` 与 `compile_report.json`，中间产物在 work 目录。
 - [ ] 模型包与 work 目录位于 `Models/<模型目录>/artifacts/`，而非
       `ToolChain/artifacts/`。
@@ -209,6 +221,11 @@ PYTHONUTF8=1 python -m unittest discover -s Models/Qwen3 -p 'test_*.py' -v
    时间戳只能放在 `compile_report.json`，不能进入 manifest。
 6. **覆盖非空输出目录**：`serialize_package` 默认拒绝；流水线显式传
    `overwrite=True`。手工调用时不要误删用户目录。
+7. **在 `input/inference_config.json` 重复官方参数**：`temperature`、
+   `top_p`、`eos_token_id`、`context_length` 等必须从官方 config 读取；
+   重复声明会被拒绝，不要试图用新配置覆盖。
+8. **误解显式优化参数**：任一 CLI 优化参数都会覆盖对应字段，其余字段
+   仍取输入配置；若需要完全自定义，改用 `optimize_config` 整体传入。
 7. **只比较 manifest 哈希**：IR 哈希必须由“重建图”计算，不能复用转换期
    缓存值，否则无法发现重建路径的图漂移。
 8. **metadata-only 包当成可用模型**：`weights_available=0` 的包只能验证

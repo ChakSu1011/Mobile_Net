@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ToolChain.common.model_ir import ModelGraph
+from ToolChain.converter.inference_config import InferenceConfig
 
 
 @dataclass(frozen=True)
@@ -23,12 +24,14 @@ class ConversionResult:
     属性：
       graph：已调用 ``sort_op()`` 的 Graph；
       model_graph：旁路记录的模型元数据；
-      adapter：Adapter 名称。
+      adapter：Adapter 名称；
+      inference_config：合并后的运行参数；未提供输入配置时为 None。
     """
 
     graph: Any
     model_graph: ModelGraph
     adapter: str
+    inference_config: InferenceConfig | None = None
 
     @property
     def ir_text(self) -> str:

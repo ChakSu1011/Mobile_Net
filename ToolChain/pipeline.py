@@ -23,6 +23,7 @@ from ToolChain.converter.converter import (
     convert,
     write_conversion_outputs,
 )
+from ToolChain.converter.inference_config import InferenceConfig
 from ToolChain.converter.result import ConversionResult
 from ToolChain.optimizer import Optimizer, OptimizeConfig
 from ToolChain.optimizer.optimizer import (
@@ -42,6 +43,15 @@ _REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_CONFIG = _REPOSITORY_ROOT / "Models" / "Qwen3" / "config.json"
 _DEFAULT_ARTIFACT = (
     _REPOSITORY_ROOT / "Models" / "Qwen3" / "artifacts" / "qwen3_0_6b")
+_OPTIMIZE_OVERRIDE_KEYS = frozenset({
+    "target_precision",
+    "accumulate_precision",
+    "batch_size",
+    "max_num_tokens",
+    "context_length",
+    "alignment",
+    "enable_reuse",
+})
 
 
 @dataclass(frozen=True)
@@ -65,6 +75,46 @@ class PipelineResult:
     work_dir: Path
 
 
+def _resolve_optimize_config(
+    inference_config: InferenceConfig | None,
+    optimize_config: OptimizeConfig | None,
+    overrides: dict[str, Any] | None,
+) -> OptimizeConfig:
+    """解析优化配置。
+
+    参数：
+      inference_config：Converter 合并的运行参数；可为 None；
+      optimize_config：完整优化配置；提供时忽略 overrides 与模型配置；
+      overrides：显式字段覆盖，仅用于未提供 optimize_config 时。
+
+    返回：
+      ``OptimizeConfig``。
+
+    异常：
+      ValueError：同时提供 optimize_config 与 overrides，或覆盖字段未知。
+    """
+    if optimize_config is not None:
+        if overrides:
+            raise ValueError(
+                "optimize_overrides cannot be combined with "
+                "optimize_config")
+        return optimize_config
+    values: dict[str, Any] = {}
+    if inference_config is not None:
+        values.update({
+            "batch_size": inference_config.max_batch_size,
+            "max_num_tokens": inference_config.max_num_tokens,
+            "context_length": inference_config.context_length,
+        })
+    if overrides:
+        unknown = sorted(set(overrides) - _OPTIMIZE_OVERRIDE_KEYS)
+        if unknown:
+            raise ValueError(
+                f"unknown optimize override: {unknown[0]}")
+        values.update(overrides)
+    return OptimizeConfig(**values)
+
+
 def run_pipeline(
     *,
     config_path: Path,
@@ -72,7 +122,9 @@ def run_pipeline(
     work_dir: Path | None = None,
     adapter: str = "qwen3",
     weights_path: Path | None = None,
+    inference_config_path: Path | None = None,
     optimize_config: OptimizeConfig | None = None,
+    optimize_overrides: dict[str, Any] | None = None,
     overwrite: bool = True,
 ) -> PipelineResult:
     """执行完整 Build 流水线。
@@ -83,7 +135,9 @@ def run_pipeline(
       work_dir：中间产物目录；省略时为 ``<output>_work``；
       adapter：Adapter 名称；
       weights_path：可选 safetensors 文件或目录；
-      optimize_config：优化配置；省略时使用默认值；
+      inference_config_path：可选输入配置路径；省略时自动发现；
+      optimize_config：完整优化配置；提供时忽略模型输入配置；
+      optimize_overrides：优化字段覆盖；其余字段取输入配置；
       overwrite：是否覆盖已有模型包。
 
     返回：
@@ -91,6 +145,7 @@ def run_pipeline(
 
     异常：
       BuildError：任一阶段失败；
+      ValueError：优化配置参数冲突；
       OSError：文件读写失败。
     """
     config_path = Path(config_path)
@@ -98,10 +153,18 @@ def run_pipeline(
     if work_dir is None:
         work_dir = output_dir.with_name(output_dir.name + "_work")
     work_dir = Path(work_dir)
-    config = optimize_config or OptimizeConfig()
 
     conversion = convert(
-        adapter, config_path, weights_path=weights_path)
+        adapter,
+        config_path,
+        weights_path=weights_path,
+        inference_config_path=inference_config_path,
+    )
+    config = _resolve_optimize_config(
+        conversion.inference_config,
+        optimize_config,
+        optimize_overrides,
+    )
     write_conversion_outputs(
         conversion, work_dir / "converter")
     converted_weights = (
@@ -163,18 +226,24 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--weights", type=Path, default=None,
         help="Optional safetensors file or directory.")
     parser.add_argument(
-        "--target-precision", default="float16",
+        "--inference-config", type=Path, default=None,
+        help="Optional input/inference_config.json path.")
+    parser.add_argument(
+        "--target-precision", default=None,
         choices=("float16", "bfloat16", "float32", "keep"),
-        help="Target precision for floating point tensors.")
+        help="Target precision; defaults to float16.")
     parser.add_argument(
-        "--max-num-tokens", type=int, default=256,
-        help="Planning bound for symbolic dimension S.")
+        "--max-num-tokens", type=int, default=None,
+        help="Planning bound for S; defaults to the model input config.")
     parser.add_argument(
-        "--context-length", type=int, default=40960,
-        help="Maximum context length per request.")
+        "--context-length", type=int, default=None,
+        help="Context limit; defaults to the model input config.")
     parser.add_argument(
-        "--alignment", type=int, default=256,
-        help="Memory alignment in bytes; must be a power of two.")
+        "--batch-size", type=int, default=None,
+        help="Planning batch bound; defaults to the model input config.")
+    parser.add_argument(
+        "--alignment", type=int, default=None,
+        help="Memory alignment in bytes; defaults to 256.")
     parser.add_argument(
         "--disable-reuse", action="store_true",
         help="Disable activation memory reuse.")
@@ -194,6 +263,19 @@ def main(argv: list[str] | None = None) -> int:
       进程退出码；0 表示成功，1 表示构建错误。
     """
     args = _parse_args(argv)
+    overrides: dict[str, Any] = {}
+    if args.target_precision is not None:
+        overrides["target_precision"] = args.target_precision
+    if args.max_num_tokens is not None:
+        overrides["max_num_tokens"] = args.max_num_tokens
+    if args.context_length is not None:
+        overrides["context_length"] = args.context_length
+    if args.batch_size is not None:
+        overrides["batch_size"] = args.batch_size
+    if args.alignment is not None:
+        overrides["alignment"] = args.alignment
+    if args.disable_reuse:
+        overrides["enable_reuse"] = False
     try:
         result = run_pipeline(
             config_path=args.config,
@@ -201,13 +283,8 @@ def main(argv: list[str] | None = None) -> int:
             work_dir=args.work_dir,
             adapter=args.adapter,
             weights_path=args.weights,
-            optimize_config=OptimizeConfig(
-                target_precision=args.target_precision,
-                max_num_tokens=args.max_num_tokens,
-                context_length=args.context_length,
-                alignment=args.alignment,
-                enable_reuse=not args.disable_reuse,
-            ),
+            inference_config_path=args.inference_config,
+            optimize_overrides=overrides or None,
             overwrite=not args.no_overwrite,
         )
     except (BuildError, ValueError, OSError) as error:

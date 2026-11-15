@@ -28,19 +28,21 @@ def convert(
     config_path: Path,
     *,
     weights_path: Path | None = None,
+    inference_config_path: Path | None = None,
 ) -> ConversionResult:
     """按 Adapter 名称执行模型转换。
 
     参数：
       adapter_name：已注册的 Adapter 名称，首期只支持 ``qwen3``；
       config_path：模型配置路径；
-      weights_path：可选 safetensors 文件或目录。
+      weights_path：可选 safetensors 文件或目录；
+      inference_config_path：可选输入配置路径；省略时自动发现。
 
     返回：
       ``ConversionResult``。
 
     异常：
-      BuildError：Adapter 未注册；
+      BuildError：Adapter 未注册、输入配置或权重文件非法；
       ValueError/RuntimeError：构图或配置失败。
     """
     adapter_type = _ADAPTERS.get(adapter_name)
@@ -49,19 +51,25 @@ def convert(
             "converter",
             f"unsupported adapter: {adapter_name}",
         )
-    return adapter_type(config_path, weights_path).build()
+    return adapter_type(
+        config_path,
+        weights_path,
+        inference_config_path,
+    ).build()
 
 
 def convert_qwen3(
     config_path: Path,
     *,
     weights_path: Path | None = None,
+    inference_config_path: Path | None = None,
 ) -> ConversionResult:
     """转换 Qwen3 模型的便捷入口。"""
     return convert(
         Qwen3Adapter.name,
         config_path,
         weights_path=weights_path,
+        inference_config_path=inference_config_path,
     )
 
 
@@ -109,6 +117,7 @@ def conversion_report(result: ConversionResult) -> dict[str, Any]:
         "weights_supplied": metadata.get(
             "weights_supplied", False),
         "weight_issues": metadata.get("weight_issues", []),
+        "inference_config": metadata.get("inference_config"),
         "constants": constants,
     }
 

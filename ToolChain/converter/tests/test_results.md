@@ -27,12 +27,45 @@ PYTHONUTF8=1 python -m unittest ToolChain.converter.test_converter -v
 实际输出（末尾）：
 
 ```text
-Ran 13 tests in 0.041s
+Ran 20 tests in 0.105s
 
 OK
 ```
 
 结论：通过，退出码 0。
+
+### 2.1 输入配置合并验证
+
+Qwen3 有效运行参数（`ConversionResult.inference_config.to_dict()`）：
+
+```json
+{
+  "context_length": 40960,
+  "vocab_size": 151936,
+  "max_num_tokens": 256,
+  "max_new_tokens": 2048,
+  "max_batch_size": 1,
+  "do_sample": true,
+  "temperature": 0.6,
+  "top_k": 20,
+  "top_p": 0.95,
+  "repetition_penalty": 1.0,
+  "seed": 0,
+  "stop_token_ids": [151645, 151643],
+  "bos_token_id": 151643,
+  "pad_token_id": 151643
+}
+```
+
+其中 `context_length`/`vocab_size` 来自 `config.json`，
+`do_sample`/`temperature`/`top_k`/`top_p`/`eos`/`pad` 来自
+`generation_config.json`；`max_num_tokens`/`max_new_tokens`/
+`max_batch_size`/`repetition_penalty`/`seed` 来自
+`Models/Qwen3/input/inference_config.json`。
+
+结论：通过。官方字段未被重复声明；重复声明 `temperature`、未知字段、
+`max_num_tokens` 越界与官方 `top_p=2.0` 均被拒绝；官方采样字段为
+`null` 时按缺省值处理。
 
 ## 3. 覆盖范围
 
@@ -43,6 +76,8 @@ OK
 - 310 个常量的 Hugging Face 权重名映射；
 - tied / untied LM Head 处理；
 - `ModelGraph` JSON 往返与权重缺失降级；
+- 输入配置与官方 config/generation_config 合并、缺失降级、null 缺省与
+  错误路径；
 - 非 JSON 属性、重复名称、外部 tensor 等错误路径。
 
 ## 4. 未覆盖项与风险
@@ -53,3 +88,5 @@ OK
 3. **依赖 Graph 扩展**：测试需要已构建的 `_graph.pyd`，未在无扩展环境验证。
 4. **仅 Windows 主机验证**：未在 Linux/macOS 或 Android 环境执行。
 5. **不执行推理**：Converter 只构图与记录元数据，不创建 OpEnv/Kernel。
+6. **输入配置无版本字段**：当前格式固定且拒绝未知字段；未来不兼容变更
+   需要新增字段兼容策略或新文件名，不能静默改变语义。

@@ -257,6 +257,7 @@ MobileNet/
 │   ├── .skill/model-graph/SKILL.md
 │   └── Qwen3/
 │       ├── artifacts/     # Qwen3 模型包产物
+│       ├── input/inference_config.json  # 引擎运行参数（官方 config 补充）
 │       └── tests/test_results.md
 ├── Runtime/               # 在线运行时（C++）
 │   ├── loader/
@@ -436,9 +437,9 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 
 **职责**：把厂商模型源码转换为 Graph 静态图，并同步旁路记录 `ModelGraph`；保持计算语义、结构、算子属性与常量权重映射不变。
 
-**输入**：模型目录（`config.json`、Tokenizer 配置、可选 safetensors 权重）、转换配置（模型族、上下文上限、权重目录）。
+**输入**：模型目录（`config.json`、`generation_config.json`、`input/inference_config.json`、Tokenizer 配置、可选 safetensors 权重）、转换配置（模型族、上下文上限、权重目录）。
 
-**输出**：`Graph.Graph`、`ModelGraph`（输入、常量、激活、op 属性、权重来源、输出绑定）、转换报告（结构映射、算子/常量统计、权重可用性）。
+**输出**：`Graph.Graph`、`ModelGraph`（输入、常量、激活、op 属性、权重来源、输出绑定、有效运行参数）、转换报告（结构映射、算子/常量统计、权重可用性、运行参数）。
 
 设计要点：
 
@@ -447,10 +448,11 @@ Host input ──▶ Input op（Engine 绑定 storage，I/O OpEnv 做 H2D）─�
 - **RecordingGraph**：对 `create_input/create_constant/create_op/create_output/sort_op/dump_ir` 做透明代理；每个方法先转发原生 Graph，成功后再记录元数据，防止“图已创建但元数据缺失”。`ModelGraph` 不是第二套可执行图。
 - **融合算子表达**：使用 Graph 的 `OpType`（如 `gather`、`linear`、`linear_swi_glu`、`rms_norm`、`rope`、`mega_attention`、`add`、`linear_per_head_rms_norm_rope`）与 `attr` 表达算子；Qwen3 的 Q/K path 使用 `linear_per_head_rms_norm_rope` 融合 linear、per-head RMSNorm 与 RoPE，融合规则在模型组图文档中定义，Graph 只承载结果。
 - **权重映射**：逐常量记录图内名称、HF/Transformers 参数名、shape、dtype、byte_size 与是否可用；转换期不读取或变换权重数值。
+- **运行参数合并**：官方 `config.json` 与 `generation_config.json` 已有参数（上下文、词表、采样、eos/pad 等）只从官方文件读取；`input/inference_config.json` 只声明引擎补充的 `max_num_tokens`、`max_new_tokens`、`max_batch_size`、`repetition_penalty`、`seed`，重复声明官方字段直接报错。合并结果写入 `ModelGraph.metadata` 并随模型包交付。
 - **I/O op**：在模型子图外层统一生成 Input/Output op；Input 记录 `int64`、`row_major` 与符号形状 `[B,S]`，Output 绑定最终 logits 张量；主机指针与设备 storage 由运行时绑定，不进入转换产物。
 - **不静默降级**：不支持的算子、缺失权重映射或非法属性直接报错并列出位置，禁止悄悄换成低效路径。
 
-**异常**：模型结构不支持、常量缺少 HF 映射、权重文件损坏、属性非 JSON 安全、Graph 构图失败。
+**异常**：模型结构不支持、常量缺少 HF 映射、权重文件损坏、属性非 JSON 安全、运行参数非法或缺失、Graph 构图失败。
 
 ### 4.2.2 Optimizer
 

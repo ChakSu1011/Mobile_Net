@@ -27,6 +27,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include "Graph/include/storage.h"
@@ -42,6 +43,7 @@ namespace mobilenet {
 
 namespace runtime_graph {
 class Graph;
+class Op;
 }  // namespace runtime_graph
 
 namespace runtime {
@@ -259,6 +261,29 @@ class Engine final : public IoBinder {
   EngineStats stats() const;
 
  private:
+  // 确保全部模块存在；缺省时调用模块默认工厂。
+  //
+  // 返回：
+  //   成功返回 kOk；任一默认工厂返回空或创建失败返回 kUnsupportedOp。
+  Status EnsureModules();
+
+  // 建立输入/输出 op 的索引，供 SetInput/SetOutput 使用。
+  //
+  // 返回：
+  //   成功返回 kOk；图的 I/O 绑定非法返回 kInvalidModelFile。
+  Status BindGraphIo();
+
+  // 执行一个 Step（不检查 threaded 模式，供单线程与推理线程共用）。
+  //
+  // 参数：
+  //   stats：输出参数，允许为空。
+  // 返回：
+  //   成功返回 kOk；调度/执行错误返回对应错误码。
+  Status ExecuteStep(StepStats* stats);
+
+  // 推理线程主循环。
+  void InferenceLoop();
+
   // 运行时状态。
   EngineState state_ = EngineState::kCreated;
 
@@ -278,6 +303,14 @@ class Engine final : public IoBinder {
   // 内部辅助对象。
   std::unique_ptr<ResourceStack> resource_stack_;
 
+  // 图输入/输出 op 索引；加载后只读。
+  std::unordered_map<std::string, runtime_graph::Op*> input_ops_;
+  std::unordered_map<std::string, runtime_graph::Op*> output_ops_;
+
+  // 后端与执行器初始化标记；用于销毁与加载回滚。
+  bool backend_initialized_ = false;
+  bool executor_initialized_ = false;
+
   // 回调与统计。
   TokenCallback token_callback_;
   EngineStats stats_;
@@ -289,8 +322,8 @@ class Engine final : public IoBinder {
   std::atomic<bool> stop_requested_{false};
 
   // 设备级错误标记。
-  bool fatal_ = false;
-  ErrorCode fatal_code_ = ErrorCode::kOk;
+  std::atomic<bool> fatal_{false};
+  std::atomic<ErrorCode> fatal_code_{ErrorCode::kOk};
 };
 
 }  // namespace runtime

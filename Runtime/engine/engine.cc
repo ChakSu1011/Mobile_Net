@@ -224,6 +224,7 @@ Status BuildKvCacheSpec(const RuntimeConfig& runtime,
 // 规则：
 //   - kv_cache_bytes > 0 时直接使用；
 //   - 否则由 memory_budget_bytes 减去权重/arena/IO 与保留余量；
+//   - 保留余量固定为 64 MiB，供运行时缓冲与碎片使用；
 //   - 两者均为 0 或预算不足返回错误。
 Status ComputeKvBudget(const RuntimeConfig& runtime,
                        const LoadResult& result, uint64_t* budget) {

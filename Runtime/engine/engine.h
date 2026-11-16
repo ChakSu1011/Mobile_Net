@@ -83,7 +83,8 @@ struct EngineConfig {
 // Engine 累计统计。
 //
 // 功能：
-//   供 Service 查询与日志；字段由实现按步更新。
+//   供 Service 查询与日志；累计计数按步更新，running/waiting/KV 为最近
+//   一个 Step 的快照，不实时查询模块内部状态。
 struct EngineStats {
   // 累计执行步数。
   uint64_t total_steps = 0;

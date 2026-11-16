@@ -597,7 +597,7 @@ class IScheduler {
 std::unique_ptr<IScheduler> CreateDefaultScheduler();
 ```
 
-说明：Scheduler 持有 `KvAllocator*`，在 `Update/Stop/Fail` 使请求进入终态时调用 `KvAllocator::Release`；Engine 不重复释放。
+说明：Scheduler 持有 `KvAllocator*`，在 `Update/Stop/Fail` 使请求进入终态时调用 `KvAllocator::Release`；Engine 不重复释放。实现必须保证 `Merge/Stop/HasRequests` 可被调用方线程与推理线程并发调用（内部加锁）；`Schedule/Update/Stats` 由推理线程调用。
 
 #### 4.2.3 `IKVCache`（`Runtime/kvcache/kv_cache_manager.h`）
 
@@ -633,7 +633,7 @@ class IExecutor {
 std::unique_ptr<IExecutor> CreateDefaultExecutor();
 ```
 
-说明：Executor 是 Backend 的唯一所有者；`Deinit` 负责 `Backend::Deinit` 并释放；OpEnv/KVCache 只借用 Backend。
+说明：Executor 是 Backend 的唯一所有者；`Deinit` 负责 `Backend::Deinit` 并释放；OpEnv/KVCache 只借用 Backend。`Init` 失败时必须释放已接管的 Backend，不得把半初始化资源留给 Engine。
 
 #### 4.2.5 `IDestroyer`（`Runtime/destroy/destroyer.h`）
 
@@ -963,7 +963,8 @@ Runtime/
 ├── executor/executor.h             # IExecutor（ExecBackend）
 ├── backend/backend.h               # Backend/Buffer/BackendCapability（ExecBackend）
 ├── backend/kernel.h                # Kernel/KernelDesc 公共契约（ExecBackend）
-└── backend/kernel_types.h          # Backend/Kernel 公共枚举（ExecBackend）
+├── backend/kernel_context.h        # KernelContext（ExecBackend）
+└── backend/kernel_types.h          # Backend/Kernel 类型映射（ExecBackend）
 ```
 
 构建：后续阶段由 `Runtime/CMakeLists.txt` 链接 Graph 静态库（`GRAPH_BUILD_PYTHON=OFF`）；各模块独立 target 与测试 target。本阶段只要求头文件可 `-fsyntax-only`。

@@ -47,7 +47,7 @@ python -m ziglang c++ -std=c++17 -Wall -Wextra -I "d:/Mobile_Net" \
 实际输出：
 
 ```text
-header refs: 20
+header refs: 21
 OK    Runtime/backend/backend.h
 OK    Runtime/backend/kernel.h
 OK    Runtime/backend/kernel_types.h
@@ -64,6 +64,7 @@ OK    Runtime/common/runtime_config.h
 OK    Runtime/common/status.h
 OK    Runtime/destroy/destroyer.h
 OK    Runtime/engine/engine.h
+OK    Runtime/engine/engine_modules.h
 OK    Runtime/executor/executor.h
 OK    Runtime/kvcache/kv_cache_manager.h
 OK    Runtime/loader/loader.h
@@ -71,7 +72,7 @@ OK    Runtime/scheduler/scheduler.h
 missing: []
 ```
 
-结论：文档引用的 20 个头文件全部存在，无缺失。
+结论：文档引用的 21 个头文件全部存在，无缺失。
 
 ### 5.2 TC-ARCH-03：依赖方向检查
 
@@ -93,13 +94,13 @@ missing: []
 实际输出（节选）：
 
 ```text
-295:  std::unique_ptr<ILoader> loader_;
-296:  std::unique_ptr<runtime_graph::Graph> graph_;
-297:  std::unique_ptr<IScheduler> scheduler_;
-298:  std::unique_ptr<IExecutor> executor_;
-299:  std::unique_ptr<IKVCache> kv_cache_;
-300:  std::unique_ptr<IDestroyer> destroyer_;
-303:  std::unique_ptr<ResourceStack> resource_stack_;
+271:  std::unique_ptr<ILoader> loader_;
+272:  std::unique_ptr<runtime_graph::Graph> graph_;
+273:  std::unique_ptr<IScheduler> scheduler_;
+274:  std::unique_ptr<IExecutor> executor_;
+275:  std::unique_ptr<IKVCache> kv_cache_;
+276:  std::unique_ptr<IDestroyer> destroyer_;
+279:  std::unique_ptr<ResourceStack> resource_stack_;
 ```
 
 结论：
@@ -135,10 +136,28 @@ OK Runtime/backend/kernel_types.cc
 
 结论：迁移后的 Kernel 枚举实现与公共状态/类型实现均可编译，无警告。
 
+### 5.5 TC-ARCH-05：EngineModules 注入对称性
+
+检查方式：扫描 `Runtime/engine/engine_modules.h` 的可注入模块字段。
+
+实际输出：
+
+```text
+45:  std::unique_ptr<ILoader> loader;
+48:  std::unique_ptr<IScheduler> scheduler;
+51:  std::unique_ptr<IExecutor> executor;
+54:  std::unique_ptr<IDestroyer> destroyer;
+```
+
+结论：Loader/Destroyer 成对出现，对应资源 Init/UnInit；Scheduler/Executor
+也可替换；`EngineModules` 单独放在 `engine_modules.h`，避免 `engine.h` 引入
+Loader/Backend 依赖。
+
 ## 6. 结论
 
 - 全部 Runtime 公共头文件（common、loader、scheduler、kvcache、engine、
-  destroy、executor、backend/kernel）编译通过，`-Wall -Wextra` 无警告。
+  engine_modules、destroy、executor、backend/kernel）编译通过，
+  `-Wall -Wextra` 无警告。
 - 接口声明与 `Runtime/.doc/Runtime_design.md` 的接口清单一致。
 - 未覆盖项：链接、实现逻辑、运行时行为、设备后端、数值正确性。这些在
   后续阶段按模块补充测试结果。

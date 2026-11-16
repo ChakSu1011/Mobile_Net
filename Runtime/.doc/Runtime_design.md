@@ -141,7 +141,7 @@ class Engine final : public IoBinder {
  private:
   EngineState state_ = EngineState::kCreated;
 
-  std::unique_ptr<ILoader> loader_;                  // 内部创建；加载期使用
+  std::unique_ptr<ILoader> loader_;                  // 可注入；加载期使用
   std::unique_ptr<runtime_graph::Graph> graph_;      // Loader 产出，Engine 持有
   std::unique_ptr<IScheduler> scheduler_;            // 可注入
   std::unique_ptr<IExecutor> executor_;              // 可注入；拥有 Backend
@@ -156,7 +156,10 @@ class Engine final : public IoBinder {
 注入机制：
 
 ```cpp
+// 定义于 Runtime/engine/engine_modules.h；单独成头，避免 engine.h 引入
+// Loader/Backend 依赖。
 struct EngineModules {
+  std::unique_ptr<ILoader> loader;
   std::unique_ptr<IScheduler> scheduler;
   std::unique_ptr<IExecutor> executor;
   std::unique_ptr<IDestroyer> destroyer;
@@ -169,11 +172,12 @@ Status Engine::SetModules(EngineModules modules);
 规则：
 
 1. `SetModules` 只在 `CREATED` 状态有效；`LOADED/RUNNING` 返回 `kStateError`。
-2. Scheduler/Executor/Destroyer 可注入；未注入时由 Engine 创建默认实现。Loader 与 KVCache 由 Engine 内部创建，不对外注入。
-3. `Graph` 与 `Backend` 依赖模型包，不能预先注入：`ILoader::Load` 产出后，Graph 移交 Engine，Backend 移交 Executor。
-4. `OpEnvFactory` 由 Loader 内部创建并用于逐 op 生成 OpEnv；Engine 不持有该工厂。
-5. `ResourceStack` 由 Engine 持有并传给 Loader/KVCache/Destroyer，负责逆序回滚与释放。
-6. Backend/KVCache/OpEnvFactory 不出现在 Engine 对外接口签名中。
+2. Loader/Scheduler/Executor/Destroyer 可注入；未注入时由 Engine 创建默认实现。KVCache 由 Engine 内部创建，不对外注入。
+3. **Loader 与 Destroyer 成对替换**：Loader 负责资源 Init（创建 Graph/Backend/OpEnv/缓冲），Destroyer 负责 UnInit（逆序释放）；自定义 Loader 应同时提供对应的 Destroyer，或确保所有资源都登记到 ResourceStack。
+4. `Graph` 与 `Backend` 依赖模型包，不能预先注入：`ILoader::Load` 产出后，Graph 移交 Engine，Backend 移交 Executor。
+5. `OpEnvFactory` 由 Loader 内部创建并用于逐 op 生成 OpEnv；Engine 不持有该工厂。
+6. `ResourceStack` 由 Engine 持有并传给 Loader/KVCache/Destroyer，负责逆序回滚与释放。
+7. Backend/KVCache/OpEnvFactory 不出现在 Engine 对外接口签名中。
 
 ### 3.3 模块划分与所有权
 
@@ -198,7 +202,7 @@ Status Engine::SetModules(EngineModules modules);
 
 ```text
 Engine.Load(config)
-  → 确保模块存在（Scheduler/Executor/Destroyer 未注入则创建默认；Loader/KVCache 内部创建）
+  → 确保模块存在（Loader/Scheduler/Executor/Destroyer 未注入则创建默认；KVCache 内部创建）
   → loader_->Load(config, resource_stack, &result)
       1 读头/校验 magic/version/manifest SHA
       2 JSON 解析 manifest
@@ -818,7 +822,7 @@ Engine 对外接口与模块统一接口的对应关系：
 
 | Engine 对外接口 | 内部调用链 |
 | --- | --- |
-| `SetModules` | 替换 `scheduler_/executor_/destroyer_` 指针 |
+| `SetModules` | 替换 `loader_/scheduler_/executor_/destroyer_` 指针；Loader 与 Destroyer 成对 |
 | `Load` | `loader_->Load` → `kv_cache_->Init` → `scheduler_->Init` → `executor_->Init(std::move(backend))` |
 | `Start` | 状态迁移；threaded 时启动推理线程 |
 | `AddRequest` | `scheduler_->Merge` |
@@ -858,7 +862,7 @@ Engine 对外接口与模块统一接口的对应关系：
 
 | 资源 | 所有者 | 创建者 | 使用者 | 释放者 |
 | --- | --- | --- | --- | --- |
-| Loader/Scheduler/KVCache/Destroyer | Engine | Engine | — | Engine |
+| Loader/Scheduler/Executor/KVCache/Destroyer | Engine | Engine 或注入 | — | Engine |
 | Graph | Engine | Loader | Executor/OpEnv（借用） | Engine（Destroy） |
 | GraphEnv | Graph | Loader | OpEnv | Graph.ClearGraphEnv |
 | Op | Graph | Loader | Executor | Graph |
@@ -954,6 +958,7 @@ Runtime/
 ├── scheduler/scheduler.h           # IScheduler
 ├── kvcache/kv_cache_manager.h      # IKVCache
 ├── engine/engine.h                 # Engine
+├── engine/engine_modules.h         # EngineModules（可注入模块集合）
 ├── destroy/destroyer.h             # IDestroyer
 ├── executor/executor.h             # IExecutor（ExecBackend）
 ├── backend/backend.h               # Backend/Buffer/BackendCapability（ExecBackend）
@@ -998,6 +1003,7 @@ Runtime/
 | TC-ARCH-02 | 逐项核对本文件接口与头文件签名 | 完全一致；扩展点字段存在 |
 | TC-ARCH-03 | 依赖方向扫描 | 无反向依赖；common 不依赖 Graph/Backend |
 | TC-ARCH-04 | Engine 成员与调用矩阵核对 | Loader/Graph/Scheduler/Executor/KVCache/Destroyer 均为 `unique_ptr`；Backend 归 Executor；OpEnvFactory 归 Loader；调用链可追溯 |
+| TC-ARCH-05 | EngineModules 注入对称性检查 | Loader/Scheduler/Executor/Destroyer 均在 `EngineModules` 中；Loader 与 Destroyer 成对可替换 |
 
 验证记录见 [`Runtime/tests/test_results.md`](../tests/test_results.md)。
 
@@ -1035,7 +1041,8 @@ Runtime/
 | `Runtime/loader/loader.h` | `ILoader/LoadConfig/LoadResult` |
 | `Runtime/scheduler/scheduler.h` | `IScheduler/SchedulerConfig/SchedulerStats/UpdateResult` |
 | `Runtime/kvcache/kv_cache_manager.h` | `IKVCache` |
-| `Runtime/engine/engine.h` | `Engine/EngineConfig/EngineModules/EngineStats` |
+| `Runtime/engine/engine.h` | `Engine/EngineConfig/EngineStats` |
+| `Runtime/engine/engine_modules.h` | `EngineModules`（Loader/Scheduler/Executor/Destroyer 注入） |
 | `Runtime/destroy/destroyer.h` | `IDestroyer/DestroyContext` |
 | `Runtime/executor/executor.h` | `IExecutor` |
 | `Runtime/backend/backend.h` | `Backend/Buffer/BackendCapability` |

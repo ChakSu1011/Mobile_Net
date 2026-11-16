@@ -12,10 +12,9 @@
 //   - 执行链经 IExecutor 进入，Backend 所有权归 Executor。
 //
 // 依赖：
-//   Runtime/common/*、Runtime/scheduler/scheduler.h、
-//   Runtime/executor/executor.h、Runtime/destroy/destroyer.h、
-//   Graph/include/storage.h；ILoader/IKVCache/Graph 使用指针成员，由
-//   Engine.cc 包含其完整定义。
+//   Runtime/common/*、Graph/include/storage.h；ILoader/IKVCache/IScheduler/
+//   IExecutor/IDestroyer/Graph 使用指针成员，由 Engine.cc 包含其完整定义。
+//   EngineModules 定义在 engine_modules.h，避免本头文件引入 Backend/Loader。
 
 #ifndef MOBILENET_RUNTIME_ENGINE_ENGINE_H_
 #define MOBILENET_RUNTIME_ENGINE_ENGINE_H_
@@ -38,9 +37,6 @@
 #include "Runtime/common/resource_stack.h"
 #include "Runtime/common/runtime_config.h"
 #include "Runtime/common/status.h"
-#include "Runtime/destroy/destroyer.h"
-#include "Runtime/executor/executor.h"
-#include "Runtime/scheduler/scheduler.h"
 
 namespace mobilenet {
 
@@ -50,8 +46,12 @@ class Graph;
 
 namespace runtime {
 
-class ILoader;
+class IDestroyer;
+class IExecutor;
 class IKVCache;
+class ILoader;
+class IScheduler;
+struct EngineModules;
 
 // Engine 生命周期状态。
 //
@@ -76,28 +76,6 @@ struct EngineConfig {
 
   // 运行参数。
   RuntimeConfig runtime;
-};
-
-// 可注入的模块实现。
-//
-// 功能：
-//   Service/测试可在 Load 前替换部分模块（例如不同版本的 Scheduler）；
-//   未注入的模块由 Engine 创建默认实现。
-//
-// 边界：
-//   - 只在 Engine CREATED 状态注入；
-//   - Loader/KVCache 由 Engine 内部创建，不在此注入；
-//   - Graph/Backend 由 Loader 产出：Graph 归 Engine，Backend 归 Executor；
-//   - 注入后所有权移交 Engine。
-struct EngineModules {
-  // 调度器实现；为空时使用默认实现。
-  std::unique_ptr<IScheduler> scheduler;
-
-  // 执行器实现；为空时使用默认实现（ExecBackend）。
-  std::unique_ptr<IExecutor> executor;
-
-  // Destroy 实现；为空时使用默认实现。
-  std::unique_ptr<IDestroyer> destroyer;
 };
 
 // Engine 累计统计。

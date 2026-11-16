@@ -28,6 +28,7 @@
 #include "Runtime/common/status.h"
 #include "Runtime/destroy/destroyer.h"
 #include "Runtime/engine/engine.h"
+#include "Runtime/engine/engine_modules.h"
 #include "Runtime/executor/executor.h"
 #include "Runtime/kvcache/kv_cache_manager.h"
 #include "Runtime/loader/loader.h"

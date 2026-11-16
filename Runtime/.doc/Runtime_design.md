@@ -832,7 +832,7 @@ Engine 对外接口与模块统一接口的对应关系：
 | `RunUntilIdle` | 循环 `RunOnce` 直到 `scheduler_->HasRequests()` 为 false |
 | `Destroy` | 停线程 → `destroyer_->Destroy`（Executor::Deinit 释放 Backend） |
 | `SetInput/SetOutput` | 校验后写入 Input/Output op 的 `attr["storage"]` |
-| `stats` | 汇总 `scheduler_->Stats()`、`kv_cache_->Stats()` 与本地计数 |
+| `stats` | 返回本地累计统计；running/waiting/KV 为最近 Step 的快照 |
 
 ### 4.6 模块调用矩阵
 
@@ -844,7 +844,7 @@ Engine 对外接口与模块统一接口的对应关系：
 | Loader → Backend | Init/Capability/CreateBuffer/ConvertParam/Upload；失败回滚时 Deinit | BufferDesc、ParamDesc | 零设备 API |
 | Loader → OpEnvFactory | `Create` | Op/Backend/GraphEnv → OpEnv | Loader 内部，逐 op 创建 |
 | Loader → ResourceStack | `Push` | 释放闭包 | 逆序回滚 |
-| Engine → IScheduler | Init/Merge/Schedule/Update/Stop/Fail/Snapshot/Stats | Request、ExecutionPlan、UpdateResult | 单推理线程 |
+| Engine → IScheduler | Init/Merge/Schedule/Update/Stop/Fail/Snapshot/Stats | Request、ExecutionPlan、UpdateResult | Schedule/Update/Stats 推理线程；Merge/Stop/HasRequests 需线程安全 |
 | Scheduler → KvAllocator | Reserve/Release/GetBlockTable/GetSlots/FreeBlocks/BlockSize | 块号、slot | 失败零副作用 |
 | Engine → IKVCache | Init/BuildView/Stats | KvCacheSpec、KvCacheView | 加载 / 每步 |
 | Engine → IExecutor | Init(std::unique_ptr<Backend>)/Execute/Deinit | ExecutionPlan、KvCacheView → StepResult | 加载 / 每步 |
@@ -1046,8 +1046,9 @@ Runtime/
 | `Runtime/destroy/destroyer.h` | `IDestroyer/DestroyContext` |
 | `Runtime/executor/executor.h` | `IExecutor` |
 | `Runtime/backend/backend.h` | `Backend/Buffer/BackendCapability` |
-| `Runtime/backend/kernel.h` | `Kernel/KernelDesc/KernelContext` |
-| `Runtime/backend/kernel_types.h` | `CopyKind/BlockStage/RopeLayout` |
+| `Runtime/backend/kernel.h` | `Kernel/KernelDesc` |
+| `Runtime/backend/kernel_context.h` | `KernelContext` |
+| `Runtime/backend/kernel_types.h` | `DataTypeFromPrecision/PrecisionFromDataType/IsSupportedDataType` |
 
 ## 附录 B：跨终端契约
 

@@ -99,6 +99,10 @@ bool ValidateHostStorage(const runtime_graph::Storage& expected,
     *error = "host storage data_ptr must not be null";
     return false;
   }
+  if (expected.byte_size == 0) {
+    *error = "graph tensor byte_size is not set";
+    return false;
+  }
   if (host.byte_size == 0) {
     *error = "host storage byte_size must be positive";
     return false;
@@ -366,20 +370,6 @@ Status Engine::Load(const EngineConfig& config) {
   bool backend_initialized = false;
   bool executor_initialized = false;
   LoadResult result;
-  LoadConfig load_config;
-  load_config.package_dir = config.package_dir;
-  load_config.runtime = config.runtime;
-  status = loader_->Load(load_config, resource_stack_.get(), &result);
-  if (!status.ok()) {
-    return status;
-  }
-  if (!result.graph || !result.backend) {
-    return MakeStatus(ErrorCode::kInternal,
-                      "loader returned empty graph or backend");
-  }
-
-  graph_ = std::move(result.graph);
-  backend_initialized = true;
 
   // 加载失败回滚：与正常 Destroy 共用 Destroyer 与 ResourceStack。
   auto rollback = [&](Backend* pending_backend, bool backend_ready,
@@ -396,9 +386,8 @@ Status Engine::Load(const EngineConfig& config) {
     context.resource_stack = resource_stack_.get();
     context.backend_initialized = backend_ready;
     context.executor_initialized = executor_ready;
-    if (destroyer_) {
-      (void)destroyer_->Destroy(context);
-    }
+    const Status destroy_status =
+        destroyer_ ? destroyer_->Destroy(context) : Status::Ok();
     graph_.reset();
     resource_stack_ = std::make_unique<ResourceStack>();
     {
@@ -409,8 +398,30 @@ Status Engine::Load(const EngineConfig& config) {
       input_ops_.clear();
       output_ops_.clear();
     }
+    if (!destroy_status.ok()) {
+      return Status(cause.code(), cause.message() +
+                                      "; rollback failed: " +
+                                      destroy_status.message());
+    }
     return PrefixStatus(cause, "Engine::Load rollback");
   };
+
+  LoadConfig load_config;
+  load_config.package_dir = config.package_dir;
+  load_config.runtime = config.runtime;
+  status = loader_->Load(load_config, resource_stack_.get(), &result);
+  if (!status.ok()) {
+    return rollback(result.backend.get(), result.backend != nullptr, false,
+                    status);
+  }
+  if (!result.graph || !result.backend) {
+    return rollback(result.backend.get(), result.backend != nullptr, false,
+                    MakeStatus(ErrorCode::kInternal,
+                               "loader returned empty graph or backend"));
+  }
+
+  graph_ = std::move(result.graph);
+  backend_initialized = true;
 
   SchedulerConfig scheduler_config;
   status = BuildSchedulerConfig(config.runtime, result.model,
@@ -454,15 +465,13 @@ Status Engine::Load(const EngineConfig& config) {
                     executor_initialized, status);
   }
 
-  Backend* pending_backend = result.backend.get();
   status = executor_->Init(std::move(result.backend), graph_.get(), this);
   if (!status.ok()) {
-    // IExecutor::Init 失败时必须自行释放已接管的 Backend。
-    return rollback(nullptr, backend_initialized, false, status);
+    // IExecutor::Init 失败时必须自行释放已接管的 Backend；此处不再让
+    // Destroyer 触碰已经由 Executor 释放的 Backend。
+    return rollback(nullptr, false, false, status);
   }
   executor_initialized = true;
-  pending_backend = nullptr;
-  (void)pending_backend;
 
   status = BindGraphIo();
   if (!status.ok()) {

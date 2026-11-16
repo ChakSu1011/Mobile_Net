@@ -14,6 +14,7 @@
 
 #include "Runtime/backend/backend.h"
 #include "Runtime/backend/kernel.h"
+#include "Runtime/backend/kernel_context.h"
 #include "Runtime/backend/kernel_types.h"
 #include "Runtime/common/data_types.h"
 #include "Runtime/common/io_binder.h"

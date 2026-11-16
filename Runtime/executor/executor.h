@@ -58,6 +58,8 @@ class IExecutor {
   //   io_binder：Engine 实现的 I/O 绑定接口，非空；Executor 只借用。
   // 返回：
   //   成功返回 kOk；缺少 I/O op 或算子返回 kUnsupportedOp。
+  // 说明：
+  //   Init 失败时必须释放已接管的 Backend，不得把半初始化资源留给调用方。
   virtual Status Init(std::unique_ptr<Backend> backend,
                       runtime_graph::Graph* graph, IoBinder* io_binder) = 0;
 

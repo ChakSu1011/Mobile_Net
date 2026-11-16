@@ -97,8 +97,8 @@ struct UpdateResult {
 //   Engine 通过本接口完成请求入队、单步调度、结果回写、取消与状态查询。
 //
 // 边界：
-//   - 所有方法只允许单推理线程调用（Merge/Stop 可由调用方线程加锁后调用，
-//     但实现必须保证线程安全或由 Engine 串行化）；
+//   - Schedule/Update/Fail/Stats 由推理线程调用；Merge/Stop/HasRequests
+//     可能由调用方线程与推理线程并发调用，实现必须在内部加锁；
 //   - Schedule 失败时不得留下半分配 KV；
 //   - Update 只处理输出 token 与状态，不推进 num_computed_tokens。
 class IScheduler {

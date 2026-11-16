@@ -47,9 +47,10 @@ python -m ziglang c++ -std=c++17 -Wall -Wextra -I "d:/Mobile_Net" \
 实际输出：
 
 ```text
-header refs: 21
+header refs: 22
 OK    Runtime/backend/backend.h
 OK    Runtime/backend/kernel.h
+OK    Runtime/backend/kernel_context.h
 OK    Runtime/backend/kernel_types.h
 OK    Runtime/common/data_types.h
 OK    Runtime/common/io_binder.h
@@ -72,7 +73,7 @@ OK    Runtime/scheduler/scheduler.h
 missing: []
 ```
 
-结论：文档引用的 21 个头文件全部存在，无缺失。
+结论：文档引用的 22 个头文件全部存在，无缺失。
 
 ### 5.2 TC-ARCH-03：依赖方向检查
 
@@ -94,13 +95,13 @@ missing: []
 实际输出（节选）：
 
 ```text
-271:  std::unique_ptr<ILoader> loader_;
-272:  std::unique_ptr<runtime_graph::Graph> graph_;
-273:  std::unique_ptr<IScheduler> scheduler_;
-274:  std::unique_ptr<IExecutor> executor_;
-275:  std::unique_ptr<IKVCache> kv_cache_;
-276:  std::unique_ptr<IDestroyer> destroyer_;
-279:  std::unique_ptr<ResourceStack> resource_stack_;
+296:  std::unique_ptr<ILoader> loader_;
+297:  std::unique_ptr<runtime_graph::Graph> graph_;
+298:  std::unique_ptr<IScheduler> scheduler_;
+299:  std::unique_ptr<IExecutor> executor_;
+300:  std::unique_ptr<IKVCache> kv_cache_;
+301:  std::unique_ptr<IDestroyer> destroyer_;
+304:  std::unique_ptr<ResourceStack> resource_stack_;
 ```
 
 结论：

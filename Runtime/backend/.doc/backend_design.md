@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 文档版本 | v0.1 |
-| 文档状态 | 设计完成；P0 契约与骨架已落地（含测试与 skill），P1–P5 待继续 |
+| 文档状态 | 设计完成；P0 契约与骨架、P1 Mock 后端与 8 个 CPU Kernel 已落地（含测试与 skill），P2–P5 待继续 |
 | 编写日期 | 2026-11-17 |
 | 模块 | `Runtime/backend/` |
 | 权威位置 | `Runtime/backend/.doc/backend_design.md` |
@@ -18,9 +18,12 @@
 **当前状态**：Runtime 已完成 I0 接口冻结（v0.3）。P0 已落地
 `kernel_context.h`、`backend_registry.h/.cc`、`exec_op_env.h/.cc`，清理了
 `kernel_types.h/.cc`，并完成 `runtime_backend` 静态库、`backend_header_check`
-可执行检查、[`tests/test_results.md`](../tests/test_results.md) 与
-[`.skill/SKILL.md`](../.skill/SKILL.md)。mock/OCL 后端、8 个算子 Kernel、Loader
-集成与算子精度测试仍待 P1–P5；模块整体在 P1–P5 完成后才可宣称完成。
+可执行检查。P1 已落地 `Runtime/backend/mock/`、8 个 CPU 参考 Kernel、
+`ops/` 的 OpSpec/`KernelOpEnv`/`IoOpEnv`/`OpEnvFactory`，以及
+`backend_contract_test`、`op_env_test`；实际结果见
+[`tests/test_results.md`](../tests/test_results.md) 第 8–14 节，skill 见
+[`.skill/SKILL.md`](../.skill/SKILL.md)。Python 组图 + torch 精度对比（P2/P3）、
+OCL 后端（P4）与每算子四件套收口（P5）仍待继续。
 
 ---
 
@@ -458,8 +461,8 @@ struct BackendCapability {
 
 | 后端 | dtypes | ops | H2D/D2H | max_buffer_bytes | min_alignment | attention_block_size | kv_layout |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `mock` | FP16/BF16/FP32 | 8 个融合 op + Input/Output | true/true | `SIZE_MAX/2` | 1 | 16 | `kNhd` |
-| `ocl` | FP16 | 8 个融合 op + Input/Output | true/true | `CL_DEVICE_MAX_MEM_ALLOC_SIZE` | 256 | 16（可调） | `kNhd` |
+| `mock` | FP16（ConvertParam 源支持 BF16/FP32） | 8 个融合 op | true/true | `SIZE_MAX/2` | 1 | 16 | `kNhd` |
+| `ocl` | FP16 | 8 个融合 op | true/true | `CL_DEVICE_MAX_MEM_ALLOC_SIZE` | 256 | 16（可调） | `kNhd` |
 
 `attention_block_size` 由 Attention Kernel 设计决定；KVCache 据此计算块大小与容量，Backend 与 KVCache
 必须一致，否则 Loader/KVCache 初始化失败。
@@ -780,8 +783,8 @@ ocl/kernels/<op>.cl             # OCL 源（构建期嵌入）
 - **传输**：`Upload/Download` 为 `memcpy`；`Synchronize` 为空操作。
 - **ConvertParam**：dtype 直通或主机侧转换；不做后端私有打包（或仅按 64 B 对齐）。
 - **Kernel**：CPU 参考实现，内部 FP32 计算，写回时 FP16 舍入；单线程、确定性。
-- **Capability**：8 op、FP16/BF16/FP32、H2D/D2H、`max_buffer_bytes=SIZE_MAX/2`、`min_alignment=1`、
-  `attention_block_size=16`、`kNhd`。
+- **Capability**：8 op、FP16 计算（ConvertParam 源支持 BF16/FP32）、H2D/D2H、
+  `max_buffer_bytes=SIZE_MAX/2`、`min_alignment=1`、`attention_block_size=16`、`kNhd`。
 - **用途**：主机 CI、OpEnv/Kernel ABI 验证、8 算子精度测试、OCL 数值的对照基线。
 - **限制**：不作为产品配置；性能不设目标。
 
@@ -897,7 +900,7 @@ ocl/kernels/<op>.cl             # OCL 源（构建期嵌入）
 | 阶段 | 内容 | 主要交付 | 依赖 |
 | --- | --- | --- | --- |
 | P0 契约与骨架 | 新增 `kernel_context.h`/`backend_registry.h`/`exec_op_env.h`；清理 `kernel_types`；CMake 骨架；公共头编译检查 | 设计文档 + 头文件 + 构建骨架 + `backend_header_check` 测试结果 + skill（P0 版） | 本文件；Runtime_design v0.3 |
-| P1 Mock 与框架 | mock 后端、通用 `KernelOpEnv`/`IoOpEnv`、OpSpec 注册、8 个 CPU Kernel、后端契约测试 | 框架代码 + `tests/test_results.md` | P0 |
+| P1 Mock 与框架 | mock 后端、通用 `KernelOpEnv`/`IoOpEnv`、OpSpec 注册、8 个 CPU Kernel、后端契约测试 | 框架代码 + 8 个 CPU Kernel + `backend_contract_test`/`op_env_test` + `tests/test_results.md` | P0 |
 | P2 Python 算子图与包 | 每算子合成 ModelGraph、torch 散算子参考、Optimizer/Serializer 打包、case 数据 | 8 套 Python 测试与包生成器 | P1；ToolChain API |
 | P3 Runtime 单算子执行 | `op_runner`、TestIoBinder、Loader 集成、Destroy；mock 上 8 算子精度测试 | 8 份算子测试结果 | P2；RuntimeCore Loader/Destroyer |
 | P4 OCL 后端 | OCL 封装、传输、Program 缓存、8 个 Kernel、契约与精度测试 | OCL 代码 + 真机测试结果 | P1；OpenCL 头/参考机 |

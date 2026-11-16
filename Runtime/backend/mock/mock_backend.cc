@@ -13,6 +13,7 @@
 
 #include "Runtime/backend/mock/mock_backend.h"
 
+#include <algorithm>
 #include <cstring>
 #include <limits>
 #include <memory>
@@ -88,8 +89,9 @@ Status ConvertParamData(const ParamDesc& desc, MockBuffer* target) {
 }  // namespace
 
 MockBackend::MockBackend() {
-  capability_.supported_dtypes = {DataType::kFloat16, DataType::kBFloat16,
-                                  DataType::kFloat32};
+  // 计算 Kernel 只实现 FP16 存储 + FP32 累加；BF16/FP32 仅作为
+  // ConvertParam 的源精度，不进入计算图。
+  capability_.supported_dtypes = {DataType::kFloat16};
   capability_.supported_ops = {
       runtime_graph::OpType::kGather,
       runtime_graph::OpType::kRmsNorm,
@@ -159,12 +161,14 @@ Status MockBackend::CreateBuffer(const BufferDesc& desc,
         ErrorCode::kBufferError,
         "MockBackend::CreateBuffer: buffer exceeds max_buffer_bytes");
   }
-  const uint64_t alignment = desc.alignment == 0 ? 64 : desc.alignment;
-  if (!IsPowerOfTwo(alignment)) {
+  const uint64_t requested = desc.alignment == 0 ? 64 : desc.alignment;
+  if (!IsPowerOfTwo(requested)) {
     return MakeStatus(
         ErrorCode::kBufferError,
         "MockBackend::CreateBuffer: alignment must be a power of two");
   }
+  // 主机分配器通常要求至少指针宽度对齐；大于请求值仍满足请求。
+  const uint64_t alignment = std::max<uint64_t>(requested, 64);
   try {
     *buffer = std::make_unique<MockBuffer>(desc.bytes, alignment);
   } catch (const std::bad_alloc&) {

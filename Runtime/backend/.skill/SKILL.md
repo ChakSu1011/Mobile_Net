@@ -118,9 +118,61 @@ python -m ziglang c++ -std=c++17 -Wall -Wextra -I "d:/Mobile_Net" \
    不 include `backend.h`，避免与 `kernel.h` 形成循环。
 10. **构建目录**：`Runtime/backend/build/` 已忽略；不要提交构建产物。
 
+## P1：Mock 后端与 CPU Kernel 落地流程
+
+### 新增/修改一个融合算子
+
+1. 在 `Runtime/backend/ops/<op>/<op>_spec.cc` 实现 `Validate...` 与
+   `Build...Desc`，定义 `const OpSpec k<Op>Spec`；
+2. 在 `Runtime/backend/ops/op_specs.h` 声明、`op_registry.cc` 登记；
+3. 在 `mock/kernels/` 新增 CPU Kernel 与 `Create<Op>Kernel`，在
+   `mock_kernel_creators.h` 声明、`mock_kernel_factory.cc` 分发；
+4. 在 `mock_backend.cc` 的 `capability_.supported_ops` 中声明；
+5. 在 `backend_contract_test.cc` 增加至少一个基础数值用例；
+6. 在 `CMakeLists.txt`/`mock/CMakeLists.txt` 加入源文件；
+7. 重新构建并运行 `ctest`，把实际输出追加到
+   `Runtime/backend/tests/test_results.md`。
+
+### Mock 后端的实现约定
+
+- `MockBuffer` 用主机对齐内存；`DevicePtr()` 返回主机地址；
+- CPU Kernel 通过 `static_cast<MockBuffer*>(view.data)->Data() + view.offset`
+  访问数据，不假设 `TensorView.data` 是裸地址；
+- 浮点计算用 `float`，写回用 `FloatToHalf`（RN-even）；读入用 `HalfToFloat`；
+- Kernel 不读 attr 的语义默认值：缺失/类型不符由 OpSpec 在加载期拒绝；
+- 形状以 `TensorView.shape` 为准，不依赖 `KernelContext.batch`；
+- `sample` 的 logits 可以是 rank≥2（Qwen3 为 [B,S,V]），输出秩 = logits 秩 -1；
+- 所有 Kernel 单线程、无全局状态，失败返回 `Status`。
+
+### 构建要点（P1 实测）
+
+- Mock 后端用 `OBJECT` library `backend_mock`，由 `runtime_backend` 以
+  `$<TARGET_OBJECTS:backend_mock>` 合并；
+- 静态库最终仍可能裁掉 `register_mock.cc.obj`；测试使用
+  `$<LINK_LIBRARY:WHOLE_ARCHIVE,runtime_backend>` 链接。产品构建也必须
+  whole-archive 或提供显式注册锚点，否则 `"mock"`/`"ocl"` 不可见；
+- 独立构建 Backend 时需把 `Runtime/common/data_types.cc` 编入
+  `runtime_backend`（Graph 的 `graph` 目标只含 `status.cc`）；RuntimeCore
+  建立 common 目标后应改为链接该目标，避免重复符号；
+- `Runtime/backend/build/` 已忽略，不提交构建产物。
+
+### P1 测试命令
+
+```bash
+cd d:/Mobile_Net
+cmake --build Runtime/backend/build --clean-first
+ctest --test-dir Runtime/backend/build --output-on-failure
+./Runtime/backend/build/backend_contract_test.exe
+./Runtime/backend/build/op_env_test.exe
+```
+
+P1 实际结果：3/3 CTest 通过；`backend_contract_test` 88 条 PASS；
+`op_env_test` 34 条 PASS；`backend_header_check` 46 条 PASS。详见
+`Runtime/backend/tests/test_results.md`。
+
 ## 后续扩展（P1–P5）
 
-- P1：mock 后端、通用 `KernelOpEnv`/`IoOpEnv`、8 个 CPU Kernel；
+- ✅ P1：mock 后端、通用 `KernelOpEnv`/`IoOpEnv`、8 个 CPU Kernel；
 - P2：Python 单算子组图 + torch 散算子参考 + Optimizer/Serializer 打包；
 - P3：`op_runner` + Loader/Destroy 集成；
 - P4：OCL 后端与 8 个 OCL Kernel；

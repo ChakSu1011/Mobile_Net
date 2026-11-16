@@ -1,4 +1,4 @@
-# Backend P0 测试结果
+# Backend 模块测试结果（P0/P1）
 
 ## 1. 测试范围
 
@@ -245,3 +245,269 @@ P0 范围内**通过**；模块整体仍未完成，P1–P4 的 mock/OCL、8 个
 | skill | ✅ `Runtime/backend/.skill/SKILL.md` |
 
 > P0 的“完成”仅指契约与骨架；Backend 模块整体按设计文档 P1–P5 继续交付。
+
+---
+
+# P1：Mock 后端与 CPU Kernel 测试结果
+
+## 8. 测试范围
+
+本阶段实现并验证：
+
+- `Runtime/backend/mock/`：Mock 后端、MockBuffer、半精度工具、自注册；
+- 8 个 CPU 参考 Kernel：gather、rms_norm、linear、linear_swi_glu、
+  per_head_rmsnorm_rope、mega_attention、add、sample_argmax；
+- `Runtime/backend/ops/`：attr 工具、OpSpec 校验、8 个 OpSpec、通用
+  `KernelOpEnv`、`IoOpEnv`、`OpEnvFactory`、OpType→Spec 注册；
+- 契约测试 `backend_contract_test` 与执行链测试 `op_env_test`。
+
+本阶段**不包含**：Python 组图/torch 精度对比（P2/P3）、Loader/Serializer
+集成（P3）、OCL 后端（P4）、每算子 `.doc`/`.skill` 四件套收口（P5）。
+
+## 9. 测试环境
+
+| 项目 | 内容 |
+| --- | --- |
+| 日期 | 2026-11-17 |
+| 操作系统 | Windows 11 Home China 10.0.26200 |
+| 编译器 | Clang 22.1.8（`Graph/tools/zig_cxx.cmd`，zig 0.17.1） |
+| CMake / Ninja | 4.4.4 / 1.13.2 |
+| 语言标准 | C++17 |
+| 构建目录 | `Runtime/backend/build` |
+| 工作目录 | `d:/Mobile_Net` |
+
+## 10. 测试命令
+
+```bash
+cd d:/Mobile_Net
+
+cmake -S Runtime/backend -B Runtime/backend/build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CXX_COMPILER="d:/Mobile_Net/Graph/tools/zig_cxx.cmd" \
+  -DCMAKE_AR="d:/Mobile_Net/Graph/tools/zig_ar.cmd" \
+  -DCMAKE_RANLIB="d:/Mobile_Net/Graph/tools/zig_ranlib.cmd" \
+  -DBACKEND_AR="d:/Mobile_Net/Graph/tools/zig_ar.cmd" \
+  -DBACKEND_RANLIB="d:/Mobile_Net/Graph/tools/zig_ranlib.cmd" \
+  -DGRAPH_AR="d:/Mobile_Net/Graph/tools/zig_ar.cmd" \
+  -DGRAPH_RANLIB="d:/Mobile_Net/Graph/tools/zig_ranlib.cmd"
+
+cmake --build Runtime/backend/build --clean-first
+ctest --test-dir Runtime/backend/build --output-on-failure
+
+# 直接运行以查看逐条断言
+./Runtime/backend/build/backend_contract_test.exe
+./Runtime/backend/build/op_env_test.exe
+```
+
+## 11. 实际输出
+
+### 11.1 构建
+
+`--clean-first` 重新构建 51 个目标，全部成功；`-Wall -Wextra` 无警告、
+无错误。构建产物包括：
+
+- `graph/libgraph.a`
+- `libruntime_backend.a`（含 `backend_mock` object library）
+- `backend_header_check.exe`
+- `backend_contract_test.exe`
+- `op_env_test.exe`
+
+### 11.2 CTest
+
+```text
+Test project D:/Mobile_Net/Runtime/backend/build
+    Start 1: backend_header_check
+1/3 Test #1: backend_header_check .............   Passed    0.05 sec
+    Start 2: backend_contract_test
+2/3 Test #2: backend_contract_test ............   Passed    0.02 sec
+    Start 3: op_env_test
+3/3 Test #3: op_env_test ......................   Passed    0.05 sec
+
+100% tests passed out of 3
+
+Total Test time (real) =   0.13 sec
+```
+
+### 11.3 `backend_contract_test`（88 条 PASS）
+
+```text
+PASS half 1.0 bit pattern
+PASS half -2.5 bit pattern
+PASS half 0.0 bit pattern
+PASS half max finite
+PASS half overflow to inf
+PASS half negative overflow to inf
+PASS half +inf
+PASS half -inf
+PASS half NaN
+PASS half->float 1.0
+PASS half->float -2.5
+PASS half->float smallest subnormal
+PASS bfloat16 1.0 -> half 1.0
+PASS registry creates mock
+PASS mock Init
+PASS mock Capability
+PASS mock supports 8 ops
+PASS mock supports H2D/D2H
+PASS mock Deinit
+PASS unknown backend rejected
+PASS lifecycle create
+PASS lifecycle Init
+PASS double Init rejected
+PASS lifecycle Deinit
+PASS double Deinit idempotent
+PASS Capability after Deinit rejected
+PASS CreateBuffer after Deinit rejected
+PASS Synchronize after Deinit rejected
+PASS CreateBuffer 257 bytes
+PASS Upload
+PASS Download
+PASS Upload/Download roundtrip
+PASS DestroyBuffer
+PASS zero-byte buffer rejected
+PASS non-power-of-two alignment rejected
+PASS null Upload rejected
+PASS buffer Deinit
+PASS ConvertParam float32->float16
+PASS ConvertParam half values
+PASS ConvertParam target bytes
+PASS ConvertParam unsupported dtype rejected
+PASS convert Deinit
+PASS CreateKernel gather
+PASS DestroyKernel gather
+PASS CreateKernel rms_norm
+PASS DestroyKernel rms_norm
+PASS CreateKernel linear
+PASS DestroyKernel linear
+PASS CreateKernel linear_swi_glu
+PASS DestroyKernel linear_swi_glu
+PASS CreateKernel per_head_rmsnorm_rope
+PASS DestroyKernel per_head_rmsnorm_rope
+PASS CreateKernel mega_attention
+PASS DestroyKernel mega_attention
+PASS CreateKernel add
+PASS DestroyKernel add
+PASS CreateKernel sample_argmax
+PASS DestroyKernel sample_argmax
+PASS unknown kernel_key rejected
+PASS kernel Deinit
+PASS add kernel executes
+PASS add value 0
+PASS add value 1
+PASS add value 2
+PASS add value 3
+PASS gather kernel executes
+PASS gather value 0
+PASS gather value 1
+PASS gather value 2
+PASS gather value 3
+PASS rms_norm kernel executes
+PASS rms_norm value 0
+PASS rms_norm value 1
+PASS linear kernel executes
+PASS linear value 0
+PASS linear value 1
+PASS linear_swi_glu kernel executes
+PASS linear_swi_glu value 0
+PASS linear_swi_glu value 1
+PASS per_head_rmsnorm_rope kernel executes
+PASS per_head_rmsnorm_rope value 0
+PASS per_head_rmsnorm_rope value 1
+PASS mega_attention kernel executes
+PASS mega_attention value 0
+PASS mega_attention value 1
+PASS sample kernel executes
+PASS sample argmax value
+PASS kernel execute Deinit
+ALL TESTS PASSED
+```
+
+退出码：`0`。
+
+### 11.4 `op_env_test`（34 条 PASS）
+
+```text
+PASS spec registered for gather
+PASS spec registered for rms_norm
+PASS spec registered for linear
+PASS spec registered for linear_swi_glu
+PASS spec registered for linear_per_head_rms_norm_rope
+PASS spec registered for mega_attention
+PASS spec registered for add
+PASS spec registered for sample
+PASS unsupported OpType has no spec
+PASS create input
+PASS bind input host storage
+PASS create rhs constant
+PASS create add op
+PASS create output
+PASS bind output host storage
+PASS sort add graph
+PASS create add OpEnvs
+PASS execute add graph
+PASS synchronize add graph
+PASS graph add value 0
+PASS graph add value 1
+PASS graph add value 2
+PASS graph add value 3
+PASS D2H add value 0
+PASS D2H add value 1
+PASS D2H add value 2
+PASS D2H add value 3
+PASS add graph Deinit
+PASS sort unsupported graph
+PASS unsupported op rejected
+PASS unsupported Deinit
+PASS sort missing attr graph
+PASS missing attr rejected
+PASS missing attr Deinit
+ALL TESTS PASSED
+```
+
+退出码：`0`。
+
+### 11.5 `backend_header_check`
+
+P0 的 46 条断言继续通过（见第 4.4 节）。
+
+## 12. 结论
+
+| 检查项 | 结论 |
+| --- | --- |
+| half/bfloat16 位级转换（含 Inf/NaN/次正规） | 通过 |
+| Mock 后端注册/能力/生命周期 | 通过 |
+| Buffer 创建/销毁/对齐/零字节拒绝 | 通过 |
+| H2D/D2H 往返 | 通过 |
+| ConvertParam FP32→FP16 / 不支持 dtype | 通过 |
+| 8 个 kernel_key 创建/销毁 | 通过 |
+| 8 个 OpType 的 OpSpec 登记 | 通过 |
+| 8 个 CPU Kernel 基础数值 | 通过 |
+| Input → Add → Output 执行链（H2D/Kernel/D2H） | 通过 |
+| 未知 op / 缺失 attr 的加载期拒绝 | 通过 |
+| 公共头/注册表回归 | 通过 |
+
+P1 范围内通过；尚未与 torch 做逐算子精度对比，不能作为算子验收结论。
+
+## 13. 未覆盖项与风险
+
+| 项目 | 说明 |
+| --- | --- |
+| torch 精度对比 | P2/P3：Python 组图 + Optimizer/Serializer + Loader + torch CPU 参考 |
+| Loader/Serializer 集成 | 依赖 RuntimeCore Loader/Destroyer |
+| 7 个算子的 OpSpec 满载图测试 | 当前 OpEnv 执行链只跑通 Add；其余算子由 Kernel 直测覆盖，P2/P3 补满载图 |
+| OCL 后端 | P4；本机无 Khronos 头/真机 |
+| 静态注册裁剪 | 测试用 `$<LINK_LIBRARY:WHOLE_ARCHIVE,runtime_backend>`；产品构建需同样 whole-archive 或显式锚点 |
+| `Runtime/common/data_types.cc` | 独立构建时编入 `runtime_backend`；RuntimeCore 建立 common 目标后需移除，避免重复符号 |
+| 性能 | Mock 为单线程朴素实现；大形状会慢，P2 用 small 形状，真实形状标 slow |
+
+## 14. 交付物状态（P1）
+
+| 四件套 | 状态 |
+| --- | --- |
+| 设计文档 | ✅ `Runtime/backend/.doc/backend_design.md`（P1 状态已更新） |
+| 代码 | ✅ mock 后端 + 8 CPU Kernel + OpSpec/OpEnv 框架 |
+| 测试结果 | ✅ 本节（实际执行） |
+| skill | ✅ `Runtime/backend/.skill/SKILL.md`（P1 流程已补充） |
+
+> P1 的“完成”指 Mock 后端与 CPU Kernel 链路；完整算子精度验收仍需 P2/P3 的
+> Python 组图 + 模型包 + Loader + torch 对比。

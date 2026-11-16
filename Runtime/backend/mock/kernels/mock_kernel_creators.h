@@ -21,13 +21,28 @@
 namespace mobilenet {
 namespace mock {
 
+// 创建 Gather CPU Kernel；kernel 为空返回 kInvalidArgument。
 Status CreateGatherKernel(std::unique_ptr<Kernel>* kernel);
+
+// 创建 RMSNorm CPU Kernel；kernel 为空返回 kInvalidArgument。
 Status CreateRmsNormKernel(std::unique_ptr<Kernel>* kernel);
+
+// 创建 Linear CPU Kernel；kernel 为空返回 kInvalidArgument。
 Status CreateLinearKernel(std::unique_ptr<Kernel>* kernel);
+
+// 创建 LinearSwiGlu CPU Kernel；kernel 为空返回 kInvalidArgument。
 Status CreateLinearSwiGluKernel(std::unique_ptr<Kernel>* kernel);
+
+// 创建 PerHeadRMSNormRope CPU Kernel；kernel 为空返回 kInvalidArgument。
 Status CreatePerHeadRmsNormRopeKernel(std::unique_ptr<Kernel>* kernel);
+
+// 创建 MegaAttention CPU Kernel；kernel 为空返回 kInvalidArgument。
 Status CreateMegaAttentionKernel(std::unique_ptr<Kernel>* kernel);
+
+// 创建 Add CPU Kernel；kernel 为空返回 kInvalidArgument。
 Status CreateAddKernel(std::unique_ptr<Kernel>* kernel);
+
+// 创建 Argmax Sample CPU Kernel；kernel 为空返回 kInvalidArgument。
 Status CreateSampleKernel(std::unique_ptr<Kernel>* kernel);
 
 }  // namespace mock

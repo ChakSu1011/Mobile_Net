@@ -35,6 +35,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(MOBILENET_BACKEND_BUILD_TESTS "Build backend tests" ON)
+option(MOBILENET_BACKEND_MOCK "Build the mock CPU backend" ON)
 
 # 非 MSVC 工具链的归档器覆盖。
 #
@@ -67,14 +68,41 @@ if(NOT TARGET graph)
                    "${CMAKE_BINARY_DIR}/graph")
 endif()
 
-# Backend 框架静态库：公共契约 + 注册表 + 执行型 OpEnv + 边界类型映射。
+# Mock 后端以 object library 编入，防止静态注册被链接器裁剪。
+if(MOBILENET_BACKEND_MOCK)
+  add_subdirectory(mock)
+endif()
+
+# Backend 框架静态库：公共契约 + 注册表 + 执行型 OpEnv + 算子规格与 Kernel。
 add_library(
   runtime_backend
   STATIC
   backend_registry.cc
   exec_op_env.cc
   kernel_types.cc
+  # Graph 的 graph 目标只编译 status.cc；DataTypeSize 在 common/data_types.cc，
+  # 独立构建 Backend 时需一并编译。RuntimeCore 建立 common 目标后由上层替换。
+  "${MOBILENET_ROOT}/Runtime/common/data_types.cc"
+  ops/attr_utils.cc
+  ops/op_validation.cc
+  ops/op_registry.cc
+  ops/kernel_op_env.cc
+  ops/io_op_env.cc
+  ops/op_env_factory.cc
+  ops/gather/gather_spec.cc
+  ops/rms_norm/rms_norm_spec.cc
+  ops/linear/linear_spec.cc
+  ops/linear_swi_glu/linear_swi_glu_spec.cc
+  ops/linear_per_head_rmsnorm_rope/per_head_rmsnorm_rope_spec.cc
+  ops/mega_attention/mega_attention_spec.cc
+  ops/add/add_spec.cc
+  ops/sample/sample_spec.cc
 )
+
+if(MOBILENET_BACKEND_MOCK)
+  target_sources(runtime_backend PRIVATE $<TARGET_OBJECTS:backend_mock>)
+endif()
+
 target_include_directories(runtime_backend PUBLIC "${MOBILENET_ROOT}")
 target_link_libraries(runtime_backend PUBLIC graph)
 
@@ -96,4 +124,32 @@ if(MOBILENET_BACKEND_BUILD_TESTS)
     target_compile_options(backend_header_check PRIVATE -Wall -Wextra)
   endif()
   add_test(NAME backend_header_check COMMAND backend_header_check)
+
+  if(MOBILENET_BACKEND_MOCK)
+    # Mock 后端契约测试：Buffer/传输/ConvertParam/Kernel/生命周期。
+    # 用 WHOLE_ARCHIVE 链接，确保 register_mock.cc.obj 的静态注册器不被
+    # 链接器裁剪；产品构建同样需要对后端库使用 whole-archive 或显式锚点。
+    add_executable(backend_contract_test tests/backend_contract_test.cc)
+    target_link_libraries(
+      backend_contract_test PRIVATE
+      "$<LINK_LIBRARY:WHOLE_ARCHIVE,runtime_backend>")
+    if(MSVC)
+      target_compile_options(backend_contract_test PRIVATE /W4)
+    else()
+      target_compile_options(backend_contract_test PRIVATE -Wall -Wextra)
+    endif()
+    add_test(NAME backend_contract_test COMMAND backend_contract_test)
+
+    # OpEnv/Kernel 执行链测试：Graph → OpEnvFactory → Forward → Destroy。
+    add_executable(op_env_test tests/op_env_test.cc)
+    target_link_libraries(
+      op_env_test PRIVATE
+      "$<LINK_LIBRARY:WHOLE_ARCHIVE,runtime_backend>")
+    if(MSVC)
+      target_compile_options(op_env_test PRIVATE /W4)
+    else()
+      target_compile_options(op_env_test PRIVATE -Wall -Wextra)
+    endif()
+    add_test(NAME op_env_test COMMAND op_env_test)
+  endif()
 endif()

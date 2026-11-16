@@ -9,6 +9,8 @@ Models/
 
 # 构建产物（ToolChain 源码仍需入库，只忽略编译输出与中间文件）
 Graph/build/
+Runtime/build/
+Runtime/backend/build/
 ToolChain/*.log
 
 # Python 缓存

@@ -6,8 +6,8 @@
 //
 // 边界：
 //   - 本文件不定义 Backend 接口（见 Runtime/backend/backend.h）；
-//   - 不定义 KernelContext 的字段（由 Executor 侧定义并构造），避免 Kernel
-//     公共头文件依赖 Graph 数据结构；
+//   - 不定义 KernelContext 的字段（见 Runtime/backend/kernel_context.h，由
+//     ExecBackend 维护），避免 Kernel 公共头文件依赖 Graph 执行接口；
 //   - 算子类型统一使用 Graph 的 runtime_graph::OpType。
 //
 // 依赖：

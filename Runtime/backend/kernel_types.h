@@ -1,59 +1,52 @@
-// 模块：Backend/Kernel 公共枚举
+// 模块：Backend/Kernel 边界类型映射
 //
 // 职责：
-//   定义 I/O 拷贝方向、Decoder Block 融合阶段与 RoPE 布局枚举，供
-//   Backend/Kernel 实现与 OpEnv 使用。
+//   定义 Graph IR 精度（runtime_graph::Precision）与后端边界精度
+//   （DataType）之间的显式转换；Backend/Kernel 公共头统一通过本文件
+//   完成精度类型转换，避免在实现中散落 switch。
 //
 // 边界：
-//   - 不定义 Kernel 接口、算子类型或后端接口；
-//   - 算子类型统一使用 Graph 的 runtime_graph::OpType；
-//   - 不依赖 LibTorch。
+//   - 只做枚举映射，不定义 Kernel 接口、算子类型或后端接口；
+//   - 不引入新枚举；算子类型统一使用 Graph 的 runtime_graph::OpType，
+//     图侧布局/设备统一使用 runtime_graph::{Layout,DeviceType}；
+//   - 不依赖 LibTorch、OpenCL 或其他厂商头文件。
 //
 // 依赖：
-//   仅依赖 C++17 标准库。
+//   Graph/include/types.h、Runtime/common/data_types.h；C++17 标准库。
 
 #ifndef MOBILENET_RUNTIME_BACKEND_KERNEL_TYPES_H_
 #define MOBILENET_RUNTIME_BACKEND_KERNEL_TYPES_H_
 
+#include "Graph/include/types.h"
+#include "Runtime/common/data_types.h"
+
 namespace mobilenet {
 
-// I/O 边界节点的数据搬运方向。
-enum class CopyKind {
-  kNone = 0,
-  kH2D = 1,
-  kD2H = 2,
-};
-
-// Decoder Block 融合阶段。
+// 把 Graph IR 精度转换为后端边界精度。
 //
-// 取值与设计文档 4.5 节融合骨架一一对应；kOutsideBlock 表示 Embedding、
-// 最终归一化、LM Head、Sampling、Cast 等块外算子。
-enum class BlockStage {
-  kUnknown = 0,
-  kStage1AttnNorm = 1,
-  kStage2Qkv = 2,
-  kStage3Attention = 3,
-  kStage4AttnResidual = 4,
-  kStage5MlpNorm = 5,
-  kStage6MlpGateUp = 6,
-  kStage7MlpDownResidual = 7,
-  kOutsideBlock = 8,
-};
+// 参数：
+//   precision：Graph Storage 中的精度枚举。
+// 返回：
+//   对应的 DataType；无对应类型的精度（Float8、Int16）返回
+//   DataType::kUnknown，调用方应返回 kUnsupportedDtype。
+DataType DataTypeFromPrecision(runtime_graph::Precision precision);
 
-// RoPE 位置编码布局。
-enum class RopeLayout {
-  kNeox = 0,
-  kGptJ = 1,
-};
+// 把后端边界精度转换为 Graph IR 精度。
+//
+// 参数：
+//   dtype：Backend/Kernel 使用的精度枚举。
+// 返回：
+//   对应的 runtime_graph::Precision；kUnknown 或无法映射时返回
+//   runtime_graph::Precision::kUnknown。
+runtime_graph::Precision PrecisionFromDataType(DataType dtype);
 
-// 返回 CopyKind 的稳定名称，例如 "kH2D"。
-const char* CopyKindName(CopyKind copy_kind);
-
-// 返回 BlockStage 的稳定名称，例如 "kStage1AttnNorm"。
-const char* BlockStageName(BlockStage stage);
-
-// 返回 RopeLayout 的稳定名称，例如 "kNeox"。
-const char* RopeLayoutName(RopeLayout layout);
+// 判断后端边界精度是否可映射到 Graph IR 精度。
+//
+// 参数：
+//   dtype：Backend/Kernel 使用的精度枚举。
+// 返回：
+//   dtype 非 kUnknown 且能映射到非 kUnknown 的 Precision 时返回 true。
+bool IsSupportedDataType(DataType dtype);
 
 }  // namespace mobilenet
 

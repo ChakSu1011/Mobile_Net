@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 文档版本 | v0.1 |
-| 文档状态 | 设计完成，代码/测试/skill 待 P1–P5 落地 |
+| 文档状态 | 设计完成；P0 契约与骨架已落地（含测试与 skill），P1–P5 待继续 |
 | 编写日期 | 2026-11-17 |
 | 模块 | `Runtime/backend/` |
 | 权威位置 | `Runtime/backend/.doc/backend_design.md` |
@@ -15,9 +15,12 @@
 `Runtime/.doc/Runtime_design.md` 为准；本文件只展开 Backend/Kernel 的职责边界、接口语义、后端插件、
 算子模块化与算子精度测试方法，不重复定义 Loader/Engine/Scheduler/KVCache/Destroy 的内部实现。
 
-**当前状态**：Runtime 已完成 I0 接口冻结（v0.3），`Runtime/backend/backend.h`、
-`Runtime/backend/kernel.h`、`Runtime/backend/kernel_types.h` 已存在；本模块尚无 `.cc` 实现、测试报告与
-skill。本文件完成“设计”四件套中的设计文档部分，模块整体在 P1–P5 完成后才可宣称完成。
+**当前状态**：Runtime 已完成 I0 接口冻结（v0.3）。P0 已落地
+`kernel_context.h`、`backend_registry.h/.cc`、`exec_op_env.h/.cc`，清理了
+`kernel_types.h/.cc`，并完成 `runtime_backend` 静态库、`backend_header_check`
+可执行检查、[`tests/test_results.md`](../tests/test_results.md) 与
+[`.skill/SKILL.md`](../.skill/SKILL.md)。mock/OCL 后端、8 个算子 Kernel、Loader
+集成与算子精度测试仍待 P1–P5；模块整体在 P1–P5 完成后才可宣称完成。
 
 ---
 
@@ -170,8 +173,8 @@ Kernel 实现     ──▶ backend/<name>/kernels/
 ```text
 Runtime/backend/
 ├── .doc/backend_design.md          # 本文件（Backend 模块权威设计）
-├── .skill/SKILL.md                 # 后端框架开发 skill（P5 落地）
-├── tests/test_results.md           # 后端契约测试结果（P1/P4 落地）
+├── .skill/SKILL.md                 # 后端框架开发 skill（P0 已落地，P1–P5 扩展）
+├── tests/test_results.md           # 后端契约测试结果（P0 已有；P1/P4 追加）
 ├── backend.h                       # Backend/Buffer/BufferDesc/Capability/ParamDesc（已冻结）
 ├── backend_registry.h/.cc          # 后端注册表 + 自注册宏（P0 新增）
 ├── kernel.h                        # Kernel/KernelDesc + KernelContext 前置声明（已冻结）
@@ -893,7 +896,7 @@ ocl/kernels/<op>.cl             # OCL 源（构建期嵌入）
 
 | 阶段 | 内容 | 主要交付 | 依赖 |
 | --- | --- | --- | --- |
-| P0 契约与骨架 | 新增 `kernel_context.h`/`backend_registry.h`/`exec_op_env.h`；清理 `kernel_types`；CMake 骨架；公共头编译检查 | 设计文档 + 头文件 + 构建骨架 | 本文件；Runtime_design v0.3 |
+| P0 契约与骨架 | 新增 `kernel_context.h`/`backend_registry.h`/`exec_op_env.h`；清理 `kernel_types`；CMake 骨架；公共头编译检查 | 设计文档 + 头文件 + 构建骨架 + `backend_header_check` 测试结果 + skill（P0 版） | 本文件；Runtime_design v0.3 |
 | P1 Mock 与框架 | mock 后端、通用 `KernelOpEnv`/`IoOpEnv`、OpSpec 注册、8 个 CPU Kernel、后端契约测试 | 框架代码 + `tests/test_results.md` | P0 |
 | P2 Python 算子图与包 | 每算子合成 ModelGraph、torch 散算子参考、Optimizer/Serializer 打包、case 数据 | 8 套 Python 测试与包生成器 | P1；ToolChain API |
 | P3 Runtime 单算子执行 | `op_runner`、TestIoBinder、Loader 集成、Destroy；mock 上 8 算子精度测试 | 8 份算子测试结果 | P2；RuntimeCore Loader/Destroyer |

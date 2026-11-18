@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 文档版本 | v0.4 |
-| 文档状态 | 架构设计（请求/响应模型变更，代码迁移待执行） |
+| 文档状态 | 架构设计（请求/响应模型已迁移） |
 | 编写日期 | 2026-11-19 |
 | 变更摘要 | v0.4：新增 `Runtime/common/sequence.h` 请求/响应模型（Request/Response/RequestStatus/SampleParams/Token/Sequence）；定义 Service→Engine→Scheduler 的请求与响应流；原 `request.h` 迁移；v0.3：Engine→Executor→Backend 所有权；Kernel 契约迁至 `Runtime/backend/` |
 | 模块 | `Runtime/` |
@@ -583,16 +583,15 @@ struct RequestSnapshot {
 1. `SamplingParams` → `SampleParams`；`RequestState` → `RequestStatus`；
    `Request.id` → `request_id`；`prompt_ids` → `prompt_token_ids`；
    `sampling` → `sample_param`；`max_new_tokens` → `SampleParams.max_tokens`。
-2. `request.h` 删除或改为转发 `sequence.h` 的过渡别名；新代码只 include
-   `sequence.h`。
+2. `request.h` 已删除；新代码只 include `sequence.h`。
 3. `kernel_context.h` 的 `const SamplingParams*` → `const SampleParams*`。
 4. `IScheduler::Update/Stop/Fail` 改为填充 `Response`；`UpdateResult` 删除。
 5. `Engine` 的 `TokenCallback` → `ResponseCallback`；`StepResult.token`
    由 `int64_t` 改为 `Token`。
 6. 现有 Engine/Scheduler/测试实现按上述契约迁移；迁移完成前旧代码保持
    可编译，迁移后删除兼容别名。
-7. 迁移完成前，接口检查与测试结果仍以当前 `request.h` 为准；`sequence.h`
-   落地后更新 `Runtime/tests/interface_check.cc` 与 `test_results.md`。
+7. 迁移已执行：`sequence.h` 落地、`request.h` 删除，接口检查与测试结果
+   已更新。
 
 #### 4.1.4 计划与结果 `plan.h`
 

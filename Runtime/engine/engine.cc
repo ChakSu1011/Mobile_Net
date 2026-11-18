@@ -518,9 +518,9 @@ Status Engine::AddRequest(const Request& request, uint64_t* request_id) {
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "request_id output must not be null");
   }
-  if (request.prompt_ids.empty()) {
+  if (request.prompt_token_ids.empty()) {
     return MakeStatus(ErrorCode::kInvalidArgument,
-                      "prompt_ids must not be empty");
+                      "prompt_token_ids must not be empty");
   }
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -557,14 +557,22 @@ Status Engine::CancelRequest(uint64_t request_id) {
   if (!scheduler_) {
     return MakeStatus(ErrorCode::kStateError, "scheduler is not available");
   }
-  Status status = scheduler_->Stop(request_id);
+  Response response;
+  Status status = scheduler_->Stop(request_id, &response);
+  if (status.ok() && response.request_id != 0) {
+    NotifyResponse(response);
+  }
   idle_cv_.notify_all();
   return status;
 }
 
 Status Engine::Update(uint64_t request_id,
-                      const std::vector<int64_t>& tokens,
-                      RequestState status) {
+                      const std::vector<Token>& tokens,
+                      Response* response) {
+  if (response == nullptr) {
+    return MakeStatus(ErrorCode::kInvalidArgument,
+                      "response must not be null");
+  }
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (state_ != EngineState::kLoaded && state_ != EngineState::kRunning) {
@@ -575,9 +583,7 @@ Status Engine::Update(uint64_t request_id,
   if (!scheduler_) {
     return MakeStatus(ErrorCode::kStateError, "scheduler is not available");
   }
-  UpdateResult result;
-  Status update_status =
-      scheduler_->Update(request_id, tokens, status, &result);
+  Status update_status = scheduler_->Update(request_id, tokens, response);
   if (!update_status.ok()) {
     return update_status;
   }
@@ -585,20 +591,7 @@ Status Engine::Update(uint64_t request_id,
     std::lock_guard<std::mutex> lock(mutex_);
     stats_.total_tokens += tokens.size();
   }
-  if (result.finished && !tokens.empty()) {
-    TokenCallback callback;
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      callback = token_callback_;
-    }
-    if (callback) {
-      try {
-        callback(request_id, tokens.back(), true);
-      } catch (const std::exception&) {
-        // 回调异常不得穿透 Engine；丢弃本次通知。
-      }
-    }
-  }
+  NotifyResponse(*response);
   return Status::Ok();
 }
 
@@ -636,6 +629,15 @@ Status Engine::ExecuteStep(StepStats* stats) {
                       "scheduler/kv_cache/executor is not available");
   }
 
+  // 将请求标记失败并通知 Service；失败路径不阻塞其他请求。
+  auto fail_request = [this](uint64_t request_id, ErrorCode code) {
+    Response response;
+    Status status = scheduler_->Fail(request_id, code, &response);
+    if (status.ok() && response.request_id != 0) {
+      NotifyResponse(response);
+    }
+  };
+
   const int64_t schedule_start_ns = NowNs();
   ExecutionPlan plan;
   Status status = scheduler_->Schedule(&plan);
@@ -655,7 +657,7 @@ Status Engine::ExecuteStep(StepStats* stats) {
     status = kv_cache_->BuildView(&kv_view);
     if (!status.ok()) {
       for (const PlanEntry& entry : plan.entries) {
-        (void)scheduler_->Fail(entry.request_id, status.code());
+        fail_request(entry.request_id, status.code());
       }
       if (IsFatalError(status.code())) {
         fatal_.store(true);
@@ -668,7 +670,7 @@ Status Engine::ExecuteStep(StepStats* stats) {
     execute_ns = NowNs() - execute_start_ns;
     if (!status.ok()) {
       for (const PlanEntry& entry : plan.entries) {
-        (void)scheduler_->Fail(entry.request_id, status.code());
+        fail_request(entry.request_id, status.code());
       }
       if (IsFatalError(status.code())) {
         fatal_.store(true);
@@ -691,17 +693,16 @@ Status Engine::ExecuteStep(StepStats* stats) {
     }
     auto result_it = result_by_id.find(entry.request_id);
     if (result_it == result_by_id.end()) {
-      (void)scheduler_->Fail(entry.request_id, ErrorCode::kInternal);
+      fail_request(entry.request_id, ErrorCode::kInternal);
       continue;
     }
     const RequestStepResult& result = *result_it->second;
     if (!result.ok) {
-      (void)scheduler_->Fail(result.request_id, result.error);
+      fail_request(result.request_id, result.error);
       continue;
     }
-    UpdateResult update_result;
-    status = scheduler_->Update(result.request_id, {result.token},
-                                RequestState::kRunning, &update_result);
+    Response response;
+    status = scheduler_->Update(result.request_id, {result.token}, &response);
     if (!status.ok()) {
       if (status.code() == ErrorCode::kRequestNotFound) {
         continue;
@@ -709,18 +710,7 @@ Status Engine::ExecuteStep(StepStats* stats) {
       return status;
     }
     ++generated_tokens;
-    TokenCallback callback;
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      callback = token_callback_;
-    }
-    if (callback) {
-      try {
-        callback(result.request_id, result.token, update_result.finished);
-      } catch (const std::exception&) {
-        // 回调异常不得穿透 Engine；丢弃本次通知。
-      }
-    }
+    NotifyResponse(response);
   }
 
   StepStats step_stats;
@@ -883,9 +873,25 @@ Status Engine::Destroy() {
   return status;
 }
 
-void Engine::SetTokenCallback(TokenCallback callback) {
+void Engine::SetResponseCallback(ResponseCallback callback) {
   std::lock_guard<std::mutex> lock(mutex_);
-  token_callback_ = std::move(callback);
+  response_callback_ = std::move(callback);
+}
+
+void Engine::NotifyResponse(const Response& response) {
+  ResponseCallback callback;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    callback = response_callback_;
+  }
+  if (!callback) {
+    return;
+  }
+  try {
+    callback(response);
+  } catch (const std::exception&) {
+    // 回调异常不得穿透 Engine；丢弃本次通知。
+  }
 }
 
 Status Engine::SetInput(const std::string& name,

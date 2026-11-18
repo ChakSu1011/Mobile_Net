@@ -286,15 +286,21 @@ class FakeScheduler final : public IScheduler {
   // 接收请求并分配 ID。
   Status Merge(const Request& request, uint64_t* request_id) override {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (request_id == nullptr || request.prompt_ids.empty()) {
+    if (request_id == nullptr || request.prompt_token_ids.empty()) {
       return MakeStatus(ErrorCode::kInvalidArgument, "invalid request");
     }
     RequestData data;
     data.request_id = next_request_id_++;
-    data.state = RequestState::kWaiting;
-    data.prompt_tokens = static_cast<int32_t>(request.prompt_ids.size());
+    data.state = RequestStatus::kWaiting;
+    data.prompt_tokens =
+        static_cast<int32_t>(request.prompt_token_ids.size());
     data.computed_tokens = 0;
     data.generated_tokens = 0;
+    data.sample_param = request.sample_param;
+    data.sequence.sequence_id = data.request_id;
+    data.sequence.prompt_count = data.prompt_tokens;
+    data.sequence.history_token_ids = request.prompt_token_ids;
+    data.sequence.vocab_size = 100;
     requests_.emplace(data.request_id, data);
     *request_id = data.request_id;
     return Status::Ok();
@@ -311,8 +317,8 @@ class FakeScheduler final : public IScheduler {
     plan->step_id = ++step_id_;
     for (auto& entry : requests_) {
       RequestData& data = entry.second;
-      if (data.state != RequestState::kWaiting &&
-          data.state != RequestState::kRunning) {
+      if (data.state != RequestStatus::kWaiting &&
+          data.state != RequestStatus::kRunning) {
         continue;
       }
       PlanEntry plan_entry;
@@ -329,56 +335,65 @@ class FakeScheduler final : public IScheduler {
       plan_entry.is_chunk = false;
       plan->entries.push_back(plan_entry);
       plan->total_tokens += 1;
-      data.state = RequestState::kRunning;
+      data.state = RequestStatus::kRunning;
       data.computed_tokens += 1;
       break;
     }
     return Status::Ok();
   }
 
-  // 回写 token 并结束请求。
-  Status Update(uint64_t request_id,
-                const std::vector<int64_t>& tokens,
-                RequestState executor_status,
-                UpdateResult* result) override {
+  // 回写 token、更新 Sequence 并结束请求。
+  Status Update(uint64_t request_id, const std::vector<Token>& tokens,
+                Response* response) override {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = requests_.find(request_id);
     if (it == requests_.end()) {
       return MakeStatus(ErrorCode::kRequestNotFound, "request not found");
     }
-    if (result == nullptr) {
-      return MakeStatus(ErrorCode::kInvalidArgument, "result is null");
+    if (response == nullptr) {
+      return MakeStatus(ErrorCode::kInvalidArgument, "response is null");
     }
-    it->second.generated_tokens += static_cast<int32_t>(tokens.size());
-    it->second.state = executor_status == RequestState::kFailed
-                           ? RequestState::kFailed
-                           : RequestState::kFinished;
-    result->request_id = request_id;
-    result->state = it->second.state;
-    result->finished = true;
+    RequestData& data = it->second;
+    for (const Token& token : tokens) {
+      data.sequence.history_token_ids.push_back(token.token_id);
+      data.sequence.current_token = token;
+      ++data.sequence.generated_count;
+      ++data.generated_tokens;
+    }
+    data.state = RequestStatus::kStopped;
+    FillResponse(data, response);
     return Status::Ok();
   }
 
-  // 取消请求。
-  Status Stop(uint64_t request_id) override {
+  // 取消请求并生成终态 Response。
+  Status Stop(uint64_t request_id, Response* response) override {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = requests_.find(request_id);
     if (it == requests_.end()) {
       return MakeStatus(ErrorCode::kRequestNotFound, "request not found");
     }
-    it->second.state = RequestState::kCancelled;
+    if (response == nullptr) {
+      return MakeStatus(ErrorCode::kInvalidArgument, "response is null");
+    }
+    it->second.state = RequestStatus::kStopped;
+    FillResponse(it->second, response);
     return Status::Ok();
   }
 
-  // 标记请求失败。
-  Status Fail(uint64_t request_id, ErrorCode code) override {
+  // 标记请求失败并生成终态 Response。
+  Status Fail(uint64_t request_id, ErrorCode code,
+              Response* response) override {
     (void)code;
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = requests_.find(request_id);
     if (it == requests_.end()) {
       return MakeStatus(ErrorCode::kRequestNotFound, "request not found");
     }
-    it->second.state = RequestState::kFailed;
+    if (response == nullptr) {
+      return MakeStatus(ErrorCode::kInvalidArgument, "response is null");
+    }
+    it->second.state = RequestStatus::kIllegal;
+    FillResponse(it->second, response);
     return Status::Ok();
   }
 
@@ -389,7 +404,7 @@ class FakeScheduler final : public IScheduler {
     for (const auto& entry : requests_) {
       RequestSnapshot snapshot;
       snapshot.request_id = entry.second.request_id;
-      snapshot.state = entry.second.state;
+      snapshot.status = entry.second.state;
       snapshot.prompt_tokens = entry.second.prompt_tokens;
       snapshot.computed_tokens = entry.second.computed_tokens;
       snapshot.generated_tokens = entry.second.generated_tokens;
@@ -403,9 +418,9 @@ class FakeScheduler final : public IScheduler {
     std::lock_guard<std::mutex> lock(mutex_);
     SchedulerStats stats;
     for (const auto& entry : requests_) {
-      if (entry.second.state == RequestState::kWaiting) {
+      if (entry.second.state == RequestStatus::kWaiting) {
         ++stats.waiting_requests;
-      } else if (entry.second.state == RequestState::kRunning) {
+      } else if (entry.second.state == RequestStatus::kRunning) {
         ++stats.running_requests;
       }
     }
@@ -418,8 +433,8 @@ class FakeScheduler final : public IScheduler {
   bool HasRequests() const override {
     std::lock_guard<std::mutex> lock(mutex_);
     for (const auto& entry : requests_) {
-      if (entry.second.state == RequestState::kWaiting ||
-          entry.second.state == RequestState::kRunning) {
+      if (entry.second.state == RequestStatus::kWaiting ||
+          entry.second.state == RequestStatus::kRunning) {
         return true;
       }
     }
@@ -430,11 +445,25 @@ class FakeScheduler final : public IScheduler {
   // 请求内部状态。
   struct RequestData {
     uint64_t request_id = 0;
-    RequestState state = RequestState::kWaiting;
+    RequestStatus state = RequestStatus::kWaiting;
     int32_t prompt_tokens = 0;
     int32_t computed_tokens = 0;
     int32_t generated_tokens = 0;
+    Sequence sequence;
+    SampleParams sample_param;
   };
+
+  // 用内部请求状态填充 Response。
+  //
+  // 参数：
+  //   data：内部请求状态；
+  //   response：输出参数，不允许为空。
+  void FillResponse(const RequestData& data, Response* response) const {
+    response->request_id = data.request_id;
+    response->status = data.state;
+    response->sequences.assign(1, data.sequence);
+    response->sample_param = data.sample_param;
+  }
 
   mutable std::mutex mutex_;
   std::unordered_map<uint64_t, RequestData> requests_;
@@ -471,7 +500,7 @@ class FakeExecutor final : public IExecutor {
     for (const PlanEntry& entry : plan.entries) {
       RequestStepResult step_result;
       step_result.request_id = entry.request_id;
-      step_result.token = 42;
+      step_result.token = Token{42, 0.0f, 0.0f, true};
       step_result.ok = true;
       result->requests.push_back(step_result);
     }
@@ -666,6 +695,9 @@ int main() {
   using mobilenet::runtime::FakeLoader;
   using mobilenet::runtime::FakeScheduler;
   using mobilenet::runtime::Request;
+  using mobilenet::runtime::RequestStatus;
+  using mobilenet::runtime::Response;
+  using mobilenet::runtime::Token;
   using mobilenet::runtime_graph::DeviceType;
   using mobilenet::runtime_graph::Layout;
   using mobilenet::runtime_graph::Precision;
@@ -683,15 +715,16 @@ int main() {
     CheckStatus(engine.RunOnce(nullptr), ErrorCode::kStateError,
                 "RunOnce rejects CREATED state");
     Request request;
-    request.prompt_ids = {1, 2, 3};
+    request.prompt_token_ids = {1, 2, 3};
     uint64_t request_id = 0;
     CheckStatus(engine.AddRequest(request, &request_id),
                 ErrorCode::kStateError,
                 "AddRequest rejects CREATED state");
     CheckStatus(engine.CancelRequest(1), ErrorCode::kStateError,
                 "CancelRequest rejects CREATED state");
-    CheckStatus(engine.Update(1, {1}), ErrorCode::kStateError,
-                "Update rejects CREATED state");
+    Response response;
+    CheckStatus(engine.Update(1, {Token{1, 0.0f, 0.0f, true}}, &response),
+                ErrorCode::kStateError, "Update rejects CREATED state");
     CheckStatus(engine.RunUntilIdle(1), ErrorCode::kStateError,
                 "RunUntilIdle rejects CREATED state");
     Storage storage;
@@ -770,14 +803,17 @@ int main() {
     int64_t callback_token = -1;
     bool callback_finished = false;
     int callback_count = 0;
-    engine.SetTokenCallback([&](uint64_t, int64_t token, bool finished) {
-      callback_token = token;
-      callback_finished = finished;
+    engine.SetResponseCallback([&](const Response& response) {
+      if (!response.sequences.empty()) {
+        callback_token = response.sequences[0].current_token.token_id;
+      }
+      callback_finished = response.status == RequestStatus::kStopped ||
+                           response.status == RequestStatus::kIllegal;
       ++callback_count;
     });
 
     Request request;
-    request.prompt_ids = {1, 2, 3};
+    request.prompt_token_ids = {1, 2, 3};
     uint64_t request_id = 0;
     CheckStatus(engine.AddRequest(request, &request_id), ErrorCode::kOk,
                 "AddRequest succeeds");
@@ -828,15 +864,17 @@ int main() {
     std::atomic<int64_t> callback_token{-1};
     std::atomic<bool> callback_finished{false};
     std::atomic<int> callback_count{0};
-    engine.SetTokenCallback(
-        [&](uint64_t, int64_t token, bool finished) {
-          callback_token.store(token);
-          callback_finished.store(finished);
-          callback_count.fetch_add(1);
-        });
+    engine.SetResponseCallback([&](const Response& response) {
+      if (!response.sequences.empty()) {
+        callback_token.store(response.sequences[0].current_token.token_id);
+      }
+      callback_finished.store(response.status == RequestStatus::kStopped ||
+                              response.status == RequestStatus::kIllegal);
+      callback_count.fetch_add(1);
+    });
 
     Request request;
-    request.prompt_ids = {1, 2, 3};
+    request.prompt_token_ids = {1, 2, 3};
     uint64_t request_id = 0;
     CheckStatus(engine.AddRequest(request, &request_id), ErrorCode::kOk,
                 "threaded AddRequest succeeds");

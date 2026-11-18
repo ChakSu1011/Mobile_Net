@@ -13,10 +13,9 @@
 **文档定位**：本文件是 Engine 模块的详细设计文档，细化统一架构文档中的
 Engine 章节；跨模块契约以 `Runtime_design.md` 为准，本文件不重复定义。
 
-> **迁移提示**：`Runtime_design.md` v0.4 已将请求/响应对象迁移到
-> `Runtime/common/sequence.h`（Request/Response/RequestStatus/SampleParams/
-> Token/Sequence）。本文件当前仍描述基于 `request.h`/`SamplingParams`/
-> `RequestState`/`TokenCallback` 的既有实现；代码迁移完成后同步更新本文件。
+> **迁移状态**：请求/响应对象已迁移到 `Runtime/common/sequence.h`
+> （Request/Response/RequestStatus/SampleParams/Token/Sequence）；`request.h`
+> 已删除，Engine 使用 `ResponseCallback` 与 `Response`。
 
 ---
 
@@ -61,7 +60,7 @@ Runtime 的 Loader、Scheduler、KVCache、Executor、Backend、Kernel、Destroy
 | E-04 | Load 失败回滚 | 逆序释放；state 回 CREATED | FR-1.14 |
 | E-05 | Backend 所有权移交 | Loader 创建、Executor 持有；Engine 不持有 | FR-1.13 |
 | E-06 | 单步执行 | Schedule → BuildView → Execute → Update；Scheduler 释放 KV | FR-1.12/1.13 |
-| E-07 | 请求 API | AddRequest/CancelRequest/Update；线程安全边界明确 | FR-1.10 |
+| E-07 | 请求 API | AddRequest(Request)/CancelRequest/Update(Token,Response)；线程安全边界明确 | FR-1.10 |
 | E-08 | 流式回调 | 每 token 回调；finished 标记；异常不穿透 | FR-1.13 |
 | E-09 | I/O 绑定 | 校验精度/布局/字节数/形状后写 `attr["storage"]` | FR-1.12 |
 | E-10 | 线程模型 | 默认 RunOnce；threaded 推理线程；Destroy join | NFR-1/5 |
@@ -154,9 +153,9 @@ Load(config)
 ExecuteStep
   → scheduler_->Schedule(&plan)
   → kv_cache_->BuildView(&view)
-  → executor_->Execute(plan, view, &result)
-  → scheduler_->Update(token)（终态释放 KV）
-  → TokenCallback
+  → executor_->Execute(plan, view, &result)  // StepResult{Token}
+  → scheduler_->Update(tokens, &response)（终态释放 KV）
+  → ResponseCallback(response)
   → 填充 StepStats/EngineStats
 ```
 
@@ -201,7 +200,7 @@ std::unordered_map<std::string, runtime_graph::Op*> input_ops_;
 std::unordered_map<std::string, runtime_graph::Op*> output_ops_;
 bool backend_initialized_;
 bool executor_initialized_;
-TokenCallback token_callback_;
+ResponseCallback response_callback_;
 EngineStats stats_;
 std::thread inference_thread_;
 mutable std::mutex mutex_;
@@ -315,7 +314,7 @@ std::atomic<ErrorCode> fatal_code_;
 | TC-ENG-01 | 生命周期/非法状态/空包/默认模块缺失/幂等销毁 | 错误码正确；state 正确 |
 | TC-ENG-02 | Fake Loader 加载成功 | state LOADED；Backend 移交 Executor |
 | TC-ENG-03 | SetInput/SetOutput 成功与不匹配 | 成功绑定；不匹配返回 `kInvalidArgument` |
-| TC-ENG-04 | AddRequest → RunOnce → 回调 | token/finished 正确；统计更新 |
+| TC-ENG-04 | AddRequest → RunOnce → ResponseCallback | Response.status/current_token/generated_count 正确；统计更新 |
 | TC-ENG-05 | threaded Start/回调/RunUntilIdle/Destroy | 线程正常退出；回调一次 |
 | TC-ENG-06 | Destroy 幂等 | 重复调用安全 |
 

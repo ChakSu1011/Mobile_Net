@@ -7,7 +7,8 @@
 - 生命周期状态机、非法状态调用、空包校验、默认模块缺失；
 - 加载成功路径（Fake Loader 产出最小图与 FakeBackend）；
 - `SetInput/SetOutput` 成功绑定与参数校验；
-- `AddRequest → RunOnce → Update → TokenCallback` 单步执行；
+- `AddRequest → RunOnce → Update → ResponseCallback` 单步执行；
+- `RequestStatus/SampleParams/Token/Sequence/Response` 新对象模型；
 - Engine/Step 统计；
 - 单线程与 threaded 两种驱动方式；
 - 幂等销毁与销毁后调用。
@@ -24,7 +25,7 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 日期 | 2026-11-17 |
+| 日期 | 2026-11-19 |
 | 操作系统 | Windows 11 Home China 10.0.26200 |
 | 编译器 | zig clang wrapper（Clang 兼容） |
 | 语言标准 | C++17 |
@@ -70,13 +71,13 @@ all engine checks passed
 | I/O 绑定成功 | 匹配精度/布局/字节数/形状的 host storage | `kOk` | 通过 |
 | 请求入队 | `AddRequest` | `kOk`，请求 ID 非 0 | 通过 |
 | 单步执行 | `RunOnce` | `kOk`，生成 1 token | 通过 |
-| Token 回调 | 单步结束回调 | token=42，finished=true | 通过 |
+| Response 回调 | 单步结束回调 | status=kStopped，current_token.token_id=42，generated_count=1 | 通过 |
 | Engine 统计 | 执行后 `stats()` | total_steps=1、total_tokens=1 | 通过 |
 | 空闲等待 | `RunUntilIdle(100)` | `kOk` | 通过 |
 | 执行后销毁 | `Destroy()` | `kOk`，`DESTROYED` | 通过 |
 | threaded 启动 | `threaded=true` + `Start()` | `kOk` | 通过 |
 | threaded 禁用 RunOnce | `RunOnce` | `kStateError` | 通过 |
-| threaded 回调 | 推理线程生成 token | token=42，finished=true | 通过 |
+| threaded 回调 | 推理线程生成 Response | status=kStopped，current_token.token_id=42 | 通过 |
 | threaded 空闲等待 | `RunUntilIdle(1000)` | `kOk` | 通过 |
 | threaded 销毁 | `Destroy()` | `kOk`，`DESTROYED` | 通过 |
 
@@ -84,7 +85,8 @@ all engine checks passed
 
 - `FakeLoader`：构造 `input → add → sample → output` 的最小图，返回
   `FakeBackend` 与测试 `ModelConfig`；
-- `FakeScheduler`：单请求单步，`Update` 后立即结束；
+- `FakeScheduler`：维护 `Sequence`，`Update` 追加 Token 并填充
+  `Response`，随后结束请求；
 - `FakeExecutor`：为每个计划项返回 token 42，持有并释放 Backend；
 - `FakeKVCache`：固定视图/块表/slot，不做真实分配；
 - `FakeDestroyer`：清空 ResourceStack 并反初始化 Executor/Backend；

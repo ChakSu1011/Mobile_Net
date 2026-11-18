@@ -59,9 +59,9 @@ OK    Runtime/common/kv_view.h
 OK    Runtime/common/model_config.h
 OK    Runtime/common/op_env_factory.h
 OK    Runtime/common/plan.h
-OK    Runtime/common/request.h
 OK    Runtime/common/resource_stack.h
 OK    Runtime/common/runtime_config.h
+OK    Runtime/common/sequence.h
 OK    Runtime/common/status.h
 OK    Runtime/destroy/destroyer.h
 OK    Runtime/engine/engine.h
@@ -153,6 +153,27 @@ OK Runtime/backend/kernel_types.cc
 结论：Loader/Destroyer 成对出现，对应资源 Init/UnInit；Scheduler/Executor
 也可替换；`EngineModules` 单独放在 `engine_modules.h`，避免 `engine.h` 引入
 Loader/Backend 依赖。
+
+### 5.6 TC-ARCH-06：请求/响应对象唯一性
+
+检查方式：确认 `sequence.h` 存在、`request.h` 已删除，且无旧 include 残留。
+
+实际输出：
+
+```text
+Runtime/common/sequence.h
+request.h absent
+no request.h includes
+37:enum class RequestStatus
+58:struct SampleParams
+146:struct Request
+184:struct Token
+208:struct Sequence
+250:struct Response
+```
+
+结论：Request/Response/RequestStatus/SampleParams/Token/Sequence 只在
+`sequence.h` 定义；`request.h` 已删除，代码不再引用旧头文件。
 
 ## 6. 结论
 

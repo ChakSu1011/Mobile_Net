@@ -14,7 +14,7 @@
 //
 // 依赖：
 //   Graph/include/attr.h、shape.h、types.h；
-//   Runtime/common/data_types.h、kv_view.h、request.h；C++17 标准库。
+//   Runtime/common/data_types.h、kv_view.h、sequence.h；C++17 标准库。
 
 #ifndef MOBILENET_RUNTIME_BACKEND_KERNEL_CONTEXT_H_
 #define MOBILENET_RUNTIME_BACKEND_KERNEL_CONTEXT_H_
@@ -26,7 +26,7 @@
 #include "Graph/include/types.h"
 #include "Runtime/common/data_types.h"
 #include "Runtime/common/kv_view.h"
-#include "Runtime/common/request.h"
+#include "Runtime/common/sequence.h"
 
 namespace mobilenet {
 
@@ -141,7 +141,7 @@ struct KernelContext {
   const AttentionContext* attention = nullptr;
 
   // 采样参数；仅 Sample op 使用，首期允许为空。
-  const runtime::SamplingParams* sampling = nullptr;
+  const runtime::SampleParams* sampling = nullptr;
 
   // 临时工作区；无 workspace 时 data 为空、bytes 为 0。
   TensorView workspace;

@@ -8,10 +8,10 @@
 // 边界：
 //   - 不包含调度策略、KV 分配策略或设备地址；
 //   - 不依赖 Graph/Backend/Kernel 的具体类型；
-//   - 不定义请求生命周期（见 request.h）。
+//   - 请求生命周期由 sequence.h 的 RequestStatus 表达。
 //
 // 依赖：
-//   Runtime/common/status.h、C++17 标准库。
+//   Runtime/common/status.h、Runtime/common/sequence.h、C++17 标准库。
 
 #ifndef MOBILENET_RUNTIME_COMMON_PLAN_H_
 #define MOBILENET_RUNTIME_COMMON_PLAN_H_
@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "Runtime/common/sequence.h"
 #include "Runtime/common/status.h"
 
 namespace mobilenet {
@@ -115,8 +116,8 @@ struct RequestStepResult {
   // 请求 ID。
   uint64_t request_id = 0;
 
-  // 本步生成的 token（阶段一/二为 argmax 结果）。
-  int64_t token = 0;
+  // 本步生成的 token（阶段一/二为 argmax 选中的 Token）。
+  Token token;
 
   // 本请求本步是否执行成功。
   bool ok = true;

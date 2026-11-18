@@ -3,15 +3,17 @@
 // 职责：
 //   定义 Engine 调用的 IScheduler：维护 Waiting/Running 队列、按
 //   max_num_tokens 预算组批、执行 chunked prefill、KV 准入、停止判定与抢占，
-//   产出 ExecutionPlan；并通过 Update 回写生成 token 与状态。
+//   产出 ExecutionPlan；并通过 Update/Stop/Fail 更新 Sequence 与状态，
+//   产出 Response。
 //
 // 边界：
 //   - 不调用设备/Kernel，不感知 KV 物理布局；
 //   - 不实现停止 token 的文本逻辑（只按 token id 判定）；
-//   - 不拥有请求之外的资源；KV 通过 KvAllocator 接口申请。
+//   - 不拥有请求之外的资源；KV 通过 KvAllocator 接口申请；
+//   - 拥有请求的 Sequence 状态；Response 为单步值快照。
 //
 // 依赖：
-//   Runtime/common/request.h、plan.h、model_config.h、kv_allocator.h。
+//   Runtime/common/sequence.h、plan.h、model_config.h、kv_allocator.h。
 
 #ifndef MOBILENET_RUNTIME_SCHEDULER_SCHEDULER_H_
 #define MOBILENET_RUNTIME_SCHEDULER_SCHEDULER_H_
@@ -23,7 +25,7 @@
 #include "Runtime/common/kv_allocator.h"
 #include "Runtime/common/model_config.h"
 #include "Runtime/common/plan.h"
-#include "Runtime/common/request.h"
+#include "Runtime/common/sequence.h"
 #include "Runtime/common/status.h"
 
 namespace mobilenet {
@@ -76,21 +78,6 @@ struct SchedulerStats {
   int64_t total_blocks = 0;
 };
 
-// Update 的结果。
-//
-// 功能：
-//   Engine 据此判断请求是否结束、是否需要释放 KV 与触发回调。
-struct UpdateResult {
-  // 请求 ID。
-  uint64_t request_id = 0;
-
-  // 更新后的请求状态。
-  RequestState state = RequestState::kRunning;
-
-  // 是否刚刚进入终态（Finished/Cancelled/Failed）。
-  bool finished = false;
-};
-
 // Scheduler 统一接口。
 //
 // 功能：
@@ -120,7 +107,7 @@ class IScheduler {
   // 加入一个请求。
   //
   // 参数：
-  //   request：请求；id 为 0 时由调度器分配；
+  //   request：请求；request.request_id 为 0 时由调度器分配；
   //   request_id：输出参数，成功时写入最终请求 ID。
   // 返回：
   //   成功返回 kOk；prompt 为空、长度超限或无法容纳返回 kInvalidArgument/
@@ -136,40 +123,42 @@ class IScheduler {
   //   返回 kInternal。
   virtual Status Schedule(ExecutionPlan* plan) = 0;
 
-  // 回写本步执行结果。
+  // 回写本步执行结果并生成 Response。
   //
   // 参数：
   //   request_id：请求 ID；
   //   tokens：本步新产生的 token（阶段一/二长度为 1；阶段三可多个）；
-  //   executor_status：执行器报告的状态（默认 kRunning；失败时 kFailed）；
-  //   result：输出参数，返回更新后的状态与是否结束。
+  //   response：输出参数，填充 request_id/status/sequences/sample_param。
   // 返回：
   //   成功返回 kOk；请求不存在返回 kRequestNotFound；已结束请求幂等忽略。
   // 说明：
-  //   追加输出 token 并判停；不推进 num_computed_tokens（后者在 Schedule
-  //   时按已调度 token 推进）。请求进入终态时，实现必须通过 KvAllocator::
-  //   Release 释放其 KV；Engine 不重复释放。
+  //   追加 Token 到 Sequence、更新 history/current_token/generated_count，
+  //   判停并设置状态；不推进 num_computed_tokens（后者在 Schedule 时按已
+  //   调度 token 推进）。请求进入终态时，实现必须通过 KvAllocator::Release
+  //   释放其 KV；Engine 不重复释放。
   virtual Status Update(uint64_t request_id,
-                        const std::vector<int64_t>& tokens,
-                        RequestState executor_status,
-                        UpdateResult* result) = 0;
+                        const std::vector<Token>& tokens,
+                        Response* response) = 0;
 
-  // 取消请求并释放其 KV。
-  //
-  // 参数：
-  //   request_id：请求 ID。
-  // 返回：
-  //   成功返回 kOk；请求不存在返回 kRequestNotFound。
-  virtual Status Stop(uint64_t request_id) = 0;
-
-  // 标记请求失败并释放其 KV。
+  // 取消请求、释放 KV 并生成终态 Response。
   //
   // 参数：
   //   request_id：请求 ID；
-  //   code：失败原因，不得为 kOk。
+  //   response：输出参数，status=kStopped。
   // 返回：
   //   成功返回 kOk；请求不存在返回 kRequestNotFound。
-  virtual Status Fail(uint64_t request_id, ErrorCode code) = 0;
+  virtual Status Stop(uint64_t request_id, Response* response) = 0;
+
+  // 标记请求失败、释放 KV 并生成终态 Response。
+  //
+  // 参数：
+  //   request_id：请求 ID；
+  //   code：失败原因，不得为 kOk；
+  //   response：输出参数，status=kIllegal。
+  // 返回：
+  //   成功返回 kOk；请求不存在返回 kRequestNotFound。
+  virtual Status Fail(uint64_t request_id, ErrorCode code,
+                      Response* response) = 0;
 
   // 返回全部请求的状态快照。
   virtual std::vector<RequestSnapshot> Snapshot() const = 0;

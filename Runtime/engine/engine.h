@@ -34,9 +34,9 @@
 #include "Runtime/common/io_binder.h"
 #include "Runtime/common/model_config.h"
 #include "Runtime/common/plan.h"
-#include "Runtime/common/request.h"
 #include "Runtime/common/resource_stack.h"
 #include "Runtime/common/runtime_config.h"
+#include "Runtime/common/sequence.h"
 #include "Runtime/common/status.h"
 
 namespace mobilenet {
@@ -111,16 +111,15 @@ struct EngineStats {
   int64_t last_step_ns = 0;
 };
 
-// 流式 token 回调。
+// 流式响应回调。
 //
 // 参数：
-//   request_id：请求 ID；
-//   token：新生成的 token；
-//   finished：该请求是否已结束。
+//   response：单请求单步结果快照；status=kStopped/kIllegal 为终态。
 // 说明：
-//   在推理线程同步调用；实现不得阻塞、不得重入 Engine。
-using TokenCallback =
-    std::function<void(uint64_t request_id, int64_t token, bool finished)>;
+//   在推理线程同步调用；实现不得阻塞、不得重入 Engine；
+//   Response 及其 Sequence.logits 仅在回调期间有效，需要长期保存时必须
+//   自行拷贝。
+using ResponseCallback = std::function<void(const Response& response)>;
 
 // Engine 总接口。
 //
@@ -188,18 +187,19 @@ class Engine final : public IoBinder {
   //   线程安全；执行中的请求由调度器在安全点取消。
   Status CancelRequest(uint64_t request_id);
 
-  // 回写生成 token 与状态。
+  // 回写生成 token 并返回 Response。
   //
   // 参数：
   //   request_id：请求 ID；
   //   tokens：本步新产生的 token（阶段一/二为 1 个）；
-  //   status：执行器报告的状态，默认 kRunning。
+  //   response：输出参数，由 Scheduler 填充；不允许为空。
   // 返回：
   //   成功返回 kOk；请求不存在返回 kRequestNotFound。
   // 说明：
   //   正常路径由 RunOnce 内部调用；外部仅在自定义执行路径下使用。
-  Status Update(uint64_t request_id, const std::vector<int64_t>& tokens,
-                RequestState status = RequestState::kRunning);
+  //   若 response.status 为终态，则触发 ResponseCallback。
+  Status Update(uint64_t request_id, const std::vector<Token>& tokens,
+                Response* response);
 
   // 执行一个 Step。
   //
@@ -229,11 +229,11 @@ class Engine final : public IoBinder {
   //   幂等；会停止并 join 推理线程。
   Status Destroy();
 
-  // 设置流式 token 回调。
+  // 设置流式响应回调。
   //
   // 参数：
   //   callback：回调；传空表示清除。
-  void SetTokenCallback(TokenCallback callback);
+  void SetResponseCallback(ResponseCallback callback);
 
   // 绑定图输入主机缓冲（IoBinder 实现）。
   //
@@ -285,6 +285,12 @@ class Engine final : public IoBinder {
   // 推理线程主循环。
   void InferenceLoop();
 
+  // 触发 ResponseCallback；回调异常被捕获，不穿透 Engine。
+  //
+  // 参数：
+  //   response：待通知的单步响应。
+  void NotifyResponse(const Response& response);
+
   // 运行时状态。
   EngineState state_ = EngineState::kCreated;
 
@@ -313,7 +319,7 @@ class Engine final : public IoBinder {
   bool executor_initialized_ = false;
 
   // 回调与统计。
-  TokenCallback token_callback_;
+  ResponseCallback response_callback_;
   EngineStats stats_;
 
   // 线程与同步状态。

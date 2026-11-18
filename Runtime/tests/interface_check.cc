@@ -23,7 +23,7 @@
 #include "Runtime/common/model_config.h"
 #include "Runtime/common/op_env_factory.h"
 #include "Runtime/common/plan.h"
-#include "Runtime/common/request.h"
+#include "Runtime/common/sequence.h"
 #include "Runtime/common/resource_stack.h"
 #include "Runtime/common/runtime_config.h"
 #include "Runtime/common/status.h"

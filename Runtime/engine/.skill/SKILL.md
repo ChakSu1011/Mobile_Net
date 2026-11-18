@@ -1,9 +1,9 @@
 # Engine 模块开发 Skill
 
-> 迁移提示：`Runtime_design.md` v0.4 已将请求/响应对象迁移到
-> `Runtime/common/sequence.h`。本 skill 中涉及 Request/Response/Status/
-> SampleParams/Token/Sequence 时，以 `sequence.h` 与新接口为准；代码迁移
-> 完成后同步更新本文件中的 API 名称。
+> 迁移状态：请求/响应对象已迁移到 `Runtime/common/sequence.h`，`request.h`
+> 已删除。Engine 使用 `RequestStatus/SampleParams/Token/Sequence/Response`
+> 与 `ResponseCallback`；旧 `SamplingParams/RequestState/TokenCallback`
+> 不再可用。
 
 ## 1. 适用场景
 
@@ -40,9 +40,9 @@
    - KVCache → Scheduler → Executor（Backend 移交）→ BindGraphIo；
    - 任一失败走统一回滚。
 5. **实现 ExecuteStep**：
-   - Schedule → BuildView → Execute → Update；
+   - Schedule → BuildView → Execute → Update(Response)；
    - Scheduler 在终态释放 KV，Engine 不重复释放；
-   - 回调异常不穿透；设备级错误置 fatal。
+   - ResponseCallback 回调异常不穿透；设备级错误置 fatal。
 6. **实现线程模型**：默认 RunOnce；threaded 用唯一推理线程 + 条件变量；
    Destroy 停线程并 join。
 7. **实现 I/O 绑定**：建立 input/output op 索引；校验 host Storage 后写

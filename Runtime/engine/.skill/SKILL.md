@@ -1,5 +1,10 @@
 # Engine 模块开发 Skill
 
+> 迁移提示：`Runtime_design.md` v0.4 已将请求/响应对象迁移到
+> `Runtime/common/sequence.h`。本 skill 中涉及 Request/Response/Status/
+> SampleParams/Token/Sequence 时，以 `sequence.h` 与新接口为准；代码迁移
+> 完成后同步更新本文件中的 API 名称。
+
 ## 1. 适用场景
 
 - 实现或修改 `Runtime/engine/` 的门面、生命周期、加载编排、单步执行、

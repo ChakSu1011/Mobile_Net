@@ -2,10 +2,10 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | v0.3 |
-| 文档状态 | 架构设计（接口冻结稿，Option A 已确认） |
-| 编写日期 | 2026-11-16 |
-| 变更摘要 | v0.3：Engine→Executor→Backend 所有权；Backend/KVCache/OpEnvFactory 不暴露给 Engine；Kernel 契约迁至 `Runtime/backend/`；Scheduler 统一释放 KV |
+| 文档版本 | v0.4 |
+| 文档状态 | 架构设计（请求/响应模型变更，代码迁移待执行） |
+| 编写日期 | 2026-11-19 |
+| 变更摘要 | v0.4：新增 `Runtime/common/sequence.h` 请求/响应模型（Request/Response/RequestStatus/SampleParams/Token/Sequence）；定义 Service→Engine→Scheduler 的请求与响应流；原 `request.h` 迁移；v0.3：Engine→Executor→Backend 所有权；Kernel 契约迁至 `Runtime/backend/` |
 | 模块 | `Runtime/` |
 | 权威位置 | `Runtime/.doc/Runtime_design.md` |
 | 上游文档 | [`.doc/MobileNet_design.md`](../../.doc/MobileNet_design.md)、[`Graph/.doc/Graph_design.md`](../../Graph/.doc/Graph_design.md) |
@@ -14,7 +14,9 @@
 
 **文档定位**：本文件是 Runtime 模块的权威架构文档，定义分层、Engine 组合方式、模块统一接口、调用关系、交互数据对象、所有权与生命周期。子模块文档只展开算法与实现细节；跨模块契约以本文件为准。
 
-**本阶段交付范围**：本文件 + 全部接口头文件（仅声明，不实现）。`Runtime/` 下的 `.cc` 实现、单元测试、skill 在后续阶段按四件套补齐；本阶段不以“模块完成”宣称，只宣称“接口冻结”。
+**本阶段交付范围**：本文件、全部接口头文件与 Engine 实现（见
+`Runtime/engine/.doc/engine_design.md`）；请求/响应对象迁移到 `sequence.h`
+后的 Loader/Scheduler/KVCache/Executor 实现与测试按 R0–R4 补齐。
 
 ---
 
@@ -57,14 +59,16 @@ Runtime 目前只有 `common/`、`backend/backend.h`（含 `backend/kernel.h`）
 | R-ARCH-03 | 公共数据对象集中在 `Runtime/common/`：错误码、配置、请求、计划、KV 视图、IO 绑定、资源栈 | 所有模块只使用 common 类型；无重复定义 | TC-ARCH-01 |
 | R-ARCH-04 | Loader 完成包校验、图重建、IR 哈希、后端初始化、能力校验、权重上传、缓冲分配、GraphEnv/OpEnv 创建 | 正常包加载成功；坏包按错误码拒绝；失败逆序回滚 | TC-LOAD-01 |
 | R-ARCH-05 | Engine 驱动单步：Schedule → Execute → Update → Release；单步 token ≤ `max_num_tokens` | 单请求/多请求结果正确；预算不超 | TC-EXEC-01、TC-SCHED-01 |
-| R-ARCH-06 | 请求生命周期：Waiting/Running/Preempted/Finished/Cancelled/Failed；Merge/Update/Stop 语义固定 | 状态迁移合法；取消/超时生效 | TC-SCHED-02 |
+| R-ARCH-06 | 请求生命周期由 `RequestStatus` 表达：Waiting/Running/Stopped/Recompute/Swapped/Illegal/ChunkedPrefill；Merge/Update/Stop 语义固定 | 状态迁移合法；取消/超时生效 | TC-SCHED-02 |
 | R-ARCH-07 | KVCache 块大小由后端 Attention tile 决定；块池不变量成立；容量启动期校验 | 不变量测试通过；OOM 可定位；启动期拒绝不可行配置 | TC-KV-01 |
 | R-ARCH-08 | Executor 只消费 `ExecutionPlan`/`KvCacheView`，按 `GetOrderlyOPList()` 驱动 OpEnv | Executor 无调度策略、无后端专有头文件 | TC-EXEC-01 |
 | R-ARCH-09 | Backend/Kernel 契约：能力、缓冲、权重、Kernel、传输、同步；Kernel 使用 `runtime_graph::OpType` | 契约测试通过；新增后端只加目录 | TC-COMPAT-01 |
-| R-ARCH-10 | Engine 对外接口：Load/Start/AddRequest/CancelRequest/Update/RunOnce/RunUntilIdle/Destroy/SetTokenCallback/SetInput/SetOutput | 接口可重复调用；线程安全边界清晰；错误可诊断 | TC-ENG-01 |
+| R-ARCH-10 | Engine 对外接口：Load/Start/AddRequest/CancelRequest/Update/RunOnce/RunUntilIdle/Destroy/SetResponseCallback/SetInput/SetOutput | 接口可重复调用；线程安全边界清晰；错误可诊断 | TC-ENG-01 |
 | R-ARCH-11 | Destroy 幂等、逆序、收集首个错误；加载失败复用同一回滚路径 | 100 次 Load/Destroy 无泄漏；重复 Destroy 安全 | TC-ENG-01 |
 | R-ARCH-12 | 可观测性：StepStats/EngineStats/SchedulerStats/KvCacheStats、请求快照 | 日志/统计可被脚本解析 | TC-ENG-01 |
 | R-ARCH-13 | 阶段三扩展点预留：投机解码、异步调度、HiCache、多类型 KV | 字段/接口存在且不破坏现有实现 | TC-ARCH-02 |
+| R-ARCH-14 | 请求/响应对象统一在 `Runtime/common/sequence.h` 定义：Request/Response/RequestStatus/SampleParams/Token/Sequence；原 `request.h` 同义对象迁移 | 无重复定义；Scheduler 与 Service 只使用 sequence.h 类型 | TC-ARCH-06 |
+| R-ARCH-15 | Service→Engine→Scheduler 管理请求与响应：`Merge(Request)`、`Update(Token)→Response`、`Stop/Fail→Response`；Response 经 Engine 回调给 Service | 请求状态与 Response 一致；终态 KV 释放；流式回调顺序正确 | TC-ENG-01、TC-SCHED-02 |
 
 ### 2.2 非功能需求
 
@@ -232,21 +236,22 @@ Engine.Load(config)
 Engine.RunOnce
   → scheduler_->Schedule(&plan)                 // 准入 + KV Reserve + chunk
   → kv_cache_->BuildView(&kv_view)
-  → executor_->Execute(plan, kv_view, &step_result)
-  → 逐请求 scheduler_->Update(id, tokens, status, &update_result)
+  → executor_->Execute(plan, kv_view, &step_result) // StepResult{Token}
+  → 逐请求 scheduler_->Update(id, tokens, &response)
        └─ 终态：Scheduler 通过 KvAllocator::Release 释放 KV
-  → update_result.finished：TokenCallback
+  → response.status 为终态时 ResponseCallback(response)
   → StepStats
 ```
 
 **请求生命周期**
 
 ```text
-WAITING ──Schedule──▶ RUNNING ──停止──▶ FINISHED
-   ▲                     │
-   │                     ├──Cancel/Timeout──▶ CANCELLED
-   │                     ├──Error───────────▶ FAILED
-   └──Preempt(recompute)─┘
+kWaiting ──Schedule──▶ kChunkedPrefill/kRunning ──Stop──▶ kStopped
+                              │
+                              ├──Error──────────────▶ kIllegal
+                              └──抢占──▶ kRecompute/kSwapped
+                                             │
+                                             └──重新调度──▶ kWaiting
 ```
 
 **销毁流程**
@@ -279,8 +284,8 @@ Engine::RunOnce
       → Backend::Synchronize
       → 读 sample.out
   → IScheduler::Update
-      → 终态：KvAllocator::Release
-  → TokenCallback
+      → 终态：KvAllocator::Release，填充 Response
+  → ResponseCallback(Response)
 ```
 
 约束：
@@ -291,6 +296,79 @@ Engine::RunOnce
 - Kernel 不知道 Graph/Scheduler 存在；
 - KV 的 Reserve/Release 都发生在 Scheduler 内（经 `KvAllocator`）。
 
+### 3.5.1 请求与响应数据流（Service → Engine → Scheduler）
+
+```text
+Service
+  │ 构造 Request（prompt_token_ids / sample_param / multimodal / lora / group / die / chunk）
+  ▼
+Engine::AddRequest
+  │ 校验状态与参数
+  ▼
+Scheduler::Merge(Request)
+  │ 分配 request_id（若为 0）
+  │ 初始化 Sequence 列表
+  │ status = kWaiting
+  ▼
+Scheduler::Schedule(&plan)
+  │ 准入/KV Reserve/组批
+  │ status = kChunkedPrefill 或 kRunning
+  ▼
+Executor::Execute(plan, kv_view)
+  │ 返回 StepResult{ request_id, Token, ok, error }
+  ▼
+Scheduler::Update(request_id, Tokens, &response)
+  │ 追加 history/current_token/generated_count
+  │ 计算 status（kRunning/kStopped/kIllegal）
+  │ 填充 Response{request_id, status, sequences, sample_param}
+  ▼
+Engine ResponseCallback(Response)
+  ▼
+Service（流式输出/最终结果）
+```
+
+取消与失败：
+
+```text
+Service::CancelRequest → Engine → Scheduler::Stop(id, &response)
+  → status=kStopped，释放 KV，ResponseCallback
+执行失败 → Scheduler::Fail(id, code, &response)
+  → status=kIllegal，释放 KV，ResponseCallback
+```
+
+规则：
+
+1. `Request` 由 Service 构造，`Merge` 后由 Scheduler 复制并持有；Engine 不保存请求副本。
+2. `Sequence` 由 Scheduler 持有与更新；`Response.sequences` 是该步的**值快照**，
+   Service 若需长期保存必须自行拷贝。
+3. `Response` 每个请求每步产生一次；`status=kStopped/kIllegal` 为终态，
+   Scheduler 在产生终态 Response 时释放 KV。
+4. `Token` 由 Executor 产出、Scheduler 消费；阶段一/二为 argmax 选中 token，
+   `select=true`，概率/对数概率未计算时为 0。
+5. `Sequence.logits` 指向本步 logits 的主机可见缓冲，仅在 ResponseCallback
+   期间有效；Service 需同步消费或拷贝。
+6. 状态迁移：
+
+```text
+kInvalid ──Merge──▶ kWaiting ──Schedule──▶ kChunkedPrefill/kRunning
+kRunning/kChunkedPrefill ──Stop──▶ kStopped
+kRunning/kChunkedPrefill ──Fail──▶ kIllegal
+kRunning ──抢占──▶ kRecompute/kSwapped ──重新调度──▶ kWaiting
+```
+
+Scheduler 内部请求/响应管理：
+
+| 阶段 | Scheduler 动作 | 输出 |
+| --- | --- | --- |
+| `Merge` | 校验 Request、分配 request_id、初始化 Sequence 列表（num_beam）、status=kWaiting | request_id |
+| `Schedule` | 准入/KV Reserve/组批；chunked prefill 置 kChunkedPrefill，否则 kRunning | ExecutionPlan |
+| `Update` | 追加 Token 到 Sequence、更新 history/count/score、判停、终态释放 KV | Response |
+| `Stop/Fail` | 置 kStopped/kIllegal、释放 KV | Response |
+| `Snapshot` | 读取请求状态与计数 | RequestSnapshot 列表 |
+
+跨边界只有 `Request`、`ExecutionPlan`、`Token/StepResult`、`Response`；
+Sequence 与 KV 块表不离开 Scheduler。
+
 ### 3.6 线程模型
 
 | 模式 | 行为 | 使用场景 |
@@ -298,12 +376,12 @@ Engine::RunOnce
 | 单线程（默认） | 调用方调 `RunOnce` 驱动 Step；`AddRequest/Cancel` 线程安全 | 单测、调试、确定性回归 |
 | 推理线程（`threaded=true`） | Engine 启动唯一推理线程循环 Step；回调在该线程触发；`Destroy` join | 阶段二 Service |
 
-规则：Backend 只被推理线程调用；`SetInput/SetOutput` 只允许推理线程；`TokenCallback` 不得阻塞或重入 Engine；`RunOnce` 只允许一个调用者。
+规则：Backend 只被推理线程调用；`SetInput/SetOutput` 只允许推理线程；`ResponseCallback` 不得阻塞或重入 Engine；`RunOnce` 只允许一个调用者。
 
 ### 3.7 错误处理模型
 
 - 对外统一 `Status`；异常不穿越模块边界与 JNI/FFI。
-- 单请求错误 → `FAILED`，不阻塞其他请求；设备级错误 → 本步全部失败 + Engine fatal 标记。
+- 单请求错误 → `RequestStatus::kIllegal`，不阻塞其他请求；设备级错误 → 本步全部失败 + Engine fatal 标记。
 - 加载失败 → 逆序回滚 → 可重试（state 回 CREATED）。
 - 错误消息带 `模块::阶段` 前缀 + request_id/op 名。
 
@@ -375,38 +453,146 @@ struct ModelConfig {                     // 来自 manifest metadata
 };
 ```
 
-#### 4.1.3 请求 `request.h`
+#### 4.1.3 请求与响应 `sequence.h`
+
+`Runtime/common/sequence.h` 是 Request/Response/RequestStatus/SampleParams/
+Token/Sequence 的唯一定义处；原 `request.h` 中的同义对象迁移到本文件。
+
+**命名冲突说明**：`status.h` 的 `mobilenet::Status` 表示操作错误；
+请求状态枚举命名为 `RequestStatus`（语义即“status”），不得与错误类型混用。
+`RequestStatus` 在你给出的 7 个值基础上增加 `kWaiting`，用于表达 Scheduler
+等待队列；取消暂映射为 `kStopped`，如需区分可后续增加 `kCancelled`。
 
 ```cpp
-enum class RequestState { kWaiting, kRunning, kPreempted, kFinished,
-                          kCancelled, kFailed };
-
-struct SamplingParams {
-  double temperature = 0.0;
-  int32_t top_k = 0;
-  double top_p = 0.0;
-  double repetition_penalty = 1.0;
-  uint64_t seed = 0;
-  std::vector<int64_t> stop_ids;
+enum class RequestStatus {
+  kInvalid = 0,        // 无效/未初始化
+  kWaiting = 1,        // 等待调度（扩展值）
+  kRunning = 2,        // 运行中（Prefill/Decode）
+  kStopped = 3,        // 已停止（EOS/stop/长度/取消）
+  kRecompute = 4,      // 被抢占，待重算
+  kSwapped = 5,        // 被换出
+  kIllegal = 6,        // 非法/失败
+  kChunkedPrefill = 7, // 分块 Prefill 进行中
 };
 
+struct SampleParams {
+  bool is_valid = false;          // 是否启用；false 使用引擎默认
+  float temperature = 0.0f;       // 温度；阶段三
+  float presence_penalty = 0.0f;  // 出现惩罚；阶段三
+  float frequency_penalty = 0.0f; // 频率惩罚；阶段三
+  int32_t num_beam = 1;           // Beam 宽度；阶段三
+  float top_p = 0.0f;             // nucleus；阶段三
+  int32_t top_k = 0;              // top-k；阶段三
+  int32_t max_tokens = 0;         // 最大生成数；0 = context - prompt
+  int32_t min_tokens = 0;         // 最小生成数
+  std::vector<int64_t> stop_token_ids; // 额外停止 token
+  int32_t logprobs = 0;           // 返回对数概率数量；0 = 不返回
+  bool ignore_eos = false;        // 忽略 EOS 停止
+};
+
+struct MultimodalInput {
+  enum class Modality { kImage = 0, kAudio = 1 };
+  Modality modality = Modality::kImage;
+  const void* data = nullptr;     // 主机侧原始数据/特征；阶段三
+  uint64_t byte_size = 0;
+  DataType dtype = DataType::kUnknown;
+  std::vector<int64_t> shape;
+  std::vector<int64_t> placeholder_token_ids; // 已编码占位 token
+};
+
+enum class RequestGroup { kPrefill = 0, kDecode = 1 };
+
 struct Request {
-  uint64_t id = 0;                       // 0 = Engine 分配
-  std::vector<int64_t> prompt_ids;
-  int32_t max_new_tokens = 0;            // 0 = 由上下文上限推导
-  SamplingParams sampling;               // v1 只记录，图内固定 argmax
-  int32_t priority = 0;
-  uint64_t deadline_ns = 0;              // 0 = 不超时
+  uint64_t request_id = 0;               // 0 = Engine/Scheduler 分配
+  std::vector<int64_t> prompt_token_ids; // prompt
+  SampleParams sample_param;             // 采样策略与生成约束
+  std::vector<MultimodalInput> multimodal_inputs; // 阶段三预留
+  int32_t lora_id = -1;                  // LoRA ID；-1 表示无
+  RequestGroup group = RequestGroup::kPrefill; // Prefill/Decode 分组
+  int32_t die_id = 0;                    // die 编号；0 为默认，多 die 预留
+  int32_t chunk_size = 0;                // 分块 Prefill 大小；0 = 调度默认
+  int32_t priority = 0;                  // 调度扩展
+  uint64_t deadline_ns = 0;              // 超时扩展；0 = 不超时
+};
+
+struct Token {
+  int64_t token_id = -1;   // 词表 ID
+  float token_prob = 0.0f; // 概率；未计算时为 0
+  float log_prob = 0.0f;   // 对数概率；未计算时为 0
+  bool select = false;     // 是否为选中 token
+};
+
+struct Sequence {
+  uint64_t sequence_id = 0;                // 内部序列 ID
+  const void* logits = nullptr;            // 本步 logits（主机可见）；生命周期见下
+  DataType logits_dtype = DataType::kUnknown; // logits 精度（扩展）
+  Token current_token;                     // 本轮 token
+  Token draft_token;                       // 阶段三 draft token
+  std::vector<int64_t> history_token_ids;  // prompt + 已生成 token
+  int32_t generated_count = 0;             // 已生成 token 数
+  int32_t prompt_count = 0;                // prompt token 数
+  double cumulative_score = 0.0;           // Beam 累计 logprob
+  int32_t vocab_size = 0;                  // 词表大小
+};
+
+struct Response {
+  uint64_t request_id = 0;
+  RequestStatus status = RequestStatus::kInvalid;
+  std::vector<Sequence> sequences; // 本步输出序列快照
+  SampleParams sample_param;       // 请求采样参数副本
 };
 
 struct RequestSnapshot {
   uint64_t request_id = 0;
-  RequestState state = RequestState::kWaiting;
+  RequestStatus status = RequestStatus::kWaiting;
   int32_t prompt_tokens = 0;
   int32_t computed_tokens = 0;
   int32_t generated_tokens = 0;
 };
 ```
+
+字段语义：
+
+| 对象 | 关键语义 |
+| --- | --- |
+| `Request` | 一次推理请求；`request_id=0` 由 Scheduler 分配；`prompt_token_ids` 非空 |
+| `SampleParams` | 阶段一/二生效：`max_tokens/min_tokens/stop_token_ids/ignore_eos`；其余字段记录，阶段三启用 |
+| `RequestGroup` | 调度分组提示；请求从 Prefill 转 Decode 时由 Scheduler 更新内部状态 |
+| `MultimodalInput` | 阶段三多模态输入；阶段一/二必须为空 |
+| `Token` | 候选/选中 token；`select=true` 表示本轮选中 |
+| `Sequence` | 一条输出序列；`history_token_ids` 含 prompt + generated；`prompt_count` 为前缀长度 |
+| `Response` | 一个请求的单步结果快照；`kStopped/kIllegal` 为终态 |
+| `logits` | 本步 logits 的主机可见指针；仅 ResponseCallback 期间有效，Service 需同步消费或拷贝 |
+
+状态迁移与旧对象映射：
+
+| 旧 `RequestState` | 新 `RequestStatus` | 说明 |
+| --- | --- | --- |
+| `kWaiting` | `kWaiting` | 扩展值 |
+| `kRunning` | `kRunning` / `kChunkedPrefill` | 分块 Prefill 用后者 |
+| `kPreempted` | `kRecompute` / `kSwapped` | 重算/换出 |
+| `kFinished` | `kStopped` | 正常停止 |
+| `kCancelled` | `kStopped` | 暂复用；可选扩展 `kCancelled` |
+| `kFailed` | `kIllegal` | 执行失败 |
+
+`RequestPhase`（Prefill/Decode）仍保留在 `plan.h`，表示单步执行阶段；
+`RequestStatus` 表示请求生命周期，两者正交。
+
+**迁移影响（代码阶段执行）**：
+
+1. `SamplingParams` → `SampleParams`；`RequestState` → `RequestStatus`；
+   `Request.id` → `request_id`；`prompt_ids` → `prompt_token_ids`；
+   `sampling` → `sample_param`；`max_new_tokens` → `SampleParams.max_tokens`。
+2. `request.h` 删除或改为转发 `sequence.h` 的过渡别名；新代码只 include
+   `sequence.h`。
+3. `kernel_context.h` 的 `const SamplingParams*` → `const SampleParams*`。
+4. `IScheduler::Update/Stop/Fail` 改为填充 `Response`；`UpdateResult` 删除。
+5. `Engine` 的 `TokenCallback` → `ResponseCallback`；`StepResult.token`
+   由 `int64_t` 改为 `Token`。
+6. 现有 Engine/Scheduler/测试实现按上述契约迁移；迁移完成前旧代码保持
+   可编译，迁移后删除兼容别名。
+7. 迁移完成前，接口检查与测试结果仍以当前 `request.h` 为准；`sequence.h`
+   落地后更新 `Runtime/tests/interface_check.cc` 与 `test_results.md`。
 
 #### 4.1.4 计划与结果 `plan.h`
 
@@ -436,7 +622,7 @@ struct ExecutionPlan {
 
 struct RequestStepResult {
   uint64_t request_id = 0;
-  int64_t token = 0;
+  Token token;               // 由 int64_t 改为 Token（见 sequence.h）
   bool ok = true;
   ErrorCode error = ErrorCode::kOk;
 };
@@ -453,7 +639,7 @@ struct StepStats {
 };
 ```
 
-不变量：`total_tokens == Σ entry.token_count ≤ max_num_tokens`；`entry.slots.size() == token_count`；`output_slot` 仅在产生 token 时有效。
+不变量：`total_tokens == Σ entry.token_count ≤ max_num_tokens`；`entry.slots.size() == token_count`；`output_slot` 仅在产生 token 时有效。`Token` 来自 `sequence.h`；`plan.h` 依赖 `sequence.h`。`PlanEntry.draft_token_ids` 仍为执行期 draft ID 列表，`Sequence.draft_token` 为请求级当前 draft。
 
 #### 4.1.5 KV 契约 `kv_allocator.h` / `kv_view.h`
 
@@ -571,12 +757,6 @@ struct SchedulerStats {
   int64_t free_blocks = 0, total_blocks = 0;
 };
 
-struct UpdateResult {
-  uint64_t request_id = 0;
-  RequestState state = RequestState::kRunning;
-  bool finished = false;
-};
-
 class IScheduler {
  public:
   virtual ~IScheduler() = default;
@@ -585,11 +765,11 @@ class IScheduler {
   virtual Status Merge(const Request& request, uint64_t* request_id) = 0;
   virtual Status Schedule(ExecutionPlan* plan) = 0;
   virtual Status Update(uint64_t request_id,
-                        const std::vector<int64_t>& tokens,
-                        RequestState executor_status,
-                        UpdateResult* result) = 0;
-  virtual Status Stop(uint64_t request_id) = 0;
-  virtual Status Fail(uint64_t request_id, ErrorCode code) = 0;
+                        const std::vector<Token>& tokens,
+                        Response* response) = 0;
+  virtual Status Stop(uint64_t request_id, Response* response) = 0;
+  virtual Status Fail(uint64_t request_id, ErrorCode code,
+                      Response* response) = 0;
   virtual std::vector<RequestSnapshot> Snapshot() const = 0;
   virtual SchedulerStats Stats() const = 0;
   virtual bool HasRequests() const = 0;
@@ -597,7 +777,19 @@ class IScheduler {
 std::unique_ptr<IScheduler> CreateDefaultScheduler();
 ```
 
-说明：Scheduler 持有 `KvAllocator*`，在 `Update/Stop/Fail` 使请求进入终态时调用 `KvAllocator::Release`；Engine 不重复释放。实现必须保证 `Merge/Stop/HasRequests` 可被调用方线程与推理线程并发调用（内部加锁）；`Schedule/Update/Stats` 由推理线程调用。
+说明：
+
+- Scheduler 拥有每个请求的 `Sequence` 状态；`Update` 追加 `Token`、更新
+  `generated_count/current_token/history`，填充 `Response`；`Stop/Fail`
+  填充终态 `Response`。
+- `Response` 每个请求每步产生一次；`status=kStopped/kIllegal` 为终态，
+  Scheduler 在产生终态 Response 时调用 `KvAllocator::Release`；Engine 不
+  重复释放。
+- `Update` 的 token 向量支持阶段三投机解码一次接受多个 token；阶段一/二
+  长度为 1。
+- `Response*` 不允许为空；调用方（Engine）提供栈上对象，Scheduler 填充。
+- 实现必须保证 `Merge/Stop/HasRequests` 可被调用方线程与推理线程并发调用
+  （内部加锁）；`Schedule/Update/Fail/Stats` 由推理线程调用。
 
 #### 4.2.3 `IKVCache`（`Runtime/kvcache/kv_cache_manager.h`）
 
@@ -633,7 +825,7 @@ class IExecutor {
 std::unique_ptr<IExecutor> CreateDefaultExecutor();
 ```
 
-说明：Executor 是 Backend 的唯一所有者；`Deinit` 负责 `Backend::Deinit` 并释放；OpEnv/KVCache 只借用 Backend。`Init` 失败时必须释放已接管的 Backend，不得把半初始化资源留给 Engine。
+说明：Executor 是 Backend 的唯一所有者；`Deinit` 负责 `Backend::Deinit` 并释放；OpEnv/KVCache 只借用 Backend。`Init` 失败时必须释放已接管的 Backend，不得把半初始化资源留给 Engine。`StepResult` 中的 token 为 `sequence.h` 的 `Token`；Executor 只负责本步 token/logits，不构建 `Response`，`Response` 由 Scheduler 生成。
 
 #### 4.2.5 `IDestroyer`（`Runtime/destroy/destroyer.h`）
 
@@ -788,8 +980,7 @@ struct EngineStats {
   int64_t last_step_ns = 0;
 };
 
-using TokenCallback =
-    std::function<void(uint64_t request_id, int64_t token, bool finished)>;
+using ResponseCallback = std::function<void(const Response& response)>;
 
 class Engine final : public IoBinder {
  public:
@@ -801,12 +992,12 @@ class Engine final : public IoBinder {
   Status Start();
   Status AddRequest(const Request& request, uint64_t* request_id);
   Status CancelRequest(uint64_t request_id);
-  Status Update(uint64_t request_id, const std::vector<int64_t>& tokens,
-                RequestState status = RequestState::kRunning);
+  Status Update(uint64_t request_id, const std::vector<Token>& tokens,
+                Response* response);
   Status RunOnce(StepStats* stats);
   Status RunUntilIdle(uint32_t timeout_ms);
   Status Destroy();
-  void SetTokenCallback(TokenCallback callback);
+  void SetResponseCallback(ResponseCallback callback);
 
   Status SetInput(const std::string& name,
                   const runtime_graph::Storage& host_storage) override;
@@ -818,6 +1009,10 @@ class Engine final : public IoBinder {
 };
 ```
 
+说明：`CancelRequest` 内部调用 `Scheduler::Stop(id, &response)`，若产生终态
+Response 则通过 `ResponseCallback` 通知 Service；`RunOnce` 在每步执行后对
+每个请求调用 `Scheduler::Update(id, tokens, &response)` 并回调。
+
 Engine 对外接口与模块统一接口的对应关系：
 
 | Engine 对外接口 | 内部调用链 |
@@ -826,11 +1021,12 @@ Engine 对外接口与模块统一接口的对应关系：
 | `Load` | `loader_->Load` → `kv_cache_->Init` → `scheduler_->Init` → `executor_->Init(std::move(backend))` |
 | `Start` | 状态迁移；threaded 时启动推理线程 |
 | `AddRequest` | `scheduler_->Merge` |
-| `CancelRequest` | `scheduler_->Stop` |
-| `Update` | `scheduler_->Update` |
-| `RunOnce` | `scheduler_->Schedule` → `kv_cache_->BuildView` → `executor_->Execute` → `scheduler_->Update`（终态由 Scheduler 释放 KV） |
+| `CancelRequest` | `scheduler_->Stop(id, &response)` → `ResponseCallback` |
+| `Update` | `scheduler_->Update(id, tokens, &response)` → `ResponseCallback` |
+| `RunOnce` | `scheduler_->Schedule` → `kv_cache_->BuildView` → `executor_->Execute` → `scheduler_->Update(..., &response)` → `ResponseCallback`（终态由 Scheduler 释放 KV） |
 | `RunUntilIdle` | 循环 `RunOnce` 直到 `scheduler_->HasRequests()` 为 false |
 | `Destroy` | 停线程 → `destroyer_->Destroy`（Executor::Deinit 释放 Backend） |
+| `SetResponseCallback` | 保存 Response 回调；推理线程同步调用 |
 | `SetInput/SetOutput` | 校验后写入 Input/Output op 的 `attr["storage"]` |
 | `stats` | 返回本地累计统计；running/waiting/KV 为最近 Step 的快照 |
 
@@ -838,16 +1034,17 @@ Engine 对外接口与模块统一接口的对应关系：
 
 | 调用方 → 被调方 | 接口 | 交互数据 | 说明 |
 | --- | --- | --- | --- |
-| Service → Engine | Load/Start/AddRequest/CancelRequest/Update/RunOnce/RunUntilIdle/Destroy/SetTokenCallback/Stats | Request、StepStats、EngineStats | 唯一对外入口 |
+| Service → Engine | Load/Start/AddRequest/CancelRequest/Update/RunOnce/RunUntilIdle/Destroy/SetResponseCallback/Stats | Request、StepStats、Response、EngineStats | 唯一对外入口 |
 | Engine → ILoader | `Load` | LoadConfig → LoadResult | 加载期一次性 |
 | Loader → Graph | Create*/SortOp/DumpIr/SetGraphEnv | Graph 对象、Storage | 重建与校验 |
 | Loader → Backend | Init/Capability/CreateBuffer/ConvertParam/Upload；失败回滚时 Deinit | BufferDesc、ParamDesc | 零设备 API |
 | Loader → OpEnvFactory | `Create` | Op/Backend/GraphEnv → OpEnv | Loader 内部，逐 op 创建 |
 | Loader → ResourceStack | `Push` | 释放闭包 | 逆序回滚 |
-| Engine → IScheduler | Init/Merge/Schedule/Update/Stop/Fail/Snapshot/Stats | Request、ExecutionPlan、UpdateResult | Schedule/Update/Stats 推理线程；Merge/Stop/HasRequests 需线程安全 |
+| Engine → IScheduler | Init/Merge/Schedule/Update/Stop/Fail/Snapshot/Stats | Request、ExecutionPlan、Token → Response | Schedule/Update/Stats 推理线程；Merge/Stop/HasRequests 需线程安全 |
 | Scheduler → KvAllocator | Reserve/Release/GetBlockTable/GetSlots/FreeBlocks/BlockSize | 块号、slot | 失败零副作用 |
 | Engine → IKVCache | Init/BuildView/Stats | KvCacheSpec、KvCacheView | 加载 / 每步 |
-| Engine → IExecutor | Init(std::unique_ptr<Backend>)/Execute/Deinit | ExecutionPlan、KvCacheView → StepResult | 加载 / 每步 |
+| Engine → IExecutor | Init(std::unique_ptr<Backend>)/Execute/Deinit | ExecutionPlan、KvCacheView → StepResult{Token} | 加载 / 每步 |
+| Engine → Service | ResponseCallback | Response | 流式/终态结果 |
 | Executor → Backend | Synchronize | — | 每步结束 |
 | Executor → IoBinder | SetInput/SetOutput | host Storage | 每步 |
 | Executor → Graph | GetOrderlyOPList/GetSampleOp/GetAllInputOp/GetAllOutputOp | Op/Tensor | 只读 |
@@ -872,7 +1069,12 @@ Engine 对外接口与模块统一接口的对应关系：
 | 设备缓冲 | Engine（ResourceStack 句柄） | Loader/KVCache | OpEnv/Kernel | ResourceStack → Backend |
 | 权重常驻缓冲 | Engine | Loader | Kernel | ResourceStack |
 | 主机 I/O 缓冲 | Executor | Executor | Backend | Executor |
-| Request/Plan | Scheduler | Scheduler | Engine/Executor（值/快照） | Scheduler |
+| Request | Scheduler（Merge 后） | Service | Engine/Scheduler | Scheduler |
+| Sequence | Scheduler | Scheduler | Engine/Response（值快照） | Scheduler |
+| Response | Engine/Scheduler（栈对象） | Scheduler | Service（回调期间） | Engine |
+| Token | Executor（StepResult） | Executor | Scheduler | 值对象 |
+| Plan | Scheduler | Scheduler | Executor（值快照） | Scheduler |
+| logits 缓冲 | Executor | Executor | Scheduler/Service（回调期间借用） | Executor |
 | KV 块 | KVCache | KVCache | Executor（只读快照） | KVCache |
 | ResourceStack | Engine | Engine | Loader/KVCache/Destroy | Destroy |
 
@@ -882,11 +1084,14 @@ Engine 对外接口与模块统一接口的对应关系：
 | --- | --- | --- | --- | --- |
 | `LoadConfig` | Engine | ILoader | 值 | Load 期间 |
 | `LoadResult` | ILoader | Engine | 值（Graph 移交 Engine；Backend 再移交 Executor） | Load 后由 Engine/Executor 持有 |
-| `Request` | Service/Engine | IScheduler | 值 | 请求生命周期 |
+| `Request` | Service | Engine → IScheduler | 值 | Merge 后由 Scheduler 持有 |
+| `SampleParams` | Service | Request/Response | 值 | 请求生命周期 |
 | `ExecutionPlan` | IScheduler | IExecutor/Engine | 值（不可变快照） | 单步 |
 | `KvCacheView` | IKVCache | Engine → IExecutor | 值（裸指针视图） | 单步 |
-| `StepResult` | IExecutor | Engine | 值 | 单步 |
-| `UpdateResult` | IScheduler | Engine | 值 | 单次 Update |
+| `StepResult` | IExecutor | Engine/IScheduler | 值（含 `Token`） | 单步 |
+| `Token` | IExecutor | IScheduler | 值 | 单步 |
+| `Sequence` | IScheduler | IScheduler/Response | 值快照 | 请求生命周期 |
+| `Response` | IScheduler | Engine → Service | 值（含序列快照） | 回调期间 |
 | `DestroyContext` | Engine | IDestroyer | 值（裸指针；Backend 借用自 Executor） | Destroy 期间 |
 | `StepStats` | Engine/Executor | Service/日志 | 值 | 单步 |
 | `EngineStats` | Engine | Service | 值 | 累计/查询 |
@@ -917,14 +1122,14 @@ Engine 对外接口与模块统一接口的对应关系：
 ```text
 engine.SetModules(...)        // 可选：注入自定义 Scheduler/Executor 等
 engine.Load(config)           // CREATED → LOADED
-engine.SetTokenCallback(cb)
+engine.SetResponseCallback(cb) // Response 回调（流式/终态）
 engine.Start()                // LOADED → RUNNING（threaded 时启动推理线程）
 
-engine.AddRequest(req, &id)   // 线程安全
+engine.AddRequest(req, &id)   // 线程安全；Request 含 SampleParams
 // 单线程模式：while (...) engine.RunOnce(&stats);
-// 线程模式：由 Engine 内部循环；调用方等待回调
-engine.CancelRequest(id)      // 线程安全
-engine.Update(id, tokens)     // 仅自定义执行路径使用；正常由 RunOnce 内部调用
+// 线程模式：由 Engine 内部循环；调用方等待 Response 回调
+engine.CancelRequest(id)      // 线程安全；终态 Response 经回调返回
+engine.Update(id, tokens, &response) // 仅自定义执行路径；正常由 RunOnce 内部调用
 engine.Destroy()              // 任意非 DESTROYED → DESTROYED
 ```
 
@@ -936,13 +1141,13 @@ engine.Destroy()              // 任意非 DESTROYED → DESTROYED
 | `Load/Start/Destroy/SetModules` | 否（需串行） | 主控线程 |
 | `RunOnce/RunUntilIdle` | 否（单调用者） | 驱动线程 |
 | `SetInput/SetOutput` | 否 | 推理线程 |
-| `TokenCallback` | 回调在推理线程执行 | 不得阻塞/重入 |
+| `ResponseCallback` | 回调在推理线程执行 | 不得阻塞/重入；Response/logits 仅回调期间有效 |
 
 ### 4.11 阶段三扩展点（只预留，不实现）
 
 | 功能 | 预留字段/接口 | 实现阶段 |
 | --- | --- | --- |
-| 投机解码 | `PlanEntry.draft_token_ids`、`Update(tokens[])`、stop 按 accepted 数 | 阶段三 |
+| 投机解码 | `PlanEntry.draft_token_ids`、`Update(std::vector<Token>)`、`Sequence.draft_token`、stop 按 accepted 数 | 阶段三 |
 | 异步调度 | `RuntimeConfig.max_concurrent_batches`、`plan.step_id`、KV `ReleaseAfter(step_id)` | 阶段三 |
 | HiCache | `KvStorageTier`、block `tier/host_slot`、`EvictToHost/ReloadFromHost` | 阶段三 |
 | 多类型 KV | `KvCacheSpec.type`、KvCache 多组、KvCacheView 多组 | 阶段三 |
@@ -1005,6 +1210,7 @@ Runtime/
 | TC-ARCH-03 | 依赖方向扫描 | 无反向依赖；common 不依赖 Graph/Backend |
 | TC-ARCH-04 | Engine 成员与调用矩阵核对 | Loader/Graph/Scheduler/Executor/KVCache/Destroyer 均为 `unique_ptr`；Backend 归 Executor；OpEnvFactory 归 Loader；调用链可追溯 |
 | TC-ARCH-05 | EngineModules 注入对称性检查 | Loader/Scheduler/Executor/Destroyer 均在 `EngineModules` 中；Loader 与 Destroyer 成对可替换 |
+| TC-ARCH-06 | 请求/响应对象唯一性与迁移检查 | `sequence.h` 是唯一定义；`request.h` 无重复定义（删除或仅转发）；`RequestStatus` 不与 `Status` 冲突；Service/Engine/Scheduler 只使用 sequence.h 类型 |
 
 验证记录见 [`Runtime/tests/test_results.md`](../tests/test_results.md)。
 
@@ -1032,7 +1238,7 @@ Runtime/
 | `Runtime/common/data_types.h` | `DataType/Layout/DeviceType` |
 | `Runtime/common/runtime_config.h` | `RuntimeConfig` |
 | `Runtime/common/model_config.h` | `ModelConfig` |
-| `Runtime/common/request.h` | `Request/SamplingParams/RequestState/RequestSnapshot` |
+| `Runtime/common/sequence.h` | `Request/Response/RequestStatus/SampleParams/Token/Sequence/RequestSnapshot/MultimodalInput` |
 | `Runtime/common/plan.h` | `ExecutionPlan/PlanEntry/StepResult/StepStats` |
 | `Runtime/common/kv_allocator.h` | `KvAllocator` |
 | `Runtime/common/kv_view.h` | `KvCacheSpec/KvCacheView/KvCacheStats` |
@@ -1040,7 +1246,7 @@ Runtime/
 | `Runtime/common/op_env_factory.h` | `OpEnvFactory` |
 | `Runtime/common/resource_stack.h` | `ResourceStack` |
 | `Runtime/loader/loader.h` | `ILoader/LoadConfig/LoadResult` |
-| `Runtime/scheduler/scheduler.h` | `IScheduler/SchedulerConfig/SchedulerStats/UpdateResult` |
+| `Runtime/scheduler/scheduler.h` | `IScheduler/SchedulerConfig/SchedulerStats`（Update/Stop/Fail 使用 `Response`） |
 | `Runtime/kvcache/kv_cache_manager.h` | `IKVCache` |
 | `Runtime/engine/engine.h` | `Engine/EngineConfig/EngineStats` |
 | `Runtime/engine/engine_modules.h` | `EngineModules`（Loader/Scheduler/Executor/Destroyer 注入） |
@@ -1086,3 +1292,8 @@ Runtime/
 | slot | 逻辑 token 在分页 KV 中的物理写入位置 |
 | ResourceStack | 逆序释放栈，用于销毁与回滚 |
 | 统一接口 | 每个模块对外暴露的唯一纯虚基类，Engine 通过它调用 |
+| RequestStatus | 请求处理状态枚举（不与错误类型 `mobilenet::Status` 混用） |
+| SampleParams | 请求采样策略与生成约束 |
+| Token | 候选/选中输出 token（id、概率、logprob、select） |
+| Sequence | 请求的一条输出序列（历史 token、current/draft、计数、分数、logits） |
+| Response | 单请求单步结果快照（status、sequences、sample_param） |

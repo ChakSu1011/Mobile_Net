@@ -13,6 +13,11 @@
 **文档定位**：本文件是 Engine 模块的详细设计文档，细化统一架构文档中的
 Engine 章节；跨模块契约以 `Runtime_design.md` 为准，本文件不重复定义。
 
+> **迁移提示**：`Runtime_design.md` v0.4 已将请求/响应对象迁移到
+> `Runtime/common/sequence.h`（Request/Response/RequestStatus/SampleParams/
+> Token/Sequence）。本文件当前仍描述基于 `request.h`/`SamplingParams`/
+> `RequestState`/`TokenCallback` 的既有实现；代码迁移完成后同步更新本文件。
+
 ---
 
 ## 1. 背景与目标

@@ -27,6 +27,7 @@
 #include "Runtime/common/resource_stack.h"
 #include "Runtime/common/runtime_config.h"
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime {
@@ -67,13 +68,13 @@ struct LoadResult {
   ModelConfig model;
 
   // 权重常驻字节数。
-  uint64_t weights_bytes = 0;
+  U64 weights_bytes = 0;
 
   // Activation arena 字节数。
-  uint64_t arena_bytes = 0;
+  U64 arena_bytes = 0;
 
   // 输入/输出缓冲字节数。
-  uint64_t io_bytes = 0;
+  U64 io_bytes = 0;
 };
 
 // Loader 统一接口。

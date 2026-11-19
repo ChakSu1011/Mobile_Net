@@ -15,6 +15,7 @@
 #include "Runtime/backend/ops/op_spec.h"
 
 #include "Runtime/backend/ops/op_specs.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 

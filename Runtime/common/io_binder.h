@@ -18,6 +18,7 @@
 #include <string>
 
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 

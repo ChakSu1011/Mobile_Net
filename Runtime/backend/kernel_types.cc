@@ -10,6 +10,7 @@
 //   Runtime/backend/kernel_types.h。
 
 #include "Runtime/backend/kernel_types.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
@@ -70,7 +71,7 @@ runtime_graph::Precision PrecisionFromDataType(DataType dtype) {
   return runtime_graph::Precision::kUnknown;
 }
 
-bool IsSupportedDataType(DataType dtype) {
+Bool IsSupportedDataType(DataType dtype) {
   return dtype != DataType::kUnknown &&
          PrecisionFromDataType(dtype) != runtime_graph::Precision::kUnknown;
 }

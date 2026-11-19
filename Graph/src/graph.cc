@@ -23,6 +23,7 @@
 
 #include "Runtime/common/status.h"
 #include "tensor.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime_graph {
@@ -40,7 +41,7 @@ Graph::~Graph() {
 const std::string& Graph::Name() const { return name_; }
 
 Status Graph::CreateOp(const std::string& name,
-                       const std::vector<Tensor*>& src_tensors, size_t out_cnt,
+                       const std::vector<Tensor*>& src_tensors, Usize out_cnt,
                        OpType op_type, const AttrMap& attr,
                        std::vector<Tensor*>* outputs) {
   Status status = ValidateNewOpName(name);
@@ -75,7 +76,7 @@ Status Graph::CreateOp(const std::string& name,
   // 先计算并校验全部输出 tensor 名称，避免提交后才发现命名冲突。
   std::vector<std::string> output_names;
   output_names.reserve(out_cnt);
-  for (size_t index = 0; index < out_cnt; ++index) {
+  for (Usize index = 0; index < out_cnt; ++index) {
     const std::string tensor_name =
         out_cnt == 1 ? name + ".out"
                      : name + ".out." + std::to_string(index);
@@ -214,7 +215,7 @@ Status Graph::CreateSample(const std::string& name, Tensor* input,
     sample_attr["method"] = std::string("argmax");
   }
   if (sample_attr.find("axis") == sample_attr.end()) {
-    sample_attr["axis"] = int64_t{-1};
+    sample_attr["axis"] = I64{-1};
   }
   if (sample_attr.find("precision") == sample_attr.end()) {
     sample_attr["precision"] = std::string("int64");
@@ -244,7 +245,7 @@ Status Graph::SortOp() {
                       "Graph::SortOp: graph has no output op");
   }
 
-  std::map<const Op*, int> states;
+  std::map<const Op*, I32> states;
   for (Op* output_op : output_op_list_) {
     if (output_op == nullptr) {
       op_list_.clear();
@@ -285,7 +286,7 @@ GraphEnv* Graph::GetGraphEnv() { return graph_env_.get(); }
 
 void Graph::ClearGraphEnv() { graph_env_.reset(); }
 
-bool Graph::OwnsTensor(const Tensor* tensor) const {
+Bool Graph::OwnsTensor(const Tensor* tensor) const {
   if (tensor == nullptr) {
     return false;
   }
@@ -360,11 +361,11 @@ Status Graph::CreateInputInternal(const std::string& name,
   return Status::Ok();
 }
 
-Status Graph::VisitOp(Op* op, std::map<const Op*, int>* states) {
+Status Graph::VisitOp(Op* op, std::map<const Op*, I32>* states) {
   if (op == nullptr) {
     return MakeStatus(ErrorCode::kStateError, "Graph::SortOp: null op");
   }
-  int& state = (*states)[op];
+  I32& state = (*states)[op];
   if (state == 1) {
     return MakeStatus(ErrorCode::kStateError,
                       "Graph::SortOp: dependency cycle at op: " + op->Name());

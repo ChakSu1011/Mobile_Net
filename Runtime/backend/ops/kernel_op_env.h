@@ -23,6 +23,7 @@
 #include "Runtime/backend/kernel_context.h"
 #include "Runtime/backend/ops/op_spec.h"
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
@@ -64,7 +65,7 @@ class KernelOpEnv final : public ExecOpEnv {
   Status Forward() override;
 
   // 是否需要图级 workspace。
-  bool NeedTempData() const override;
+  Bool NeedTempData() const override;
 
  private:
   // 从 Tensor 构建执行视图。
@@ -75,7 +76,7 @@ class KernelOpEnv final : public ExecOpEnv {
   //   view：输出参数。
   // 返回：
   //   成功返回 kOk；未绑定设备/精度不支持返回错误码。
-  Status BuildView(const runtime_graph::Tensor& tensor, const char* role,
+  Status BuildView(const runtime_graph::Tensor& tensor, const C8* role,
                    runtime_graph::TensorView* view) const;
 
   // 非拥有后端。

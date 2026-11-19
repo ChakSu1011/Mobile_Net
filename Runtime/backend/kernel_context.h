@@ -27,6 +27,7 @@
 #include "Runtime/common/data_types.h"
 #include "Runtime/common/kv_view.h"
 #include "Runtime/common/sequence.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
@@ -50,10 +51,10 @@ struct TensorView {
   void* data = nullptr;
 
   // data 为 Buffer 时的字节偏移；主机侧恒为 0。
-  uint64_t offset = 0;
+  U64 offset = 0;
 
   // 有效字节数；必须等于 shape.GetShapeSize() * 元素字节数。
-  uint64_t bytes = 0;
+  U64 bytes = 0;
 
   // 逻辑形状；物理布局按 row_major 连续处理。
   Shape shape;
@@ -80,34 +81,34 @@ struct TensorView {
 //   - 不表示 Prefill/Decode 的调度决策，只传递执行所需信息。
 struct AttentionContext {
   // batch 行数。
-  int32_t batch = 0;
+  I32 batch = 0;
 
   // 本步有效 token 总数。
-  int32_t token_count = 0;
+  I32 token_count = 0;
 
   // 每 batch 行的有效序列长度，长度至少为 batch。
-  const int32_t* seq_lens = nullptr;
+  const I32* seq_lens = nullptr;
 
   // 每请求物理块表；首期可为空。
-  const int32_t* block_table = nullptr;
+  const I32* block_table = nullptr;
 
   // block_table 每行的元素数。
-  int32_t block_table_stride = 0;
+  I32 block_table_stride = 0;
 
   // KV 写入 slot；首期可为空。
-  const int64_t* slots = nullptr;
+  const I64* slots = nullptr;
 
   // slot 数量。
-  int32_t slot_count = 0;
+  I32 slot_count = 0;
 
   // 每个 KV 块的 token 数；0 表示未启用 KV。
-  int32_t kv_block_size = 0;
+  I32 kv_block_size = 0;
 
   // KV 只读视图；首期可为空。
   const runtime::KvCacheView* kv = nullptr;
 
   // 是否处于 Prefill 阶段。
-  bool is_prefill = true;
+  Bool is_prefill = true;
 };
 
 // 单节点执行上下文。
@@ -126,13 +127,13 @@ struct KernelContext {
   const TensorView* inputs = nullptr;
 
   // 输入张量数量。
-  uint32_t input_count = 0;
+  U32 input_count = 0;
 
   // 输出张量视图数组。
   TensorView* outputs = nullptr;
 
   // 输出张量数量。
-  uint32_t output_count = 0;
+  U32 output_count = 0;
 
   // 节点静态属性；只读，可为空表示无属性。
   const AttrMap* attrs = nullptr;
@@ -153,13 +154,13 @@ struct KernelContext {
   Stream* stream = nullptr;
 
   // 本步 batch 行数。
-  int32_t batch = 1;
+  I32 batch = 1;
 
   // 本步有效 token 总数。
-  int32_t token_count = 0;
+  I32 token_count = 0;
 
   // 逻辑序列长度（含 padding）。
-  int32_t seq_len = 0;
+  I32 seq_len = 0;
 };
 
 }  // namespace runtime_graph

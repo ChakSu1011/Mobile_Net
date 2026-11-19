@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "storage.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime_graph {
@@ -30,11 +31,11 @@ namespace runtime_graph {
 // Op 属性值。
 //
 // 允许的类型：
-//   bool、int64_t、double、std::string、std::vector<int64_t>、
-//   std::vector<double>、std::vector<std::string>、Storage。
+//   Bool、I64、F64、std::string、std::vector<I64>、
+//   std::vector<F64>、std::vector<std::string>、Storage。
 using AttrValue =
-    std::variant<bool, int64_t, double, std::string, std::vector<int64_t>,
-                 std::vector<double>, std::vector<std::string>, Storage>;
+    std::variant<Bool, I64, F64, std::string, std::vector<I64>,
+                 std::vector<F64>, std::vector<std::string>, Storage>;
 
 // Op 属性表，按属性名排序，保证 dump_ir 输出稳定。
 using AttrMap = std::map<std::string, AttrValue>;

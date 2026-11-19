@@ -23,6 +23,7 @@
 #include "Runtime/common/kv_view.h"
 #include "Runtime/common/resource_stack.h"
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
@@ -54,7 +55,7 @@ class IKVCache : public KvAllocator {
   //   成功返回 kOk；预算不足或 block_size 非法返回 kDeviceOom/
   //   kInvalidArgument；后端分配失败返回 kBufferError。
   virtual Status Init(Backend* backend, const KvCacheSpec& spec,
-                      uint64_t kv_budget_bytes,
+                      U64 kv_budget_bytes,
                       ResourceStack* resource_stack) = 0;
 
   // 构建只读视图。

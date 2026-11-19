@@ -24,11 +24,12 @@
 #include "Graph/include/tensor.h"
 #include "Runtime/backend/kernel.h"
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
 // 返回 Shape 的逻辑维度；max_dim 非法时返回空。
-std::vector<int64_t> ShapeToDims(const runtime_graph::Shape& shape);
+std::vector<I64> ShapeToDims(const runtime_graph::Shape& shape);
 
 // 返回张量 Storage 的精度对应的 DataType；未知精度返回 kUnknown。
 DataType TensorDataType(const runtime_graph::Tensor& tensor);
@@ -44,8 +45,8 @@ DataType TensorDataType(const runtime_graph::Tensor& tensor);
 //   成功返回 kOk；精度不支持返回 kUnsupportedDtype；布局不支持返回
 //   kUnsupportedLayout；形状/字节数/设备不匹配返回 kInvalidArgument。
 Status CheckTensor(const runtime_graph::Tensor& tensor,
-                   runtime_graph::Precision precision, const char* op_name,
-                   const char* role);
+                   runtime_graph::Precision precision, const C8* op_name,
+                   const C8* role);
 
 // 校验张量秩。
 //
@@ -56,8 +57,8 @@ Status CheckTensor(const runtime_graph::Tensor& tensor,
 //   role：张量角色。
 // 返回：
 //   成功返回 kOk；秩不符返回 kInvalidArgument。
-Status CheckRank(const runtime_graph::Tensor& tensor, size_t rank,
-                 const char* op_name, const char* role);
+Status CheckRank(const runtime_graph::Tensor& tensor, Usize rank,
+                 const C8* op_name, const C8* role);
 
 // 校验两个维度序列的前 prefix_len 维一致。
 //
@@ -67,9 +68,9 @@ Status CheckRank(const runtime_graph::Tensor& tensor, size_t rank,
 //   message：错误消息前缀。
 // 返回：
 //   成功返回 kOk；长度不足或不一致返回 kInvalidArgument。
-Status CheckSamePrefix(const std::vector<int64_t>& first,
-                       const std::vector<int64_t>& second,
-                       size_t prefix_len, const char* message);
+Status CheckSamePrefix(const std::vector<I64>& first,
+                       const std::vector<I64>& second,
+                       Usize prefix_len, const C8* message);
 
 // 组装 KernelDesc。
 //
@@ -81,7 +82,7 @@ Status CheckSamePrefix(const std::vector<int64_t>& first,
 // 返回：
 //   成功返回 kOk；精度不可映射返回 kUnsupportedDtype。
 Status BuildKernelDesc(const runtime_graph::Op& op,
-                       const char* kernel_key,
+                       const C8* kernel_key,
                        const runtime_graph::Tensor& precision_tensor,
                        KernelDesc* desc);
 

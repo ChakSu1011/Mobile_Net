@@ -25,6 +25,7 @@
 #include "Runtime/executor/executor.h"
 #include "Runtime/loader/loader.h"
 #include "Runtime/scheduler/scheduler.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime {

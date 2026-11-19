@@ -26,6 +26,7 @@
 #include "attr.h"
 #include "op_env.h"
 #include "op_type.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime_graph {

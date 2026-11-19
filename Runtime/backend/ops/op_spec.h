@@ -20,6 +20,7 @@
 #include "Graph/include/op.h"
 #include "Graph/include/op_type.h"
 #include "Runtime/backend/kernel.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
@@ -29,13 +30,13 @@ struct OpSpec {
   runtime_graph::OpType op_type = runtime_graph::OpType::kUnknown;
 
   // 后端实现键，例如 "rms_norm"。
-  const char* kernel_key = "";
+  const C8* kernel_key = "";
 
   // 是否需要图级临时 workspace。
-  bool need_workspace = false;
+  Bool need_workspace = false;
 
   // workspace 字节数；need_workspace=false 时忽略。
-  uint64_t workspace_bytes = 0;
+  U64 workspace_bytes = 0;
 
   // 加载期校验 attr/形状/精度。
   //

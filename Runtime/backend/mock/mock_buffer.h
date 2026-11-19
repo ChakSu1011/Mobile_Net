@@ -18,6 +18,7 @@
 #include <cstdint>
 
 #include "Runtime/backend/backend.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace mock {
@@ -32,7 +33,7 @@ class MockBuffer final : public Buffer {
   //   alignment：对齐字节数，必须是 2 的幂；0 表示默认 64。
   // 异常：
   //   分配失败抛出 std::bad_alloc；构造函数由 Backend 捕获并转成错误码。
-  MockBuffer(uint64_t bytes, uint64_t alignment);
+  MockBuffer(U64 bytes, U64 alignment);
 
   ~MockBuffer() override;
 
@@ -45,7 +46,7 @@ class MockBuffer final : public Buffer {
   void* DevicePtr() const override;
 
   // 返回缓冲字节数。
-  uint64_t Bytes() const override;
+  U64 Bytes() const override;
 
   // 返回可读写的主机数据指针。
   //
@@ -58,7 +59,7 @@ class MockBuffer final : public Buffer {
   void* data_ = nullptr;
 
   // 分配的字节数。
-  uint64_t bytes_ = 0;
+  U64 bytes_ = 0;
 };
 
 }  // namespace mock

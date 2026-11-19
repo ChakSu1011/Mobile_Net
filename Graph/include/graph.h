@@ -30,6 +30,7 @@
 #include "op.h"
 #include "op_type.h"
 #include "tensor.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime_graph {
@@ -88,7 +89,7 @@ class Graph {
   //   CreateOutput，kSample 使用 CreateSample。
   virtual Status CreateOp(const std::string& name,
                           const std::vector<Tensor*>& src_tensors,
-                          size_t out_cnt, OpType op_type, const AttrMap& attr,
+                          Usize out_cnt, OpType op_type, const AttrMap& attr,
                           std::vector<Tensor*>* outputs);
 
   // 创建 constant tensor，并把传入 storage 保存到 tensor 内。
@@ -214,7 +215,7 @@ class Graph {
   // 返回：
   //   true 表示该指针等于 tensor_map_ 或 constant_tensor_map_ 中某个对象的
   //   get() 结果；空指针返回 false。
-  bool OwnsTensor(const Tensor* tensor) const;
+  Bool OwnsTensor(const Tensor* tensor) const;
 
   std::string name_;
   std::vector<Op*> op_list_;
@@ -263,7 +264,7 @@ class Graph {
   //   states：访问状态表，0=未访问，1=访问中，2=已完成。
   // 返回：
   //   成功返回 OK；发现依赖环或缺失 producer 时返回 STATE_ERROR。
-  Status VisitOp(Op* op, std::map<const Op*, int>* states);
+  Status VisitOp(Op* op, std::map<const Op*, I32>* states);
 };
 
 }  // namespace runtime_graph

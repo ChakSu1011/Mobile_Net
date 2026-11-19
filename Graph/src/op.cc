@@ -19,6 +19,7 @@
 
 #include "Runtime/common/status.h"
 #include "tensor.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime_graph {

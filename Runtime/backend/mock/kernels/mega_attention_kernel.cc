@@ -25,6 +25,7 @@
 
 #include "Runtime/backend/mock/kernels/kernel_common.h"
 #include "Runtime/backend/ops/attr_utils.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace mock {
@@ -47,17 +48,17 @@ class MegaAttentionKernel final : public Kernel {
       return status;
     }
 
-    const std::vector<int64_t> query = Dims(context.inputs[0].shape);
-    const std::vector<int64_t> key = Dims(context.inputs[1].shape);
-    const std::vector<int64_t> value = Dims(context.inputs[2].shape);
-    const std::vector<int64_t> output = Dims(context.outputs[0].shape);
+    const std::vector<I64> query = Dims(context.inputs[0].shape);
+    const std::vector<I64> key = Dims(context.inputs[1].shape);
+    const std::vector<I64> value = Dims(context.inputs[2].shape);
+    const std::vector<I64> output = Dims(context.outputs[0].shape);
     if (query.size() != 3 || key.size() != 3 || value.size() != 3 ||
         output != query) {
       return MakeStatus(ErrorCode::kInvalidArgument,
                         "MegaAttentionKernel: unexpected tensor shape");
     }
-    const int64_t batch = query[0];
-    const int64_t sequence = query[1];
+    const I64 batch = query[0];
+    const I64 sequence = query[1];
     if (batch < 0 || sequence <= 0) {
       return MakeStatus(ErrorCode::kInvalidArgument,
                         "MegaAttentionKernel: invalid batch/sequence");
@@ -68,11 +69,11 @@ class MegaAttentionKernel final : public Kernel {
                         "MegaAttentionKernel: K/V prefix mismatch");
     }
 
-    int64_t num_heads = 0;
-    int64_t num_kv_heads = 0;
-    int64_t head_dim = 0;
-    bool causal = true;
-    double softmax_scale = 0.0;
+    I64 num_heads = 0;
+    I64 num_kv_heads = 0;
+    I64 head_dim = 0;
+    Bool causal = true;
+    F64 softmax_scale = 0.0;
     status = GetIntAttr(*context.attrs, "num_heads", &num_heads);
     if (!status.ok()) {
       return status;
@@ -109,47 +110,47 @@ class MegaAttentionKernel final : public Kernel {
                         "MegaAttentionKernel: invalid softmax_scale");
     }
 
-    const int64_t group = num_heads / num_kv_heads;
-    const float scale = static_cast<float>(softmax_scale);
-    std::vector<float> accumulator(static_cast<size_t>(head_dim), 0.0f);
-    for (int64_t b = 0; b < batch; ++b) {
-      for (int64_t i = 0; i < sequence; ++i) {
-        const int64_t query_base = (b * sequence + i) * query[2];
-        for (int64_t head = 0; head < num_heads; ++head) {
-          const int64_t kv_head = head / group;
-          const int64_t query_head_base = query_base + head * head_dim;
-          const int64_t kv_base = (b * sequence) * key[2] +
+    const I64 group = num_heads / num_kv_heads;
+    const F32 scale = static_cast<F32>(softmax_scale);
+    std::vector<F32> accumulator(static_cast<Usize>(head_dim), 0.0f);
+    for (I64 b = 0; b < batch; ++b) {
+      for (I64 i = 0; i < sequence; ++i) {
+        const I64 query_base = (b * sequence + i) * query[2];
+        for (I64 head = 0; head < num_heads; ++head) {
+          const I64 kv_head = head / group;
+          const I64 query_head_base = query_base + head * head_dim;
+          const I64 kv_base = (b * sequence) * key[2] +
                                   kv_head * head_dim;
-          float max_score = -std::numeric_limits<float>::infinity();
-          const int64_t last_key = causal ? i : sequence - 1;
-          for (int64_t j = 0; j <= last_key; ++j) {
-            float dot = 0.0f;
-            const int64_t key_base = kv_base + j * key[2];
-            for (int64_t d = 0; d < head_dim; ++d) {
+          F32 max_score = -std::numeric_limits<F32>::infinity();
+          const I64 last_key = causal ? i : sequence - 1;
+          for (I64 j = 0; j <= last_key; ++j) {
+            F32 dot = 0.0f;
+            const I64 key_base = kv_base + j * key[2];
+            for (I64 d = 0; d < head_dim; ++d) {
               dot += ReadHalf(context.inputs[0], query_head_base + d) *
                      ReadHalf(context.inputs[1], key_base + d);
             }
-            const float score = dot * scale;
+            const F32 score = dot * scale;
             if (score > max_score) {
               max_score = score;
             }
           }
 
-          float sum = 0.0f;
+          F32 sum = 0.0f;
           std::fill(accumulator.begin(), accumulator.end(), 0.0f);
-          for (int64_t j = 0; j <= last_key; ++j) {
-            float dot = 0.0f;
-            const int64_t key_base = kv_base + j * key[2];
-            for (int64_t d = 0; d < head_dim; ++d) {
+          for (I64 j = 0; j <= last_key; ++j) {
+            F32 dot = 0.0f;
+            const I64 key_base = kv_base + j * key[2];
+            for (I64 d = 0; d < head_dim; ++d) {
               dot += ReadHalf(context.inputs[0], query_head_base + d) *
                      ReadHalf(context.inputs[1], key_base + d);
             }
-            const float probability = std::exp(dot * scale - max_score);
+            const F32 probability = std::exp(dot * scale - max_score);
             sum += probability;
-            for (int64_t d = 0; d < head_dim; ++d) {
-              const int64_t value_index =
+            for (I64 d = 0; d < head_dim; ++d) {
+              const I64 value_index =
                   (b * sequence + j) * value[2] + kv_head * head_dim + d;
-              accumulator[static_cast<size_t>(d)] +=
+              accumulator[static_cast<Usize>(d)] +=
                   probability * ReadHalf(context.inputs[2], value_index);
             }
           }
@@ -157,11 +158,11 @@ class MegaAttentionKernel final : public Kernel {
             return MakeStatus(ErrorCode::kKernelError,
                               "MegaAttentionKernel: softmax sum is zero");
           }
-          const float inverse = 1.0f / sum;
-          const int64_t output_base = query_base + head * head_dim;
-          for (int64_t d = 0; d < head_dim; ++d) {
+          const F32 inverse = 1.0f / sum;
+          const I64 output_base = query_base + head * head_dim;
+          for (I64 d = 0; d < head_dim; ++d) {
             WriteHalf(context.outputs[0], output_base + d,
-                      accumulator[static_cast<size_t>(d)] * inverse);
+                      accumulator[static_cast<Usize>(d)] * inverse);
           }
         }
       }

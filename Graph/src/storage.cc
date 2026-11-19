@@ -13,6 +13,7 @@
 
 #include <sstream>
 #include <string>
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime_graph {
@@ -30,11 +31,11 @@ std::string ShapeToString(const Shape& shape) {
   }
   std::ostringstream stream;
   stream << "[";
-  for (int64_t index = 0; index < shape.max_dim; ++index) {
+  for (I64 index = 0; index < shape.max_dim; ++index) {
     if (index != 0) {
       stream << ",";
     }
-    stream << shape.dims[static_cast<size_t>(index)];
+    stream << shape.dims[static_cast<Usize>(index)];
   }
   stream << "]";
   return stream.str();

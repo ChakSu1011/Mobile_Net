@@ -20,6 +20,7 @@
 #include "Runtime/backend/ops/attr_utils.h"
 #include "Runtime/backend/ops/op_specs.h"
 #include "Runtime/backend/ops/op_validation.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace {
@@ -35,12 +36,12 @@ Status ValidateMegaAttention(const runtime_graph::Op& op) {
             ": mega_attention requires 3 inputs and 1 output");
   }
 
-  int64_t num_heads = 0;
-  int64_t num_kv_heads = 0;
-  int64_t head_dim = 0;
-  bool causal = true;
-  bool merge_heads = true;
-  double softmax_scale = 0.0;
+  I64 num_heads = 0;
+  I64 num_kv_heads = 0;
+  I64 head_dim = 0;
+  Bool causal = true;
+  Bool merge_heads = true;
+  F64 softmax_scale = 0.0;
   Status status = GetIntAttr(op, "num_heads", &num_heads);
   if (!status.ok()) {
     return status;
@@ -72,7 +73,7 @@ Status ValidateMegaAttention(const runtime_graph::Op& op) {
             ": mega_attention only supports merge_heads=true");
   }
   if (HasAttr(op.Attrs(), "has_output_projection")) {
-    bool has_projection = false;
+    Bool has_projection = false;
     status = GetBoolAttr(op, "has_output_projection", &has_projection);
     if (!status.ok()) {
       return status;
@@ -85,7 +86,7 @@ Status ValidateMegaAttention(const runtime_graph::Op& op) {
     }
   }
   if (HasAttr(op.Attrs(), "use_kv_cache")) {
-    bool use_kv_cache = false;
+    Bool use_kv_cache = false;
     status = GetBoolAttr(op, "use_kv_cache", &use_kv_cache);
     if (!status.ok()) {
       return status;
@@ -98,7 +99,7 @@ Status ValidateMegaAttention(const runtime_graph::Op& op) {
     }
   }
   if (HasAttr(op.Attrs(), "sliding_window")) {
-    int64_t sliding_window = 0;
+    I64 sliding_window = 0;
     status = GetIntAttr(op, "sliding_window", &sliding_window);
     if (!status.ok()) {
       return status;
@@ -111,7 +112,7 @@ Status ValidateMegaAttention(const runtime_graph::Op& op) {
     }
   }
   if (HasAttr(op.Attrs(), "gqa_ratio")) {
-    int64_t gqa_ratio = 0;
+    I64 gqa_ratio = 0;
     status = GetIntAttr(op, "gqa_ratio", &gqa_ratio);
     if (!status.ok()) {
       return status;
@@ -130,8 +131,8 @@ Status ValidateMegaAttention(const runtime_graph::Op& op) {
   }
   (void)causal;
 
-  const char* op_name = op.Name().c_str();
-  for (size_t i = 0; i < sources.size(); ++i) {
+  const C8* op_name = op.Name().c_str();
+  for (Usize i = 0; i < sources.size(); ++i) {
     status = CheckTensor(*sources[i],
                          runtime_graph::Precision::kFloat16, op_name,
                          "input");
@@ -145,7 +146,7 @@ Status ValidateMegaAttention(const runtime_graph::Op& op) {
   if (!status.ok()) {
     return status;
   }
-  for (size_t i = 0; i < sources.size(); ++i) {
+  for (Usize i = 0; i < sources.size(); ++i) {
     status = CheckRank(*sources[i], 3, op_name, "input");
     if (!status.ok()) {
       return status;
@@ -156,13 +157,13 @@ Status ValidateMegaAttention(const runtime_graph::Op& op) {
     return status;
   }
 
-  const std::vector<int64_t> query =
+  const std::vector<I64> query =
       ShapeToDims(sources[0]->GetStorage().shape);
-  const std::vector<int64_t> key =
+  const std::vector<I64> key =
       ShapeToDims(sources[1]->GetStorage().shape);
-  const std::vector<int64_t> value =
+  const std::vector<I64> value =
       ShapeToDims(sources[2]->GetStorage().shape);
-  const std::vector<int64_t> output =
+  const std::vector<I64> output =
       ShapeToDims(destinations[0]->GetStorage().shape);
   if (query[0] != key[0] || query[0] != value[0] ||
       query[1] != key[1] || query[1] != value[1]) {

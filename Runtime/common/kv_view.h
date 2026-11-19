@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "Runtime/common/data_types.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime {
@@ -49,22 +50,22 @@ struct KvCacheSpec {
   KvCacheType type = KvCacheType::kFullAttention;
 
   // 每块 token 数；由后端 Attention tile 决定。
-  int32_t block_size = 0;
+  I32 block_size = 0;
 
   // 层数。
-  int32_t num_layers = 0;
+  I32 num_layers = 0;
 
   // KV 头数。
-  int32_t num_kv_heads = 0;
+  I32 num_kv_heads = 0;
 
   // 每头维度。
-  int32_t head_dim = 0;
+  I32 head_dim = 0;
 
   // KV 精度。
   DataType dtype = DataType::kFloat16;
 
   // 滑窗大小；全注意力为 0。
-  int32_t sliding_window = 0;
+  I32 sliding_window = 0;
 };
 
 // 单层 KV 视图。
@@ -83,7 +84,7 @@ struct KvLayerView {
   void* v_base = nullptr;
 
   // 单个物理块的字节步长。
-  int64_t block_stride = 0;
+  I64 block_stride = 0;
 };
 
 // KV 只读视图。
@@ -100,10 +101,10 @@ struct KvCacheView {
   std::vector<KvLayerView> layers;
 
   // 每块 token 数。
-  int32_t block_size = 0;
+  I32 block_size = 0;
 
   // 最大 token 容量。
-  int64_t max_total_tokens = 0;
+  I64 max_total_tokens = 0;
 };
 
 // KV 统计。
@@ -112,16 +113,16 @@ struct KvCacheView {
 //   供 EngineStats/日志与测试断言。
 struct KvCacheStats {
   // 每块 token 数。
-  int32_t block_size = 0;
+  I32 block_size = 0;
 
   // 物理块总数。
-  int64_t total_blocks = 0;
+  I64 total_blocks = 0;
 
   // 空闲块数。
-  int64_t free_blocks = 0;
+  I64 free_blocks = 0;
 
   // 最大 token 容量。
-  int64_t max_total_tokens = 0;
+  I64 max_total_tokens = 0;
 };
 
 }  // namespace runtime

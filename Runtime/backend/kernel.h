@@ -23,6 +23,7 @@
 #include "Runtime/backend/kernel_types.h"
 #include "Runtime/common/data_types.h"
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 

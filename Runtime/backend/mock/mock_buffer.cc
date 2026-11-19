@@ -17,19 +17,20 @@
 
 #if defined(_WIN32)
 #include <malloc.h>
+#include "Utils/cpp/types.h"
 #endif
 
 namespace mobilenet {
 namespace mock {
 
-MockBuffer::MockBuffer(uint64_t bytes, uint64_t alignment) : bytes_(bytes) {
-  const size_t align =
-      alignment == 0 ? static_cast<size_t>(64) : static_cast<size_t>(alignment);
+MockBuffer::MockBuffer(U64 bytes, U64 alignment) : bytes_(bytes) {
+  const Usize align =
+      alignment == 0 ? static_cast<Usize>(64) : static_cast<Usize>(alignment);
 #if defined(_WIN32)
-  data_ = _aligned_malloc(static_cast<size_t>(bytes), align);
+  data_ = _aligned_malloc(static_cast<Usize>(bytes), align);
 #else
   void* pointer = nullptr;
-  if (posix_memalign(&pointer, align, static_cast<size_t>(bytes)) != 0) {
+  if (posix_memalign(&pointer, align, static_cast<Usize>(bytes)) != 0) {
     pointer = nullptr;
   }
   data_ = pointer;
@@ -50,7 +51,7 @@ MockBuffer::~MockBuffer() {
 
 void* MockBuffer::DevicePtr() const { return data_; }
 
-uint64_t MockBuffer::Bytes() const { return bytes_; }
+U64 MockBuffer::Bytes() const { return bytes_; }
 
 void* MockBuffer::Data() const { return data_; }
 

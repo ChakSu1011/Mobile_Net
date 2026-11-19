@@ -29,6 +29,7 @@
 #include "Runtime/backend/kernel.h"
 #include "Runtime/backend/kernel_context.h"
 #include "Runtime/backend/kernel_types.h"
+#include "Utils/cpp/types.h"
 
 namespace {
 
@@ -61,16 +62,16 @@ using mobilenet::runtime_graph::Precision;
 // 假设备缓冲：用自身地址作为不透明设备句柄。
 class FakeBuffer final : public Buffer {
  public:
-  explicit FakeBuffer(uint64_t bytes) : bytes_(bytes) {}
+  explicit FakeBuffer(U64 bytes) : bytes_(bytes) {}
 
   void* DevicePtr() const override {
     return const_cast<FakeBuffer*>(this);
   }
 
-  uint64_t Bytes() const override { return bytes_; }
+  U64 Bytes() const override { return bytes_; }
 
  private:
-  uint64_t bytes_ = 0;
+  U64 bytes_ = 0;
 };
 
 // 假执行流：无状态。
@@ -137,7 +138,7 @@ class FakeBackend final : public Backend {
     return Status::Ok();
   }
 
-  Status Upload(void* device_ptr, const void* host_ptr, uint64_t bytes,
+  Status Upload(void* device_ptr, const void* host_ptr, U64 bytes,
                 Stream*) override {
     if (device_ptr == nullptr || host_ptr == nullptr || bytes == 0) {
       return mobilenet::MakeStatus(
@@ -147,7 +148,7 @@ class FakeBackend final : public Backend {
     return Status::Ok();
   }
 
-  Status Download(void* host_ptr, const void* device_ptr, uint64_t bytes,
+  Status Download(void* host_ptr, const void* device_ptr, U64 bytes,
                   Stream*) override {
     if (host_ptr == nullptr || device_ptr == nullptr || bytes == 0) {
       return mobilenet::MakeStatus(
@@ -204,7 +205,7 @@ class TestExecOpEnv final : public ExecOpEnv {
 
   Status Forward() override { return Status::Ok(); }
 
-  bool NeedTempData() const override { return false; }
+  Bool NeedTempData() const override { return false; }
 };
 
 // 测试用普通 OpEnv：不是 ExecOpEnv。
@@ -214,11 +215,11 @@ class TestPlainOpEnv final : public OpEnv {
 
   Status Forward() override { return Status::Ok(); }
 
-  bool NeedTempData() const override { return false; }
+  Bool NeedTempData() const override { return false; }
 };
 
 // 输出一条断言结果。
-void Expect(bool condition, const std::string& message, int* failures) {
+void Expect(Bool condition, const std::string& message, I32* failures) {
   if (condition) {
     std::cout << "PASS " << message << "\n";
     return;
@@ -228,7 +229,7 @@ void Expect(bool condition, const std::string& message, int* failures) {
 }
 
 // 验证 Precision↔DataType 映射与支持性判断。
-void CheckDataTypeMapping(int* failures) {
+void CheckDataTypeMapping(I32* failures) {
   Expect(DataTypeFromPrecision(Precision::kFloat16) == DataType::kFloat16,
          "precision float16 -> DataType float16", failures);
   Expect(PrecisionFromDataType(DataType::kFloat16) == Precision::kFloat16,
@@ -257,7 +258,7 @@ void CheckDataTypeMapping(int* failures) {
 }
 
 // 验证注册表的注册、重复/非法注册、创建与枚举。
-void CheckBackendRegistry(int* failures) {
+void CheckBackendRegistry(I32* failures) {
   BackendRegistry& registry = BackendRegistry::Instance();
   Expect(registry.Register("fake", CreateFakeBackend).ok(),
          "register fake backend", failures);
@@ -301,7 +302,7 @@ void CheckBackendRegistry(int* failures) {
 }
 
 // 验证 SetStepContext 的类型校验与空值处理。
-void CheckStepContext(int* failures) {
+void CheckStepContext(I32* failures) {
   StepContext context;
   TestExecOpEnv exec_env(nullptr);
   Expect(SetStepContext(&exec_env, &context).ok(),
@@ -318,7 +319,7 @@ void CheckStepContext(int* failures) {
 }
 
 // 验证 KernelContext/TensorView 默认值。
-void CheckKernelContextDefaults(int* failures) {
+void CheckKernelContextDefaults(I32* failures) {
   KernelContext context;
   Expect(context.inputs == nullptr && context.input_count == 0,
          "KernelContext inputs default empty", failures);
@@ -341,8 +342,8 @@ void CheckKernelContextDefaults(int* failures) {
 // 宏自注册：验证静态注册路径；名称固定，避免与测试内注册冲突。
 MOBILENET_REGISTER_BACKEND("fake_macro", CreateFakeBackend);
 
-int main() {
-  int failures = 0;
+I32 main() {
+  I32 failures = 0;
 
   CheckDataTypeMapping(&failures);
   CheckBackendRegistry(&failures);

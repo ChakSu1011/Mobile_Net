@@ -19,6 +19,7 @@
 #include <memory>
 
 #include "Runtime/backend/backend.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace mock {
@@ -78,11 +79,11 @@ class MockBackend final : public Backend {
                       std::unique_ptr<Buffer>* buffer) override;
 
   // 主机到设备拷贝；Mock 实现为 memcpy。
-  Status Upload(void* device_ptr, const void* host_ptr, uint64_t bytes,
+  Status Upload(void* device_ptr, const void* host_ptr, U64 bytes,
                 Stream* stream) override;
 
   // 设备到主机拷贝；Mock 实现为 memcpy。
-  Status Download(void* host_ptr, const void* device_ptr, uint64_t bytes,
+  Status Download(void* host_ptr, const void* device_ptr, U64 bytes,
                   Stream* stream) override;
 
   // 按 kernel_key 创建 CPU 参考 Kernel。
@@ -104,7 +105,7 @@ class MockBackend final : public Backend {
 
  private:
   // 是否已完成 Init。
-  bool initialized_ = false;
+  Bool initialized_ = false;
 
   // 能力声明。
   BackendCapability capability_;

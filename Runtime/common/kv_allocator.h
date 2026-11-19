@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime {
@@ -45,7 +46,7 @@ class KvAllocator {
   // 返回：
   //   成功返回 kOk；容量不足返回 kDeviceOom；参数非法返回
   //   kInvalidArgument。失败时不得改变任何分配状态。
-  virtual Status Reserve(uint64_t request_id, int64_t new_tokens) = 0;
+  virtual Status Reserve(U64 request_id, I64 new_tokens) = 0;
 
   // 释放请求占用的全部 KV 块。
   //
@@ -53,16 +54,16 @@ class KvAllocator {
   //   request_id：请求 ID。
   // 说明：
   //   幂等；未分配过的请求视为成功。释放顺序由实现保证（逆序归还）。
-  virtual void Release(uint64_t request_id) = 0;
+  virtual void Release(U64 request_id) = 0;
 
   // 返回当前空闲块数。
-  virtual int64_t FreeBlocks() const = 0;
+  virtual I64 FreeBlocks() const = 0;
 
   // 返回每个块的 token 数；由后端 Attention tile 决定。
-  virtual int32_t BlockSize() const = 0;
+  virtual I32 BlockSize() const = 0;
 
   // 返回 KV 能容纳的最大 token 总数（blocks × block_size）。
-  virtual int64_t MaxTotalTokens() const = 0;
+  virtual I64 MaxTotalTokens() const = 0;
 
   // 读取请求的逻辑块表（逻辑块下标 → 物理块 ID）。
   //
@@ -71,8 +72,8 @@ class KvAllocator {
   //   table：输出参数，成功时写入块表快照。
   // 返回：
   //   成功返回 kOk；请求不存在返回 kRequestNotFound。
-  virtual Status GetBlockTable(uint64_t request_id,
-                              std::vector<int32_t>* table) const = 0;
+  virtual Status GetBlockTable(U64 request_id,
+                              std::vector<I32>* table) const = 0;
 
   // 计算一段连续 token 的 KV 写入 slot。
   //
@@ -83,8 +84,8 @@ class KvAllocator {
   //   slots：输出参数，长度为 count。
   // 返回：
   //   成功返回 kOk；请求不存在或区间越界返回 kInvalidArgument。
-  virtual Status GetSlots(uint64_t request_id, int64_t first_token,
-                          int64_t count, std::vector<int64_t>* slots) const = 0;
+  virtual Status GetSlots(U64 request_id, I64 first_token,
+                          I64 count, std::vector<I64>* slots) const = 0;
 };
 
 }  // namespace runtime

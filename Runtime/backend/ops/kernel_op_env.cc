@@ -20,12 +20,13 @@
 #include "Runtime/backend/backend.h"
 #include "Runtime/backend/kernel.h"
 #include "Runtime/backend/kernel_types.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace {
 
 // workspace 共享存储键前缀。
-constexpr char kWorkspacePrefix[] = "workspace.";
+constexpr C8 kWorkspacePrefix[] = "workspace.";
 
 }  // namespace
 
@@ -49,7 +50,7 @@ Status KernelOpEnv::Init(runtime_graph::GraphEnv* graph_env) {
 
   inputs_.clear();
   inputs_.reserve(op_->SrcTensors().size());
-  for (size_t i = 0; i < op_->SrcTensors().size(); ++i) {
+  for (Usize i = 0; i < op_->SrcTensors().size(); ++i) {
     runtime_graph::TensorView view;
     status = BuildView(*op_->SrcTensors()[i], "input", &view);
     if (!status.ok()) {
@@ -59,7 +60,7 @@ Status KernelOpEnv::Init(runtime_graph::GraphEnv* graph_env) {
   }
   outputs_.clear();
   outputs_.reserve(op_->DstTensors().size());
-  for (size_t i = 0; i < op_->DstTensors().size(); ++i) {
+  for (Usize i = 0; i < op_->DstTensors().size(); ++i) {
     runtime_graph::TensorView view;
     status = BuildView(*op_->DstTensors()[i], "output", &view);
     if (!status.ok()) {
@@ -113,9 +114,9 @@ Status KernelOpEnv::Forward() {
 
   runtime_graph::KernelContext context;
   context.inputs = inputs_.data();
-  context.input_count = static_cast<uint32_t>(inputs_.size());
+  context.input_count = static_cast<U32>(inputs_.size());
   context.outputs = outputs_.data();
-  context.output_count = static_cast<uint32_t>(outputs_.size());
+  context.output_count = static_cast<U32>(outputs_.size());
   context.attrs = &op_->Attrs();
   context.backend = step_context_->backend != nullptr
                         ? step_context_->backend
@@ -126,7 +127,7 @@ Status KernelOpEnv::Forward() {
   context.seq_len = step_context_->packed_tokens;
   if (!outputs_.empty() && outputs_[0].shape.max_dim >= 3) {
     context.seq_len =
-        static_cast<int32_t>(outputs_[0].shape.dims[1]);
+        static_cast<I32>(outputs_[0].shape.dims[1]);
   }
 
   runtime_graph::AttentionContext attention;
@@ -173,12 +174,12 @@ Status KernelOpEnv::Forward() {
   return Status::Ok();
 }
 
-bool KernelOpEnv::NeedTempData() const {
+Bool KernelOpEnv::NeedTempData() const {
   return spec_ != nullptr && spec_->need_workspace;
 }
 
 Status KernelOpEnv::BuildView(const runtime_graph::Tensor& tensor,
-                              const char* role,
+                              const C8* role,
                               runtime_graph::TensorView* view) const {
   if (view == nullptr) {
     return MakeStatus(ErrorCode::kInvalidArgument,

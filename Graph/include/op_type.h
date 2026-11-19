@@ -1,3 +1,4 @@
+#include "Utils/cpp/types.h"
 // 模块：Runtime Graph OpType 枚举
 //
 // 职责：
@@ -69,7 +70,7 @@ enum class OpType {
 //   op_type：op 类型。
 // 返回：
 //   小写下划线形式的常量字符串，例如 "mega_attention"；未知值返回 "unknown"。
-const char* OpTypeToStr(OpType op_type);
+const C8* OpTypeToStr(OpType op_type);
 
 }  // namespace runtime_graph
 }  // namespace mobilenet

@@ -16,6 +16,7 @@
 #define MOBILENET_GRAPH_INCLUDE_RUNTIME_GRAPH_OP_ENV_H_
 
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime_graph {
@@ -66,7 +67,7 @@ class OpEnv {
   //
   // 返回：
   //   true 表示 Manager 需要为该 op 预留临时 workspace。
-  virtual bool NeedTempData() const = 0;
+  virtual Bool NeedTempData() const = 0;
 
  protected:
   Op* op_ = nullptr;
@@ -96,7 +97,7 @@ class MegaAttentionOpEnv : public OpEnv {
   Status Forward() override;
 
   // 返回 true，表示该 op 需要 temp data。
-  bool NeedTempData() const override;
+  Bool NeedTempData() const override;
 };
 
 }  // namespace runtime_graph

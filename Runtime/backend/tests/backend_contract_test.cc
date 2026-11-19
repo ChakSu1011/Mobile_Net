@@ -30,6 +30,7 @@
 #include "Runtime/backend/kernel_types.h"
 #include "Runtime/backend/mock/half_utils.h"
 #include "Runtime/common/data_types.h"
+#include "Utils/cpp/types.h"
 
 namespace {
 
@@ -54,7 +55,7 @@ using mobilenet::runtime_graph::Shape;
 using mobilenet::runtime_graph::TensorView;
 
 // 输出一条断言结果。
-void Expect(bool condition, const std::string& message, int* failures) {
+void Expect(Bool condition, const std::string& message, I32* failures) {
   if (condition) {
     std::cout << "PASS " << message << "\n";
     return;
@@ -64,16 +65,16 @@ void Expect(bool condition, const std::string& message, int* failures) {
 }
 
 // 输出浮点比较断言。
-void ExpectNear(float actual, float expected, float tolerance,
-                const std::string& message, int* failures) {
+void ExpectNear(F32 actual, F32 expected, F32 tolerance,
+                const std::string& message, I32* failures) {
   Expect(std::fabs(actual - expected) <= tolerance, message, failures);
 }
 
 // 创建指定维度的 Shape。
-Shape MakeShape(const std::vector<int64_t>& dims) {
+Shape MakeShape(const std::vector<I64>& dims) {
   Shape shape;
-  shape.max_dim = static_cast<int64_t>(dims.size());
-  for (size_t i = 0; i < dims.size(); ++i) {
+  shape.max_dim = static_cast<I64>(dims.size());
+  for (Usize i = 0; i < dims.size(); ++i) {
     shape.dims[i] = dims[i];
     shape.pitch[i] = dims[i];
   }
@@ -81,16 +82,16 @@ Shape MakeShape(const std::vector<int64_t>& dims) {
 }
 
 // 计算维度元素数。
-uint64_t Elements(const std::vector<int64_t>& dims) {
-  uint64_t total = 1;
-  for (const int64_t dim : dims) {
-    total *= static_cast<uint64_t>(dim);
+U64 Elements(const std::vector<I64>& dims) {
+  U64 total = 1;
+  for (const I64 dim : dims) {
+    total *= static_cast<U64>(dim);
   }
   return total;
 }
 
 // 创建并绑定一个 Mock 设备缓冲与张量视图。
-bool CreateTensor(Backend* backend, const std::vector<int64_t>& dims,
+Bool CreateTensor(Backend* backend, const std::vector<I64>& dims,
                   DataType dtype, std::unique_ptr<Buffer>* buffer,
                   TensorView* view) {
   BufferDesc desc;
@@ -110,44 +111,44 @@ bool CreateTensor(Backend* backend, const std::vector<int64_t>& dims,
   return true;
 }
 
-// 把 float 序列写成 half 张量。
+// 把 F32 序列写成 half 张量。
 void WriteHalves(const TensorView& view,
-                 const std::vector<float>& values) {
+                 const std::vector<F32>& values) {
   auto* buffer = static_cast<Buffer*>(view.data);
-  auto* data = static_cast<uint16_t*>(buffer->DevicePtr());
-  for (size_t i = 0; i < values.size(); ++i) {
+  auto* data = static_cast<U16*>(buffer->DevicePtr());
+  for (Usize i = 0; i < values.size(); ++i) {
     data[i] = FloatToHalf(values[i]);
   }
 }
 
 // 把 int64 序列写成张量。
 void WriteInt64(const TensorView& view,
-                const std::vector<int64_t>& values) {
+                const std::vector<I64>& values) {
   auto* buffer = static_cast<Buffer*>(view.data);
-  auto* data = static_cast<int64_t*>(buffer->DevicePtr());
-  for (size_t i = 0; i < values.size(); ++i) {
+  auto* data = static_cast<I64*>(buffer->DevicePtr());
+  for (Usize i = 0; i < values.size(); ++i) {
     data[i] = values[i];
   }
 }
 
-// 读取 half 张量为 float 序列。
-std::vector<float> ReadHalves(const TensorView& view, size_t count) {
+// 读取 half 张量为 F32 序列。
+std::vector<F32> ReadHalves(const TensorView& view, Usize count) {
   const auto* buffer = static_cast<const Buffer*>(view.data);
   const auto* data =
-      static_cast<const uint16_t*>(buffer->DevicePtr());
-  std::vector<float> values(count, 0.0f);
-  for (size_t i = 0; i < count; ++i) {
+      static_cast<const U16*>(buffer->DevicePtr());
+  std::vector<F32> values(count, 0.0f);
+  for (Usize i = 0; i < count; ++i) {
     values[i] = HalfToFloat(data[i]);
   }
   return values;
 }
 
 // 读取 int64 张量。
-std::vector<int64_t> ReadInt64(const TensorView& view, size_t count) {
+std::vector<I64> ReadInt64(const TensorView& view, Usize count) {
   const auto* buffer = static_cast<const Buffer*>(view.data);
-  const auto* data = static_cast<const int64_t*>(buffer->DevicePtr());
-  std::vector<int64_t> values(count, 0);
-  for (size_t i = 0; i < count; ++i) {
+  const auto* data = static_cast<const I64*>(buffer->DevicePtr());
+  std::vector<I64> values(count, 0);
+  for (Usize i = 0; i < count; ++i) {
     values[i] = data[i];
   }
   return values;
@@ -164,7 +165,7 @@ Status CreateMockBackend(std::unique_ptr<Backend>* backend) {
 }
 
 // 验证注册表与能力声明。
-void TestRegistry(int* failures) {
+void TestRegistry(I32* failures) {
   std::unique_ptr<Backend> backend;
   const Status created = BackendRegistry::Instance().Create(
       "mock", BackendConfig{}, &backend);
@@ -189,7 +190,7 @@ void TestRegistry(int* failures) {
 }
 
 // 验证生命周期状态机。
-void TestLifecycle(int* failures) {
+void TestLifecycle(I32* failures) {
   std::unique_ptr<Backend> backend;
   Status status = BackendRegistry::Instance().Create(
       "mock", BackendConfig{}, &backend);
@@ -199,9 +200,9 @@ void TestLifecycle(int* failures) {
   }
   Expect(backend->Init(BackendConfig{}).ok(), "lifecycle Init", failures);
   Expect(backend->Init(BackendConfig{}).code() == ErrorCode::kStateError,
-         "double Init rejected", failures);
+         "F64 Init rejected", failures);
   Expect(backend->Deinit().ok(), "lifecycle Deinit", failures);
-  Expect(backend->Deinit().ok(), "double Deinit idempotent", failures);
+  Expect(backend->Deinit().ok(), "F64 Deinit idempotent", failures);
   mobilenet::BackendCapability capability;
   Expect(backend->Capability(&capability).code() ==
              ErrorCode::kStateError,
@@ -217,7 +218,7 @@ void TestLifecycle(int* failures) {
 }
 
 // 验证 Buffer 与 H2D/D2H 往返。
-void TestBuffers(int* failures) {
+void TestBuffers(I32* failures) {
   std::unique_ptr<Backend> backend;
   if (!CreateMockBackend(&backend).ok()) {
     Expect(false, "buffer backend init", failures);
@@ -230,15 +231,15 @@ void TestBuffers(int* failures) {
   Expect(backend->CreateBuffer(desc, &buffer).ok() && buffer != nullptr,
          "CreateBuffer 257 bytes", failures);
   if (buffer != nullptr) {
-    std::vector<uint8_t> source(257);
-    for (size_t i = 0; i < source.size(); ++i) {
-      source[i] = static_cast<uint8_t>(i);
+    std::vector<U8> source(257);
+    for (Usize i = 0; i < source.size(); ++i) {
+      source[i] = static_cast<U8>(i);
     }
     Expect(backend->Upload(buffer->DevicePtr(), source.data(),
                            source.size(), nullptr)
                .ok(),
            "Upload", failures);
-    std::vector<uint8_t> destination(257, 0);
+    std::vector<U8> destination(257, 0);
     Expect(backend->Download(destination.data(), buffer->DevicePtr(),
                              destination.size(), nullptr)
                .ok(),
@@ -265,7 +266,7 @@ void TestBuffers(int* failures) {
              ErrorCode::kBufferError,
          "non-power-of-two alignment rejected", failures);
 
-  const uint8_t dummy_source[] = {0};
+  const U8 dummy_source[] = {0};
   Expect(backend->Upload(nullptr, dummy_source, 1, nullptr).code() ==
              ErrorCode::kInvalidArgument,
          "null Upload rejected", failures);
@@ -273,13 +274,13 @@ void TestBuffers(int* failures) {
 }
 
 // 验证 ConvertParam 的直通与 FP32→FP16。
-void TestConvertParam(int* failures) {
+void TestConvertParam(I32* failures) {
   std::unique_ptr<Backend> backend;
   if (!CreateMockBackend(&backend).ok()) {
     Expect(false, "convert backend init", failures);
     return;
   }
-  const float source[] = {1.0f, -2.5f, 0.5f};
+  const F32 source[] = {1.0f, -2.5f, 0.5f};
   ParamDesc desc;
   desc.host_ptr = source;
   desc.bytes = sizeof(source);
@@ -290,12 +291,12 @@ void TestConvertParam(int* failures) {
          "ConvertParam float32->float16", failures);
   if (buffer != nullptr) {
     const auto* data =
-        static_cast<const uint16_t*>(buffer->DevicePtr());
+        static_cast<const U16*>(buffer->DevicePtr());
     Expect(data[0] == FloatToHalf(1.0f) &&
                data[1] == FloatToHalf(-2.5f) &&
                data[2] == FloatToHalf(0.5f),
            "ConvertParam half values", failures);
-    Expect(buffer->Bytes() == 3 * sizeof(uint16_t),
+    Expect(buffer->Bytes() == 3 * sizeof(U16),
            "ConvertParam target bytes", failures);
   }
 
@@ -312,18 +313,18 @@ void TestConvertParam(int* failures) {
 }
 
 // 创建 Kernel 并校验 key 分发。
-void TestKernelCreation(int* failures) {
+void TestKernelCreation(I32* failures) {
   std::unique_ptr<Backend> backend;
   if (!CreateMockBackend(&backend).ok()) {
     Expect(false, "kernel backend init", failures);
     return;
   }
-  const char* keys[] = {"gather",        "rms_norm",
+  const C8* keys[] = {"gather",        "rms_norm",
                         "linear",        "linear_swi_glu",
                         "per_head_rmsnorm_rope",
                         "mega_attention", "add",
                         "sample_argmax"};
-  for (const char* key : keys) {
+  for (const C8* key : keys) {
     KernelDesc desc;
     desc.op_type = OpType::kAdd;
     desc.precision = DataType::kFloat16;
@@ -344,7 +345,7 @@ void TestKernelCreation(int* failures) {
 }
 
 // 验证 half 位级转换的关键边界。
-void TestHalfUtils(int* failures) {
+void TestHalfUtils(I32* failures) {
   Expect(FloatToHalf(1.0f) == 0x3C00u, "half 1.0 bit pattern", failures);
   Expect(FloatToHalf(-2.5f) == 0xC100u, "half -2.5 bit pattern", failures);
   Expect(FloatToHalf(0.0f) == 0x0000u, "half 0.0 bit pattern", failures);
@@ -352,27 +353,27 @@ void TestHalfUtils(int* failures) {
   Expect(FloatToHalf(1.0e5f) == 0x7C00u, "half overflow to inf", failures);
   Expect(FloatToHalf(-1.0e5f) == 0xFC00u,
          "half negative overflow to inf", failures);
-  Expect(FloatToHalf(std::numeric_limits<float>::infinity()) == 0x7C00u,
+  Expect(FloatToHalf(std::numeric_limits<F32>::infinity()) == 0x7C00u,
          "half +inf", failures);
-  Expect(FloatToHalf(-std::numeric_limits<float>::infinity()) == 0xFC00u,
+  Expect(FloatToHalf(-std::numeric_limits<F32>::infinity()) == 0xFC00u,
          "half -inf", failures);
-  const uint16_t nan_bits =
-      FloatToHalf(std::numeric_limits<float>::quiet_NaN());
+  const U16 nan_bits =
+      FloatToHalf(std::numeric_limits<F32>::quiet_NaN());
   Expect((nan_bits & 0x7C00u) == 0x7C00u && (nan_bits & 0x03FFu) != 0,
          "half NaN", failures);
 
-  ExpectNear(HalfToFloat(0x3C00u), 1.0f, 0.0f, "half->float 1.0",
+  ExpectNear(HalfToFloat(0x3C00u), 1.0f, 0.0f, "half->F32 1.0",
              failures);
-  ExpectNear(HalfToFloat(0xC100u), -2.5f, 0.0f, "half->float -2.5",
+  ExpectNear(HalfToFloat(0xC100u), -2.5f, 0.0f, "half->F32 -2.5",
              failures);
   ExpectNear(HalfToFloat(0x0001u), 5.9604645e-8f, 1e-14f,
-             "half->float smallest subnormal", failures);
+             "half->F32 smallest subnormal", failures);
   Expect(BFloat16ToHalf(0x3F80u) == 0x3C00u,
          "bfloat16 1.0 -> half 1.0", failures);
 }
 
 // 运行一个简单 Kernel。
-Status RunKernel(Backend* backend, const char* key, OpType op_type,
+Status RunKernel(Backend* backend, const C8* key, OpType op_type,
                  const std::vector<TensorView>& inputs,
                  const std::vector<TensorView>& outputs,
                  const mobilenet::runtime_graph::AttrMap& attrs) {
@@ -387,9 +388,9 @@ Status RunKernel(Backend* backend, const char* key, OpType op_type,
   }
   KernelContext context;
   context.inputs = inputs.data();
-  context.input_count = static_cast<uint32_t>(inputs.size());
+  context.input_count = static_cast<U32>(inputs.size());
   context.outputs = const_cast<TensorView*>(outputs.data());
-  context.output_count = static_cast<uint32_t>(outputs.size());
+  context.output_count = static_cast<U32>(outputs.size());
   context.attrs = &attrs;
   context.backend = backend;
   status = kernel->Execute(context);
@@ -398,7 +399,7 @@ Status RunKernel(Backend* backend, const char* key, OpType op_type,
 }
 
 // 验证 8 个 CPU Kernel 的基础数值。
-void TestKernels(int* failures) {
+void TestKernels(I32* failures) {
   std::unique_ptr<Backend> backend;
   if (!CreateMockBackend(&backend).ok()) {
     Expect(false, "kernel execute backend init", failures);
@@ -425,7 +426,7 @@ void TestKernels(int* failures) {
       const Status status = RunKernel(backend.get(), "add", OpType::kAdd,
                                       {a, b}, {out}, empty_attrs);
       Expect(status.ok(), "add kernel executes", failures);
-      const std::vector<float> values = ReadHalves(out, 4);
+      const std::vector<F32> values = ReadHalves(out, 4);
       ExpectNear(values[0], 11.0f, 1e-3f, "add value 0", failures);
       ExpectNear(values[1], 22.0f, 1e-3f, "add value 1", failures);
       ExpectNear(values[2], 33.0f, 1e-3f, "add value 2", failures);
@@ -452,12 +453,12 @@ void TestKernels(int* failures) {
       WriteInt64(ids, {0, 1});
       WriteHalves(weight, {1.0f, 2.0f, 3.0f, 4.0f});
       mobilenet::runtime_graph::AttrMap attrs;
-      attrs["axis"] = static_cast<int64_t>(0);
+      attrs["axis"] = static_cast<I64>(0);
       const Status status = RunKernel(backend.get(), "gather",
                                       OpType::kGather, {ids, weight},
                                       {out}, attrs);
       Expect(status.ok(), "gather kernel executes", failures);
-      const std::vector<float> values = ReadHalves(out, 4);
+      const std::vector<F32> values = ReadHalves(out, 4);
       ExpectNear(values[0], 1.0f, 0.0f, "gather value 0", failures);
       ExpectNear(values[1], 2.0f, 0.0f, "gather value 1", failures);
       ExpectNear(values[2], 3.0f, 0.0f, "gather value 2", failures);
@@ -485,13 +486,13 @@ void TestKernels(int* failures) {
       WriteHalves(w, {1.0f, 1.0f});
       mobilenet::runtime_graph::AttrMap attrs;
       attrs["eps"] = 0.0;
-      attrs["normalized_shape"] = static_cast<int64_t>(2);
+      attrs["normalized_shape"] = static_cast<I64>(2);
       const Status status = RunKernel(backend.get(), "rms_norm",
                                       OpType::kRmsNorm, {x, w}, {out},
                                       attrs);
       Expect(status.ok(), "rms_norm kernel executes", failures);
-      const std::vector<float> values = ReadHalves(out, 2);
-      const float scale = 1.0f / std::sqrt(12.5f);
+      const std::vector<F32> values = ReadHalves(out, 2);
+      const F32 scale = 1.0f / std::sqrt(12.5f);
       ExpectNear(values[0], 3.0f * scale, 1e-3f,
                  "rms_norm value 0", failures);
       ExpectNear(values[1], 4.0f * scale, 1e-3f,
@@ -521,7 +522,7 @@ void TestKernels(int* failures) {
                                       OpType::kLinear, {x, weight}, {out},
                                       empty_attrs);
       Expect(status.ok(), "linear kernel executes", failures);
-      const std::vector<float> values = ReadHalves(out, 2);
+      const std::vector<F32> values = ReadHalves(out, 2);
       ExpectNear(values[0], 1.0f, 1e-3f, "linear value 0", failures);
       ExpectNear(values[1], 2.0f, 1e-3f, "linear value 1", failures);
     } else {
@@ -554,9 +555,9 @@ void TestKernels(int* failures) {
                                       OpType::kLinearSwiGlu, {x, gate, up},
                                       {out}, empty_attrs);
       Expect(status.ok(), "linear_swi_glu kernel executes", failures);
-      const std::vector<float> values = ReadHalves(out, 2);
-      const float silu_one = 1.0f / (1.0f + std::exp(-1.0f));
-      const float silu_two = 2.0f / (1.0f + std::exp(-2.0f));
+      const std::vector<F32> values = ReadHalves(out, 2);
+      const F32 silu_one = 1.0f / (1.0f + std::exp(-1.0f));
+      const F32 silu_two = 2.0f / (1.0f + std::exp(-2.0f));
       ExpectNear(values[0], silu_one, 1e-3f,
                  "linear_swi_glu value 0", failures);
       ExpectNear(values[1], silu_two * 2.0f, 1e-3f,
@@ -593,8 +594,8 @@ void TestKernels(int* failures) {
       WriteHalves(norm, {1.0f, 1.0f});
       WriteInt64(positions, {0});
       mobilenet::runtime_graph::AttrMap attrs;
-      attrs["num_heads"] = static_cast<int64_t>(1);
-      attrs["head_dim"] = static_cast<int64_t>(2);
+      attrs["num_heads"] = static_cast<I64>(1);
+      attrs["head_dim"] = static_cast<I64>(2);
       attrs["norm_eps"] = 0.0;
       attrs["rope_theta"] = 10000.0;
       attrs["rope_layout"] = std::string("neox");
@@ -604,8 +605,8 @@ void TestKernels(int* failures) {
           {x, weight, norm, positions}, {out}, attrs);
       Expect(status.ok(), "per_head_rmsnorm_rope kernel executes",
              failures);
-      const std::vector<float> values = ReadHalves(out, 2);
-      const float scale = 1.0f / std::sqrt(2.5f);
+      const std::vector<F32> values = ReadHalves(out, 2);
+      const F32 scale = 1.0f / std::sqrt(2.5f);
       ExpectNear(values[0], scale, 1e-3f,
                  "per_head_rmsnorm_rope value 0", failures);
       ExpectNear(values[1], 2.0f * scale, 1e-3f,
@@ -637,16 +638,16 @@ void TestKernels(int* failures) {
       WriteHalves(k, {1.0f, 2.0f});
       WriteHalves(v, {3.0f, 4.0f});
       mobilenet::runtime_graph::AttrMap attrs;
-      attrs["num_heads"] = static_cast<int64_t>(1);
-      attrs["num_kv_heads"] = static_cast<int64_t>(1);
-      attrs["head_dim"] = static_cast<int64_t>(2);
+      attrs["num_heads"] = static_cast<I64>(1);
+      attrs["num_kv_heads"] = static_cast<I64>(1);
+      attrs["head_dim"] = static_cast<I64>(2);
       attrs["causal"] = true;
       attrs["softmax_scale"] = 1.0;
       const Status status = RunKernel(backend.get(), "mega_attention",
                                       OpType::kMegaAttention, {q, k, v},
                                       {out}, attrs);
       Expect(status.ok(), "mega_attention kernel executes", failures);
-      const std::vector<float> values = ReadHalves(out, 2);
+      const std::vector<F32> values = ReadHalves(out, 2);
       ExpectNear(values[0], 3.0f, 1e-3f,
                  "mega_attention value 0", failures);
       ExpectNear(values[1], 4.0f, 1e-3f,
@@ -669,12 +670,12 @@ void TestKernels(int* failures) {
       WriteHalves(logits, {0.1f, 0.9f, 0.5f});
       mobilenet::runtime_graph::AttrMap attrs;
       attrs["method"] = std::string("argmax");
-      attrs["axis"] = static_cast<int64_t>(-1);
+      attrs["axis"] = static_cast<I64>(-1);
       const Status status = RunKernel(backend.get(), "sample_argmax",
                                       OpType::kSample, {logits}, {out},
                                       attrs);
       Expect(status.ok(), "sample kernel executes", failures);
-      const std::vector<int64_t> values = ReadInt64(out, 1);
+      const std::vector<I64> values = ReadInt64(out, 1);
       Expect(values[0] == 1, "sample argmax value", failures);
     } else {
       Expect(false, "sample buffers", failures);
@@ -686,8 +687,8 @@ void TestKernels(int* failures) {
 
 }  // namespace
 
-int main() {
-  int failures = 0;
+I32 main() {
+  I32 failures = 0;
   TestHalfUtils(&failures);
   TestRegistry(&failures);
   TestLifecycle(&failures);

@@ -36,6 +36,7 @@
 #include "storage.h"
 #include "tensor.h"
 #include "types.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime_graph {
@@ -55,42 +56,42 @@ void ThrowIfError(const Status& status) {
   }
 }
 
-// 把 Python 列表转换为 int64_t 数组。
+// 把 Python 列表转换为 I64 数组。
 //
 // 参数：
 //   value：Python list 或 tuple。
 // 返回：
-//   int64_t 数组。
+//   I64 数组。
 // 异常：
-//   元素不是 bool/int 时抛出 std::invalid_argument。
-std::vector<int64_t> ToInt64Vector(const py::handle& value) {
-  std::vector<int64_t> result;
+//   元素不是 Bool/I32 时抛出 std::invalid_argument。
+std::vector<I64> ToInt64Vector(const py::handle& value) {
+  std::vector<I64> result;
   for (py::handle item : py::reinterpret_borrow<py::sequence>(value)) {
     if (!py::isinstance<py::int_>(item)) {
       throw std::invalid_argument("attribute array elements must be integers");
     }
-    result.push_back(py::cast<int64_t>(item));
+    result.push_back(py::cast<I64>(item));
   }
   return result;
 }
 
-// 把 Python 列表转换为 double 数组。
+// 把 Python 列表转换为 F64 数组。
 //
 // 参数：
 //   value：Python list 或 tuple。
 // 返回：
-//   double 数组。
+//   F64 数组。
 // 异常：
-//   元素不是 int/float 时抛出 std::invalid_argument。
-std::vector<double> ToDoubleVector(const py::handle& value) {
-  std::vector<double> result;
+//   元素不是 I32/F32 时抛出 std::invalid_argument。
+std::vector<F64> ToDoubleVector(const py::handle& value) {
+  std::vector<F64> result;
   for (py::handle item : py::reinterpret_borrow<py::sequence>(value)) {
     if (!py::isinstance<py::int_>(item) &&
         !py::isinstance<py::float_>(item)) {
       throw std::invalid_argument(
           "attribute array elements must be numeric");
     }
-    result.push_back(py::cast<double>(item));
+    result.push_back(py::cast<F64>(item));
   }
   return result;
 }
@@ -118,28 +119,28 @@ std::vector<std::string> ToStringVector(const py::handle& value) {
 // 把 Python 值转换为 AttrValue。
 //
 // 参数：
-//   value：Python bool/int/float/str/list/tuple。
+//   value：Python Bool/I32/F32/str/list/tuple。
 // 返回：
-//   AttrValue；空 list 按 vector<int64_t> 处理。
+//   AttrValue；空 list 按 vector<I64> 处理。
 // 异常：
 //   类型不支持或数组元素类型混合时抛出 std::invalid_argument。
 AttrValue ToAttrValue(const py::handle& value) {
   if (py::isinstance<py::bool_>(value)) {
-    return py::cast<bool>(value);
+    return py::cast<Bool>(value);
   }
   if (py::isinstance<py::int_>(value)) {
-    return py::cast<int64_t>(value);
+    return py::cast<I64>(value);
   }
   if (py::isinstance<py::float_>(value)) {
-    return py::cast<double>(value);
+    return py::cast<F64>(value);
   }
   if (py::isinstance<py::str>(value)) {
     return py::cast<std::string>(value);
   }
   if (py::isinstance<py::list>(value) || py::isinstance<py::tuple>(value)) {
-    bool has_int = false;
-    bool has_double = false;
-    bool has_string = false;
+    Bool has_int = false;
+    Bool has_double = false;
+    Bool has_string = false;
     for (py::handle item : py::reinterpret_borrow<py::sequence>(value)) {
       if (py::isinstance<py::bool_>(item) || py::isinstance<py::int_>(item)) {
         has_int = true;
@@ -165,7 +166,7 @@ AttrValue ToAttrValue(const py::handle& value) {
     return ToInt64Vector(value);
   }
   throw std::invalid_argument(
-      "attribute value must be bool, int, float, str, list, or tuple");
+      "attribute value must be Bool, I32, F32, str, list, or tuple");
 }
 
 // 把 Python dict 转换为 AttrMap。
@@ -211,36 +212,36 @@ AttrMap ToAttrMap(const py::object& value) {
 // 异常：
 //   维度数量超过 kMaxShapeDim、pitch 长度不匹配或维度为负时抛出
 //   std::invalid_argument。
-Storage MakeStorage(const std::vector<int64_t>& dims,
-                    const std::vector<int64_t>& pitch, Precision precision,
-                    Layout layout, uint64_t byte_size, uintptr_t data_ptr) {
-  if (dims.size() > static_cast<size_t>(kMaxShapeDim)) {
+Storage MakeStorage(const std::vector<I64>& dims,
+                    const std::vector<I64>& pitch, Precision precision,
+                    Layout layout, U64 byte_size, uintptr_t data_ptr) {
+  if (dims.size() > static_cast<Usize>(kMaxShapeDim)) {
     throw std::invalid_argument("dims size exceeds kMaxShapeDim");
   }
   if (!pitch.empty() && pitch.size() != dims.size()) {
     throw std::invalid_argument("pitch size must match dims size");
   }
-  for (int64_t dim : dims) {
+  for (I64 dim : dims) {
     if (dim < 0) {
       throw std::invalid_argument("dims must not contain negative values");
     }
   }
-  for (int64_t value : pitch) {
+  for (I64 value : pitch) {
     if (value < 0) {
       throw std::invalid_argument("pitch must not contain negative values");
     }
   }
 
   Storage storage;
-  storage.shape.max_dim = static_cast<int64_t>(dims.size());
-  for (size_t index = 0; index < dims.size(); ++index) {
+  storage.shape.max_dim = static_cast<I64>(dims.size());
+  for (Usize index = 0; index < dims.size(); ++index) {
     storage.shape.dims[index] = dims[index];
     storage.shape.pitch[index] = pitch.empty() ? dims[index] : pitch[index];
   }
   storage.precision = precision;
   storage.layout = layout;
   storage.device_type = DeviceType::kHost;
-  storage.byte_size = static_cast<size_t>(byte_size);
+  storage.byte_size = static_cast<Usize>(byte_size);
   storage.data_ptr = reinterpret_cast<void*>(data_ptr);
   storage.reusable = true;
   return storage;
@@ -255,7 +256,7 @@ Storage MakeStorage(const std::vector<int64_t>& dims,
 std::string JoinTensorNames(const std::vector<Tensor*>& tensors) {
   std::ostringstream stream;
   stream << "[";
-  for (size_t index = 0; index < tensors.size(); ++index) {
+  for (Usize index = 0; index < tensors.size(); ++index) {
     if (index != 0) {
       stream << ",";
     }
@@ -290,13 +291,13 @@ std::string DumpIr(Graph& graph) {
 
   stream << "ops " << graph.GetOrderlyOPList().size() << "\n";
   const std::vector<Op*>& ordered_ops = graph.GetOrderlyOPList();
-  for (size_t index = 0; index < ordered_ops.size(); ++index) {
+  for (Usize index = 0; index < ordered_ops.size(); ++index) {
     Op* op = ordered_ops[index];
     stream << "  [" << index << "] " << op->Name() << " "
            << OpTypeToStr(op->Type()) << " src="
            << JoinTensorNames(op->SrcTensors())
            << " dst=" << JoinTensorNames(op->DstTensors()) << " attrs={";
-    bool first = true;
+    Bool first = true;
     for (const auto& entry : op->Attrs()) {
       if (!first) {
         stream << ",";
@@ -415,7 +416,7 @@ PYBIND11_MODULE(_graph, module) {
       .def(
           "create_op",
           [](Graph& graph, const std::string& name,
-             const std::vector<Tensor*>& src_tensors, size_t out_cnt,
+             const std::vector<Tensor*>& src_tensors, Usize out_cnt,
              OpType op_type, const py::object& attr) {
             const AttrMap attr_map = ToAttrMap(attr);
             std::vector<Tensor*> outputs;
@@ -433,9 +434,9 @@ PYBIND11_MODULE(_graph, module) {
       .def(
           "create_constant",
           [](Graph& graph, const std::string& name,
-             const std::vector<int64_t>& dims,
-             const std::vector<int64_t>& pitch, Precision precision,
-             Layout layout, uint64_t byte_size, uintptr_t data_ptr) {
+             const std::vector<I64>& dims,
+             const std::vector<I64>& pitch, Precision precision,
+             Layout layout, U64 byte_size, uintptr_t data_ptr) {
             const Storage storage = MakeStorage(dims, pitch, precision, layout,
                                                 byte_size, data_ptr);
             Tensor* tensor = nullptr;

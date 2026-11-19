@@ -22,6 +22,7 @@
 #include "Runtime/common/kv_view.h"
 #include "Runtime/common/plan.h"
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 

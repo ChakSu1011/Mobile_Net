@@ -22,6 +22,7 @@
 #include "Runtime/backend/mock/half_utils.h"
 #include "Runtime/backend/mock/kernels/kernel_common.h"
 #include "Runtime/backend/ops/attr_utils.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace mock {
@@ -44,25 +45,25 @@ class RmsNormKernel final : public Kernel {
       return status;
     }
 
-    const std::vector<int64_t> input = Dims(context.inputs[0].shape);
-    const std::vector<int64_t> weight = Dims(context.inputs[1].shape);
-    const std::vector<int64_t> output = Dims(context.outputs[0].shape);
+    const std::vector<I64> input = Dims(context.inputs[0].shape);
+    const std::vector<I64> weight = Dims(context.inputs[1].shape);
+    const std::vector<I64> output = Dims(context.outputs[0].shape);
     if (input.empty() || weight.size() != 1 || output != input) {
       return MakeStatus(ErrorCode::kInvalidArgument,
                         "RmsNormKernel: unexpected tensor shape");
     }
-    const int64_t last_dim = input.back();
+    const I64 last_dim = input.back();
     if (last_dim <= 0 || weight[0] != last_dim) {
       return MakeStatus(ErrorCode::kInvalidArgument,
                         "RmsNormKernel: normalized shape mismatch");
     }
 
-    double eps = 0.0;
+    F64 eps = 0.0;
     status = GetFloatAttr(*context.attrs, "eps", &eps);
     if (!status.ok()) {
       return status;
     }
-    int64_t normalized_shape = 0;
+    I64 normalized_shape = 0;
     status = GetIntAttr(*context.attrs, "normalized_shape",
                         &normalized_shape);
     if (!status.ok()) {
@@ -73,23 +74,23 @@ class RmsNormKernel final : public Kernel {
                         "RmsNormKernel: normalized_shape != last dim");
     }
 
-    const uint16_t* weight_data = HalfData(context.inputs[1]);
+    const U16* weight_data = HalfData(context.inputs[1]);
     if (weight_data == nullptr) {
       return MakeStatus(ErrorCode::kInvalidArgument,
                         "RmsNormKernel: null weight data");
     }
-    const int64_t rows = NumElements(context.inputs[0].shape) / last_dim;
-    for (int64_t row = 0; row < rows; ++row) {
-      float sum = 0.0f;
-      for (int64_t i = 0; i < last_dim; ++i) {
-        const float value = ReadHalf(context.inputs[0], row * last_dim + i);
+    const I64 rows = NumElements(context.inputs[0].shape) / last_dim;
+    for (I64 row = 0; row < rows; ++row) {
+      F32 sum = 0.0f;
+      for (I64 i = 0; i < last_dim; ++i) {
+        const F32 value = ReadHalf(context.inputs[0], row * last_dim + i);
         sum += value * value;
       }
-      const float mean = sum / static_cast<float>(last_dim);
-      const float scale = 1.0f / std::sqrt(mean + static_cast<float>(eps));
-      for (int64_t i = 0; i < last_dim; ++i) {
-        const float value = ReadHalf(context.inputs[0], row * last_dim + i);
-        const float weight_value = HalfToFloat(weight_data[i]);
+      const F32 mean = sum / static_cast<F32>(last_dim);
+      const F32 scale = 1.0f / std::sqrt(mean + static_cast<F32>(eps));
+      for (I64 i = 0; i < last_dim; ++i) {
+        const F32 value = ReadHalf(context.inputs[0], row * last_dim + i);
+        const F32 weight_value = HalfToFloat(weight_data[i]);
         WriteHalf(context.outputs[0], row * last_dim + i,
                   value * scale * weight_value);
       }

@@ -38,6 +38,7 @@
 #include "Runtime/common/runtime_config.h"
 #include "Runtime/common/sequence.h"
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
@@ -87,28 +88,28 @@ struct EngineConfig {
 //   一个 Step 的快照，不实时查询模块内部状态。
 struct EngineStats {
   // 累计执行步数。
-  uint64_t total_steps = 0;
+  U64 total_steps = 0;
 
   // 累计接收请求数。
-  uint64_t total_requests = 0;
+  U64 total_requests = 0;
 
   // 累计生成 token 数。
-  uint64_t total_tokens = 0;
+  U64 total_tokens = 0;
 
   // 当前运行请求数。
-  int32_t running_requests = 0;
+  I32 running_requests = 0;
 
   // 当前等待请求数。
-  int32_t waiting_requests = 0;
+  I32 waiting_requests = 0;
 
   // 当前已用 KV 块数。
-  int64_t kv_used_blocks = 0;
+  I64 kv_used_blocks = 0;
 
   // 当前空闲 KV 块数。
-  int64_t kv_free_blocks = 0;
+  I64 kv_free_blocks = 0;
 
   // 最近一步耗时（纳秒）。
-  int64_t last_step_ns = 0;
+  I64 last_step_ns = 0;
 };
 
 // 流式响应回调。
@@ -175,7 +176,7 @@ class Engine final : public IoBinder {
   //   成功返回 kOk；未 LOADED/RUNNING、参数非法或容量不足返回对应错误码。
   // 说明：
   //   线程安全，可由任意调用方线程调用。
-  Status AddRequest(const Request& request, uint64_t* request_id);
+  Status AddRequest(const Request& request, U64* request_id);
 
   // 取消请求。
   //
@@ -185,7 +186,7 @@ class Engine final : public IoBinder {
   //   成功返回 kOk；请求不存在返回 kRequestNotFound。
   // 说明：
   //   线程安全；执行中的请求由调度器在安全点取消。
-  Status CancelRequest(uint64_t request_id);
+  Status CancelRequest(U64 request_id);
 
   // 回写生成 token 并返回 Response。
   //
@@ -198,7 +199,7 @@ class Engine final : public IoBinder {
   // 说明：
   //   正常路径由 RunOnce 内部调用；外部仅在自定义执行路径下使用。
   //   若 response.status 为终态，则触发 ResponseCallback。
-  Status Update(uint64_t request_id, const std::vector<Token>& tokens,
+  Status Update(U64 request_id, const std::vector<Token>& tokens,
                 Response* response);
 
   // 执行一个 Step。
@@ -218,7 +219,7 @@ class Engine final : public IoBinder {
   //   timeout_ms：超时毫秒；0 表示不等待。
   // 返回：
   //   成功返回 kOk；超时返回 kTimeout。
-  Status RunUntilIdle(uint32_t timeout_ms);
+  Status RunUntilIdle(U32 timeout_ms);
 
   // 销毁全部运行时资源。
   //
@@ -315,8 +316,8 @@ class Engine final : public IoBinder {
   std::unordered_map<std::string, runtime_graph::Op*> output_ops_;
 
   // 后端与执行器初始化标记；用于销毁与加载回滚。
-  bool backend_initialized_ = false;
-  bool executor_initialized_ = false;
+  Bool backend_initialized_ = false;
+  Bool executor_initialized_ = false;
 
   // 回调与统计。
   ResponseCallback response_callback_;
@@ -326,10 +327,10 @@ class Engine final : public IoBinder {
   std::thread inference_thread_;
   mutable std::mutex mutex_;
   std::condition_variable idle_cv_;
-  std::atomic<bool> stop_requested_{false};
+  std::atomic<Bool> stop_requested_{false};
 
   // 设备级错误标记。
-  std::atomic<bool> fatal_{false};
+  std::atomic<Bool> fatal_{false};
   std::atomic<ErrorCode> fatal_code_{ErrorCode::kOk};
 };
 

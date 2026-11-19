@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "Runtime/backend/mock/kernels/kernel_common.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace mock {
@@ -37,17 +38,17 @@ class LinearSwiGluKernel final : public Kernel {
       return status;
     }
 
-    const std::vector<int64_t> input = Dims(context.inputs[0].shape);
-    const std::vector<int64_t> gate = Dims(context.inputs[1].shape);
-    const std::vector<int64_t> up = Dims(context.inputs[2].shape);
-    const std::vector<int64_t> output = Dims(context.outputs[0].shape);
+    const std::vector<I64> input = Dims(context.inputs[0].shape);
+    const std::vector<I64> gate = Dims(context.inputs[1].shape);
+    const std::vector<I64> up = Dims(context.inputs[2].shape);
+    const std::vector<I64> output = Dims(context.outputs[0].shape);
     if (input.empty() || gate.size() != 2 || up != gate ||
         output.size() != input.size()) {
       return MakeStatus(ErrorCode::kInvalidArgument,
                         "LinearSwiGluKernel: unexpected tensor rank");
     }
-    const int64_t in_features = input.back();
-    const int64_t intermediate = gate[0];
+    const I64 in_features = input.back();
+    const I64 intermediate = gate[0];
     if (in_features <= 0 || intermediate <= 0 ||
         gate[1] != in_features) {
       return MakeStatus(ErrorCode::kInvalidArgument,
@@ -57,7 +58,7 @@ class LinearSwiGluKernel final : public Kernel {
       return MakeStatus(ErrorCode::kInvalidArgument,
                         "LinearSwiGluKernel: output last dim mismatch");
     }
-    for (size_t i = 0; i + 1 < input.size(); ++i) {
+    for (Usize i = 0; i + 1 < input.size(); ++i) {
       if (output[i] != input[i]) {
         return MakeStatus(
             ErrorCode::kInvalidArgument,
@@ -65,19 +66,19 @@ class LinearSwiGluKernel final : public Kernel {
       }
     }
 
-    const int64_t rows = NumElements(context.inputs[0].shape) / in_features;
-    for (int64_t row = 0; row < rows; ++row) {
-      const int64_t input_base = row * in_features;
-      for (int64_t out = 0; out < intermediate; ++out) {
-        const int64_t weight_base = out * in_features;
-        float gate_sum = 0.0f;
-        float up_sum = 0.0f;
-        for (int64_t i = 0; i < in_features; ++i) {
-          const float value = ReadHalf(context.inputs[0], input_base + i);
+    const I64 rows = NumElements(context.inputs[0].shape) / in_features;
+    for (I64 row = 0; row < rows; ++row) {
+      const I64 input_base = row * in_features;
+      for (I64 out = 0; out < intermediate; ++out) {
+        const I64 weight_base = out * in_features;
+        F32 gate_sum = 0.0f;
+        F32 up_sum = 0.0f;
+        for (I64 i = 0; i < in_features; ++i) {
+          const F32 value = ReadHalf(context.inputs[0], input_base + i);
           gate_sum += value * ReadHalf(context.inputs[1], weight_base + i);
           up_sum += value * ReadHalf(context.inputs[2], weight_base + i);
         }
-        const float activated = gate_sum / (1.0f + std::exp(-gate_sum));
+        const F32 activated = gate_sum / (1.0f + std::exp(-gate_sum));
         WriteHalf(context.outputs[0], row * intermediate + out,
                   activated * up_sum);
       }

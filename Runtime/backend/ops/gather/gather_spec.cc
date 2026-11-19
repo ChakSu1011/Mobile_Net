@@ -18,6 +18,7 @@
 #include "Runtime/backend/ops/attr_utils.h"
 #include "Runtime/backend/ops/op_specs.h"
 #include "Runtime/backend/ops/op_validation.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace {
@@ -31,7 +32,7 @@ Status ValidateGather(const runtime_graph::Op& op) {
                       "op=" + op.Name() +
                           ": gather requires 2 inputs and 1 output");
   }
-  int64_t axis = 0;
+  I64 axis = 0;
   Status status = GetIntAttr(op, "axis", &axis);
   if (!status.ok()) {
     return status;
@@ -40,7 +41,7 @@ Status ValidateGather(const runtime_graph::Op& op) {
     return MakeStatus(ErrorCode::kUnsupportedOp,
                       "op=" + op.Name() + ": gather only supports axis=0");
   }
-  const char* op_name = op.Name().c_str();
+  const C8* op_name = op.Name().c_str();
   status = CheckTensor(*sources[0], runtime_graph::Precision::kInt64,
                        op_name, "input[0]");
   if (!status.ok()) {
@@ -70,11 +71,11 @@ Status ValidateGather(const runtime_graph::Op& op) {
     return status;
   }
 
-  const std::vector<int64_t> ids =
+  const std::vector<I64> ids =
       ShapeToDims(sources[0]->GetStorage().shape);
-  const std::vector<int64_t> weight =
+  const std::vector<I64> weight =
       ShapeToDims(sources[1]->GetStorage().shape);
-  const std::vector<int64_t> output =
+  const std::vector<I64> output =
       ShapeToDims(destinations[0]->GetStorage().shape);
   if (output[0] != ids[0] || output[1] != ids[1] ||
       output[2] != weight[1]) {

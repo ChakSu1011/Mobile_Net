@@ -374,6 +374,28 @@ Python display width <= 80: OK
 序列化和跨平台构建仍未覆盖，相关风险已在第 8 节列出，不能据此宣称推理引擎
 端到端可用。
 
+## 类型别名重构回归（2026-11-20）
+
+全工程 C++ 类型统一为 `Utils/cpp/types.h` 别名后，Graph 回归结果：
+
+```bash
+cmake --build Graph/build
+./Graph/build/graph_test.exe
+PYTHONUTF8=1 python Graph/tests/test_graph.py -v
+```
+
+实际输出：
+
+```text
+[16/16] Linking CXX shared module python\_graph.pyd
+graph_test: ALL TESTS PASSED
+Ran 11 tests in 0.007s
+OK
+```
+
+结论：Graph C++ 库、`_graph` 扩展、C++ 单测与 Python 单测均通过；无编译
+警告，无原始类型名残留。
+
 ## 附录 A：复现命令
 
 ```bash

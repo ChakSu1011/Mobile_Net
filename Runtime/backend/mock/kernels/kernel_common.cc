@@ -12,6 +12,7 @@
 #include "Runtime/backend/mock/kernels/kernel_common.h"
 
 #include "Runtime/backend/mock/half_utils.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace mock {
@@ -24,77 +25,77 @@ MockBuffer* GetMutableBuffer(const runtime_graph::TensorView& view) {
   return static_cast<MockBuffer*>(view.data);
 }
 
-const uint16_t* HalfData(const runtime_graph::TensorView& view) {
+const U16* HalfData(const runtime_graph::TensorView& view) {
   const MockBuffer* buffer = GetBuffer(view);
   if (buffer == nullptr) {
     return nullptr;
   }
-  const auto* base = static_cast<const uint8_t*>(buffer->Data());
-  return reinterpret_cast<const uint16_t*>(base + view.offset);
+  const auto* base = static_cast<const U8*>(buffer->Data());
+  return reinterpret_cast<const U16*>(base + view.offset);
 }
 
-uint16_t* MutableHalfData(const runtime_graph::TensorView& view) {
+U16* MutableHalfData(const runtime_graph::TensorView& view) {
   MockBuffer* buffer = GetMutableBuffer(view);
   if (buffer == nullptr) {
     return nullptr;
   }
-  auto* base = static_cast<uint8_t*>(buffer->Data());
-  return reinterpret_cast<uint16_t*>(base + view.offset);
+  auto* base = static_cast<U8*>(buffer->Data());
+  return reinterpret_cast<U16*>(base + view.offset);
 }
 
-const int64_t* Int64Data(const runtime_graph::TensorView& view) {
+const I64* Int64Data(const runtime_graph::TensorView& view) {
   const MockBuffer* buffer = GetBuffer(view);
   if (buffer == nullptr) {
     return nullptr;
   }
-  const auto* base = static_cast<const uint8_t*>(buffer->Data());
-  return reinterpret_cast<const int64_t*>(base + view.offset);
+  const auto* base = static_cast<const U8*>(buffer->Data());
+  return reinterpret_cast<const I64*>(base + view.offset);
 }
 
-int64_t* MutableInt64Data(const runtime_graph::TensorView& view) {
+I64* MutableInt64Data(const runtime_graph::TensorView& view) {
   MockBuffer* buffer = GetMutableBuffer(view);
   if (buffer == nullptr) {
     return nullptr;
   }
-  auto* base = static_cast<uint8_t*>(buffer->Data());
-  return reinterpret_cast<int64_t*>(base + view.offset);
+  auto* base = static_cast<U8*>(buffer->Data());
+  return reinterpret_cast<I64*>(base + view.offset);
 }
 
-std::vector<int64_t> Dims(const runtime_graph::Shape& shape) {
+std::vector<I64> Dims(const runtime_graph::Shape& shape) {
   if (shape.max_dim < 0 || shape.max_dim > runtime_graph::kMaxShapeDim) {
     return {};
   }
-  std::vector<int64_t> dims;
-  dims.reserve(static_cast<size_t>(shape.max_dim));
-  for (int64_t i = 0; i < shape.max_dim; ++i) {
-    dims.push_back(shape.dims[static_cast<size_t>(i)]);
+  std::vector<I64> dims;
+  dims.reserve(static_cast<Usize>(shape.max_dim));
+  for (I64 i = 0; i < shape.max_dim; ++i) {
+    dims.push_back(shape.dims[static_cast<Usize>(i)]);
   }
   return dims;
 }
 
-int64_t NumElements(const runtime_graph::Shape& shape) {
-  const std::vector<int64_t> dims = Dims(shape);
+I64 NumElements(const runtime_graph::Shape& shape) {
+  const std::vector<I64> dims = Dims(shape);
   if (dims.empty()) {
     return 1;
   }
-  int64_t total = 1;
-  for (const int64_t dim : dims) {
+  I64 total = 1;
+  for (const I64 dim : dims) {
     total *= dim;
   }
   return total;
 }
 
-float ReadHalf(const runtime_graph::TensorView& view, uint64_t index) {
-  const uint16_t* data = HalfData(view);
+F32 ReadHalf(const runtime_graph::TensorView& view, U64 index) {
+  const U16* data = HalfData(view);
   if (data == nullptr) {
     return 0.0f;
   }
   return HalfToFloat(data[index]);
 }
 
-void WriteHalf(const runtime_graph::TensorView& view, uint64_t index,
-               float value) {
-  uint16_t* data = MutableHalfData(view);
+void WriteHalf(const runtime_graph::TensorView& view, U64 index,
+               F32 value) {
+  U16* data = MutableHalfData(view);
   if (data == nullptr) {
     return;
   }
@@ -102,7 +103,7 @@ void WriteHalf(const runtime_graph::TensorView& view, uint64_t index,
 }
 
 Status RequireInputCount(const runtime_graph::KernelContext& context,
-                         uint32_t count) {
+                         U32 count) {
   if (context.inputs == nullptr || context.input_count < count) {
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "MockKernel: insufficient inputs");
@@ -111,7 +112,7 @@ Status RequireInputCount(const runtime_graph::KernelContext& context,
 }
 
 Status RequireOutputCount(const runtime_graph::KernelContext& context,
-                          uint32_t count) {
+                          U32 count) {
   if (context.outputs == nullptr || context.output_count < count) {
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "MockKernel: insufficient outputs");

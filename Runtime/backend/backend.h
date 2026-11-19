@@ -28,6 +28,7 @@
 #include "Runtime/backend/kernel.h"
 #include "Runtime/common/data_types.h"
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
@@ -60,7 +61,7 @@ class Buffer {
   virtual void* DevicePtr() const = 0;
 
   // 返回缓冲字节数。
-  virtual uint64_t Bytes() const = 0;
+  virtual U64 Bytes() const = 0;
 };
 
 // 缓冲用途。
@@ -92,8 +93,8 @@ enum class KvLayout {
 //   alignment：起始地址对齐要求（字节）；
 //   usage：用途，供后端选择内存类型。
 struct BufferDesc {
-  uint64_t bytes = 0;
-  uint64_t alignment = 0;
+  U64 bytes = 0;
+  U64 alignment = 0;
   BufferUsage usage = BufferUsage::kPersistent;
 };
 
@@ -104,8 +105,8 @@ struct BufferDesc {
 //   queue_count：队列数；
 //   options：后端专有选项（不得包含影响上层的语义）。
 struct BackendConfig {
-  int32_t device_id = 0;
-  uint32_t queue_count = 1;
+  I32 device_id = 0;
+  U32 queue_count = 1;
   std::map<std::string, std::string> options;
 };
 
@@ -120,7 +121,7 @@ struct BackendConfig {
 struct ParamDesc {
   std::string name;
   const void* host_ptr = nullptr;
-  uint64_t bytes = 0;
+  U64 bytes = 0;
   DataType source_dtype = DataType::kUnknown;
   DataType target_dtype = DataType::kUnknown;
 };
@@ -142,19 +143,19 @@ struct BackendCapability {
   std::vector<runtime_graph::OpType> supported_ops;
 
   // 是否支持主机到设备传输。
-  bool h2d = false;
+  Bool h2d = false;
 
   // 是否支持设备到主机传输。
-  bool d2h = false;
+  Bool d2h = false;
 
   // 单缓冲最大字节数。
-  uint64_t max_buffer_bytes = 0;
+  U64 max_buffer_bytes = 0;
 
   // 最小对齐要求。
-  uint64_t min_alignment = 0;
+  U64 min_alignment = 0;
 
   // Attention Kernel 的 KV 块大小（token 数）。
-  int32_t attention_block_size = 0;
+  I32 attention_block_size = 0;
 
   // KV 物理布局。
   KvLayout kv_layout = KvLayout::kNhd;
@@ -233,7 +234,7 @@ class Backend {
   //   stream：执行流，可为空表示默认流。
   // 返回：
   //   成功返回 kOk；失败返回 kBufferError/kDeviceError。
-  virtual Status Upload(void* device_ptr, const void* host_ptr, uint64_t bytes,
+  virtual Status Upload(void* device_ptr, const void* host_ptr, U64 bytes,
                         Stream* stream) = 0;
 
   // 设备到主机拷贝。
@@ -246,7 +247,7 @@ class Backend {
   // 返回：
   //   成功返回 kOk；失败返回 kBufferError/kDeviceError。
   virtual Status Download(void* host_ptr, const void* device_ptr,
-                          uint64_t bytes, Stream* stream) = 0;
+                          U64 bytes, Stream* stream) = 0;
 
   // 创建 Kernel。
   //

@@ -16,6 +16,7 @@
 #define MOBILENET_RUNTIME_COMMON_DATA_TYPES_H_
 
 #include <cstdint>
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
@@ -57,13 +58,13 @@ enum class DeviceType {
 //   dtype：数据类型。
 // 返回：
 //   常量字符串；未知类型返回 "unknown"。
-const char* DataTypeName(DataType dtype);
+const C8* DataTypeName(DataType dtype);
 
 // 返回布局稳定名称，例如 "row_major"。
-const char* LayoutName(Layout layout);
+const C8* LayoutName(Layout layout);
 
 // 返回设备类别稳定名称，例如 "host" / "device"。
-const char* DeviceTypeName(DeviceType device);
+const C8* DeviceTypeName(DeviceType device);
 
 // 返回单个元素的字节数。
 //
@@ -71,7 +72,7 @@ const char* DeviceTypeName(DeviceType device);
 //   dtype：数据类型。
 // 返回：
 //   字节数；kUnknown 返回 0。
-uint32_t DataTypeSize(DataType dtype);
+U32 DataTypeSize(DataType dtype);
 
 }  // namespace mobilenet
 

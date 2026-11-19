@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "Runtime/common/data_types.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime {
@@ -57,40 +58,40 @@ enum class RequestStatus {
 //   - is_valid=false 时使用引擎默认参数。
 struct SampleParams {
   // 是否启用本组参数。
-  bool is_valid = false;
+  Bool is_valid = false;
 
   // 温度；阶段三。
-  float temperature = 0.0f;
+  F32 temperature = 0.0f;
 
   // 出现惩罚；阶段三。
-  float presence_penalty = 0.0f;
+  F32 presence_penalty = 0.0f;
 
   // 频率惩罚；阶段三。
-  float frequency_penalty = 0.0f;
+  F32 frequency_penalty = 0.0f;
 
   // Beam 宽度；阶段三。
-  int32_t num_beam = 1;
+  I32 num_beam = 1;
 
   // Nucleus 采样阈值；阶段三。
-  float top_p = 0.0f;
+  F32 top_p = 0.0f;
 
   // Top-k 采样上限；阶段三。
-  int32_t top_k = 0;
+  I32 top_k = 0;
 
   // 最大生成 token 数；0 表示由 context_length - prompt 推导。
-  int32_t max_tokens = 0;
+  I32 max_tokens = 0;
 
   // 最小生成 token 数。
-  int32_t min_tokens = 0;
+  I32 min_tokens = 0;
 
   // 额外停止 token。
-  std::vector<int64_t> stop_token_ids;
+  std::vector<I64> stop_token_ids;
 
   // 返回对数概率的数量；0 表示不返回。
-  int32_t logprobs = 0;
+  I32 logprobs = 0;
 
   // 是否忽略 EOS 停止。
-  bool ignore_eos = false;
+  Bool ignore_eos = false;
 };
 
 // 多模态输入描述（阶段三）。
@@ -115,16 +116,16 @@ struct MultimodalInput {
   const void* data = nullptr;
 
   // 数据字节数。
-  uint64_t byte_size = 0;
+  U64 byte_size = 0;
 
   // 数据类型。
   DataType dtype = DataType::kUnknown;
 
   // 数据形状。
-  std::vector<int64_t> shape;
+  std::vector<I64> shape;
 
   // 已插入 prompt 的占位 token ID。
-  std::vector<int64_t> placeholder_token_ids;
+  std::vector<I64> placeholder_token_ids;
 };
 
 // Prefill/Decode 调度分组。
@@ -145,10 +146,10 @@ enum class RequestGroup {
 //     预留字段，当前实现按单设备、无 LoRA、默认 chunk 处理。
 struct Request {
   // 请求 ID；0 表示由 Scheduler 分配。
-  uint64_t request_id = 0;
+  U64 request_id = 0;
 
   // prompt token 序列。
-  std::vector<int64_t> prompt_token_ids;
+  std::vector<I64> prompt_token_ids;
 
   // 采样策略与生成约束。
   SampleParams sample_param;
@@ -157,22 +158,22 @@ struct Request {
   std::vector<MultimodalInput> multimodal_inputs;
 
   // LoRA ID；-1 表示无。
-  int32_t lora_id = -1;
+  I32 lora_id = -1;
 
   // Prefill/Decode 调度分组。
   RequestGroup group = RequestGroup::kPrefill;
 
   // die 编号；0 为默认，多 die 预留。
-  int32_t die_id = 0;
+  I32 die_id = 0;
 
   // 分块 Prefill 大小；0 表示使用调度默认值。
-  int32_t chunk_size = 0;
+  I32 chunk_size = 0;
 
   // 调度优先级；数值越大越优先。
-  int32_t priority = 0;
+  I32 priority = 0;
 
   // 截止时间（单调时钟纳秒）；0 表示不超时。
-  uint64_t deadline_ns = 0;
+  U64 deadline_ns = 0;
 };
 
 // 候选或选中的输出 token。
@@ -183,16 +184,16 @@ struct Request {
 //     时保持 0。
 struct Token {
   // 词表 ID。
-  int64_t token_id = -1;
+  I64 token_id = -1;
 
   // 概率；未计算时为 0。
-  float token_prob = 0.0f;
+  F32 token_prob = 0.0f;
 
   // 对数概率；未计算时为 0。
-  float log_prob = 0.0f;
+  F32 log_prob = 0.0f;
 
   // 是否为选中 token。
-  bool select = false;
+  Bool select = false;
 };
 
 // 请求的一条输出序列。
@@ -207,7 +208,7 @@ struct Token {
 //   - logits 为本步 logits 的主机可见指针，仅在 Response 回调期间有效。
 struct Sequence {
   // 内部序列 ID。
-  uint64_t sequence_id = 0;
+  U64 sequence_id = 0;
 
   // 本步 logits 指针；可为空。
   const void* logits = nullptr;
@@ -222,19 +223,19 @@ struct Sequence {
   Token draft_token;
 
   // prompt + 已生成 token 的完整历史。
-  std::vector<int64_t> history_token_ids;
+  std::vector<I64> history_token_ids;
 
   // 已生成 token 数。
-  int32_t generated_count = 0;
+  I32 generated_count = 0;
 
   // prompt token 数。
-  int32_t prompt_count = 0;
+  I32 prompt_count = 0;
 
   // Beam 累计 logprob。
-  double cumulative_score = 0.0;
+  F64 cumulative_score = 0.0;
 
   // 词表大小。
-  int32_t vocab_size = 0;
+  I32 vocab_size = 0;
 };
 
 // 单个请求的单步推理结果。
@@ -249,7 +250,7 @@ struct Sequence {
 //   - SampleParams 为请求采样参数的副本。
 struct Response {
   // 请求 ID。
-  uint64_t request_id = 0;
+  U64 request_id = 0;
 
   // 请求状态。
   RequestStatus status = RequestStatus::kInvalid;
@@ -267,19 +268,19 @@ struct Response {
 //   供 Scheduler::Snapshot、日志与测试查询，不携带序列内容。
 struct RequestSnapshot {
   // 请求 ID。
-  uint64_t request_id = 0;
+  U64 request_id = 0;
 
   // 当前状态。
   RequestStatus status = RequestStatus::kWaiting;
 
   // prompt token 数。
-  int32_t prompt_tokens = 0;
+  I32 prompt_tokens = 0;
 
   // 已计算 token 数。
-  int32_t computed_tokens = 0;
+  I32 computed_tokens = 0;
 
   // 已生成 token 数。
-  int32_t generated_tokens = 0;
+  I32 generated_tokens = 0;
 };
 
 }  // namespace runtime

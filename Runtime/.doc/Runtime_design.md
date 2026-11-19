@@ -1210,6 +1210,7 @@ Runtime/
 | TC-ARCH-04 | Engine 成员与调用矩阵核对 | Loader/Graph/Scheduler/Executor/KVCache/Destroyer 均为 `unique_ptr`；Backend 归 Executor；OpEnvFactory 归 Loader；调用链可追溯 |
 | TC-ARCH-05 | EngineModules 注入对称性检查 | Loader/Scheduler/Executor/Destroyer 均在 `EngineModules` 中；Loader 与 Destroyer 成对可替换 |
 | TC-ARCH-06 | 请求/响应对象唯一性与迁移检查 | `sequence.h` 是唯一定义；`request.h` 无重复定义（删除或仅转发）；`RequestStatus` 不与 `Status` 冲突；Service/Engine/Scheduler 只使用 sequence.h 类型 |
+| TC-ARCH-07 | C++ 类型别名约定检查 | 所有 C++ 源码包含 `Utils/cpp/types.h`；无原始 `uint64_t/int32_t/size_t/float/double/bool/char` 等类型名 |
 
 验证记录见 [`Runtime/tests/test_results.md`](../tests/test_results.md)。
 
@@ -1235,6 +1236,7 @@ Runtime/
 | --- | --- |
 | `Runtime/common/status.h` | `Status`、`ErrorCode` |
 | `Runtime/common/data_types.h` | `DataType/Layout/DeviceType` |
+| `Utils/cpp/types.h` | `U8/U16/U32/U64/I8/I16/I32/I64/F32/F64/Bool/C8/Usize/Isize` |
 | `Runtime/common/runtime_config.h` | `RuntimeConfig` |
 | `Runtime/common/model_config.h` | `ModelConfig` |
 | `Runtime/common/sequence.h` | `Request/Response/RequestStatus/SampleParams/Token/Sequence/RequestSnapshot/MultimodalInput` |

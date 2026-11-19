@@ -19,6 +19,7 @@
 #include "Runtime/backend/ops/attr_utils.h"
 #include "Runtime/backend/ops/op_specs.h"
 #include "Runtime/backend/ops/op_validation.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace {
@@ -33,7 +34,7 @@ Status ValidateLinearSwiGlu(const runtime_graph::Op& op) {
         "op=" + op.Name() +
             ": linear_swi_glu requires 3 inputs and 1 output");
   }
-  int64_t intermediate_size = 0;
+  I64 intermediate_size = 0;
   Status status = GetIntAttr(op, "intermediate_size", &intermediate_size);
   if (!status.ok()) {
     return status;
@@ -48,7 +49,7 @@ Status ValidateLinearSwiGlu(const runtime_graph::Op& op) {
         ErrorCode::kUnsupportedOp,
         "op=" + op.Name() + ": linear_swi_glu only supports silu");
   }
-  bool transpose = true;
+  Bool transpose = true;
   status = GetBoolAttr(op, "transpose_weight", &transpose);
   if (!status.ok()) {
     return status;
@@ -60,7 +61,7 @@ Status ValidateLinearSwiGlu(const runtime_graph::Op& op) {
             ": linear_swi_glu only supports transpose_weight=true");
   }
   if (HasAttr(op.Attrs(), "bias")) {
-    bool bias = false;
+    Bool bias = false;
     status = GetBoolAttr(op, "bias", &bias);
     if (!status.ok()) {
       return status;
@@ -77,8 +78,8 @@ Status ValidateLinearSwiGlu(const runtime_graph::Op& op) {
         "op=" + op.Name() + ": invalid intermediate_size");
   }
 
-  const char* op_name = op.Name().c_str();
-  for (size_t i = 0; i < sources.size(); ++i) {
+  const C8* op_name = op.Name().c_str();
+  for (Usize i = 0; i < sources.size(); ++i) {
     status = CheckTensor(*sources[i],
                          runtime_graph::Precision::kFloat16, op_name,
                          "input");
@@ -101,13 +102,13 @@ Status ValidateLinearSwiGlu(const runtime_graph::Op& op) {
     return status;
   }
 
-  const std::vector<int64_t> input =
+  const std::vector<I64> input =
       ShapeToDims(sources[0]->GetStorage().shape);
-  const std::vector<int64_t> gate =
+  const std::vector<I64> gate =
       ShapeToDims(sources[1]->GetStorage().shape);
-  const std::vector<int64_t> up =
+  const std::vector<I64> up =
       ShapeToDims(sources[2]->GetStorage().shape);
-  const std::vector<int64_t> output =
+  const std::vector<I64> output =
       ShapeToDims(destinations[0]->GetStorage().shape);
   if (input.empty() || gate != up || output.size() != input.size()) {
     return MakeStatus(

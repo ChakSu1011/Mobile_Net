@@ -18,6 +18,7 @@
 
 #include "Runtime/backend/kernel.h"
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace mock {

@@ -47,7 +47,7 @@ python -m ziglang c++ -std=c++17 -Wall -Wextra -I "d:/Mobile_Net" \
 实际输出：
 
 ```text
-header refs: 22
+header refs: 23
 OK    Runtime/backend/backend.h
 OK    Runtime/backend/kernel.h
 OK    Runtime/backend/kernel_context.h
@@ -70,10 +70,11 @@ OK    Runtime/executor/executor.h
 OK    Runtime/kvcache/kv_cache_manager.h
 OK    Runtime/loader/loader.h
 OK    Runtime/scheduler/scheduler.h
+OK    Utils/cpp/types.h
 missing: []
 ```
 
-结论：文档引用的 22 个头文件全部存在，无缺失。
+结论：文档引用的 23 个头文件全部存在，无缺失。
 
 ### 5.2 TC-ARCH-03：依赖方向检查
 
@@ -174,6 +175,34 @@ no request.h includes
 
 结论：Request/Response/RequestStatus/SampleParams/Token/Sequence 只在
 `sequence.h` 定义；`request.h` 已删除，代码不再引用旧头文件。
+
+### 5.7 TC-ARCH-07：C++ 类型别名约定
+
+检查方式：
+
+1. 扫描 Graph/Runtime/Tests/Tools 下全部 C++ 文件；
+2. 检查是否包含 `Utils/cpp/types.h`；
+3. 检查是否仍有原始 `uint64_t/int32_t/size_t/float/double/bool/char/int` 等类型名。
+
+实际输出：
+
+```text
+files missing types.h include: (none)
+include count: 98
+remaining raw token counts: {}
+```
+
+结论：98 个 C++ 文件全部包含 `Utils/cpp/types.h`，无原始类型名残留。
+
+回归编译：
+
+```text
+cmake --build Graph/build          -> 16/16 成功
+Graph/build/graph_test.exe         -> graph_test: ALL TESTS PASSED
+python Graph/tests/test_graph.py   -> 11 tests OK
+Engine test                         -> all engine checks passed
+Runtime 全部 .cc 单文件编译          -> failed=0
+```
 
 ## 6. 结论
 

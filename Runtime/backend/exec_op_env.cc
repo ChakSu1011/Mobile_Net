@@ -10,6 +10,7 @@
 //   Runtime/backend/exec_op_env.h、Runtime/common/status.h。
 
 #include "Runtime/backend/exec_op_env.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 

@@ -20,6 +20,7 @@
 
 #include "Runtime/common/status.h"
 #include "storage.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime_graph {

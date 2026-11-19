@@ -34,9 +34,10 @@
 #include "Runtime/kvcache/kv_cache_manager.h"
 #include "Runtime/loader/loader.h"
 #include "Runtime/scheduler/scheduler.h"
+#include "Utils/cpp/types.h"
 
 // 接口检查入口。
 //
 // 返回：
 //   恒为 0；编译成功即表示接口声明自洽。
-int main() { return 0; }
+I32 main() { return 0; }

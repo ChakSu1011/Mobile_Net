@@ -19,6 +19,7 @@
 
 #include "Graph/include/types.h"
 #include "Runtime/common/data_types.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
@@ -46,7 +47,7 @@ runtime_graph::Precision PrecisionFromDataType(DataType dtype);
 //   dtype：Backend/Kernel 使用的精度枚举。
 // 返回：
 //   dtype 非 kUnknown 且能映射到非 kUnknown 的 Precision 时返回 true。
-bool IsSupportedDataType(DataType dtype);
+Bool IsSupportedDataType(DataType dtype);
 
 }  // namespace mobilenet
 

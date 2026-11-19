@@ -9,10 +9,11 @@
 #include "Runtime/common/status.h"
 
 #include <string>
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
-const char* ErrorCodeName(ErrorCode code) {
+const C8* ErrorCodeName(ErrorCode code) {
   switch (code) {
     case ErrorCode::kOk:
       return "OK";

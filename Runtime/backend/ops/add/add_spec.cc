@@ -17,6 +17,7 @@
 #include "Graph/include/tensor.h"
 #include "Runtime/backend/ops/op_specs.h"
 #include "Runtime/backend/ops/op_validation.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace {
@@ -30,8 +31,8 @@ Status ValidateAdd(const runtime_graph::Op& op) {
                       "op=" + op.Name() +
                           ": add requires 2 inputs and 1 output");
   }
-  const char* op_name = op.Name().c_str();
-  for (size_t i = 0; i < sources.size(); ++i) {
+  const C8* op_name = op.Name().c_str();
+  for (Usize i = 0; i < sources.size(); ++i) {
     const Status status = CheckTensor(
         *sources[i], runtime_graph::Precision::kFloat16, op_name, "input");
     if (!status.ok()) {
@@ -44,11 +45,11 @@ Status ValidateAdd(const runtime_graph::Op& op) {
   if (!status.ok()) {
     return status;
   }
-  const std::vector<int64_t> first =
+  const std::vector<I64> first =
       ShapeToDims(sources[0]->GetStorage().shape);
-  const std::vector<int64_t> second =
+  const std::vector<I64> second =
       ShapeToDims(sources[1]->GetStorage().shape);
-  const std::vector<int64_t> output =
+  const std::vector<I64> output =
       ShapeToDims(destinations[0]->GetStorage().shape);
   if (first != second || first != output) {
     return MakeStatus(ErrorCode::kInvalidArgument,

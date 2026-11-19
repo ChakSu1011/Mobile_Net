@@ -15,6 +15,7 @@
 #include "Runtime/common/resource_stack.h"
 
 #include <utility>
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime {
@@ -39,7 +40,7 @@ Status ResourceStack::Clear() {
   return first_error;
 }
 
-std::size_t ResourceStack::size() const { return entries_.size(); }
+Usize ResourceStack::size() const { return entries_.size(); }
 
 }  // namespace runtime
 }  // namespace mobilenet

@@ -19,6 +19,7 @@
 
 #include "Runtime/backend/mock/half_utils.h"
 #include "Runtime/backend/mock/kernels/kernel_common.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace mock {
@@ -37,37 +38,37 @@ class SampleKernel final : public Kernel {
       return status;
     }
 
-    const std::vector<int64_t> logits = Dims(context.inputs[0].shape);
-    const std::vector<int64_t> output = Dims(context.outputs[0].shape);
+    const std::vector<I64> logits = Dims(context.inputs[0].shape);
+    const std::vector<I64> output = Dims(context.outputs[0].shape);
     if (logits.size() < 2 || output.size() + 1 != logits.size()) {
       return MakeStatus(ErrorCode::kInvalidArgument,
                         "SampleKernel: unexpected tensor rank");
     }
-    for (size_t i = 0; i < output.size(); ++i) {
+    for (Usize i = 0; i < output.size(); ++i) {
       if (output[i] != logits[i]) {
         return MakeStatus(ErrorCode::kInvalidArgument,
                           "SampleKernel: output shape mismatch");
       }
     }
-    const int64_t vocab = logits.back();
+    const I64 vocab = logits.back();
     if (vocab <= 0) {
       return MakeStatus(ErrorCode::kInvalidArgument,
                         "SampleKernel: empty vocabulary");
     }
 
-    const int64_t rows = NumElements(context.inputs[0].shape) / vocab;
-    int64_t* output_data = MutableInt64Data(context.outputs[0]);
+    const I64 rows = NumElements(context.inputs[0].shape) / vocab;
+    I64* output_data = MutableInt64Data(context.outputs[0]);
     if (output_data == nullptr) {
       return MakeStatus(ErrorCode::kInvalidArgument,
                         "SampleKernel: null output data");
     }
-    for (int64_t row = 0; row < rows; ++row) {
-      const int64_t base = row * vocab;
-      float best = ReadHalf(context.inputs[0], static_cast<uint64_t>(base));
-      int64_t best_index = 0;
-      for (int64_t i = 1; i < vocab; ++i) {
-        const float value =
-            ReadHalf(context.inputs[0], static_cast<uint64_t>(base + i));
+    for (I64 row = 0; row < rows; ++row) {
+      const I64 base = row * vocab;
+      F32 best = ReadHalf(context.inputs[0], static_cast<U64>(base));
+      I64 best_index = 0;
+      for (I64 i = 1; i < vocab; ++i) {
+        const F32 value =
+            ReadHalf(context.inputs[0], static_cast<U64>(base + i));
         if (value > best) {
           best = value;
           best_index = i;

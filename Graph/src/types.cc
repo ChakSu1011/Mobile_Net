@@ -10,11 +10,12 @@
 //   types.h。
 
 #include "types.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime_graph {
 
-const char* PrecisionName(Precision precision) {
+const C8* PrecisionName(Precision precision) {
   switch (precision) {
     case Precision::kUnknown:
       return "unknown";
@@ -41,12 +42,12 @@ const char* PrecisionName(Precision precision) {
     case Precision::kUInt8:
       return "uint8";
     case Precision::kBool:
-      return "bool";
+      return "Bool";
   }
   return "unknown";
 }
 
-int64_t PrecisionByteSize(Precision precision) {
+I64 PrecisionByteSize(Precision precision) {
   switch (precision) {
     case Precision::kUnknown:
       return 0;
@@ -70,7 +71,7 @@ int64_t PrecisionByteSize(Precision precision) {
   return 0;
 }
 
-const char* LayoutName(Layout layout) {
+const C8* LayoutName(Layout layout) {
   switch (layout) {
     case Layout::kRowMajor:
       return "row_major";
@@ -80,7 +81,7 @@ const char* LayoutName(Layout layout) {
   return "unknown";
 }
 
-const char* DeviceTypeName(DeviceType device) {
+const C8* DeviceTypeName(DeviceType device) {
   switch (device) {
     case DeviceType::kUnknown:
       return "unknown";

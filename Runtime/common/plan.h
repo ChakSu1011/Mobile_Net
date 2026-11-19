@@ -21,6 +21,7 @@
 
 #include "Runtime/common/sequence.h"
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime {
@@ -47,40 +48,40 @@ enum class RequestPhase {
 //   - draft_token_ids 为阶段三投机解码预留，阶段一/二必须为空。
 struct PlanEntry {
   // 请求 ID，必须与 Scheduler 中的请求一致。
-  uint64_t request_id = 0;
+  U64 request_id = 0;
 
   // 本步阶段：Prefill 或 Decode。
   RequestPhase phase = RequestPhase::kPrefill;
 
   // 本片段的 token 在 packed token 缓冲中的起始下标。
-  int32_t packed_offset = 0;
+  I32 packed_offset = 0;
 
   // 本步 token 数：Prefill 为 chunk 长度，Decode 固定为 1。
-  int32_t token_count = 0;
+  I32 token_count = 0;
 
   // 本步要计算的 token id，长度为 token_count。
-  std::vector<int64_t> token_ids;
+  std::vector<I64> token_ids;
 
   // 每个 token 的绝对位置（从 0 开始），长度为 token_count。
-  std::vector<int64_t> positions;
+  std::vector<I64> positions;
 
   // 每个 token 的 KV 写入 slot，长度为 token_count。
-  std::vector<int64_t> slots;
+  std::vector<I64> slots;
 
   // 本请求的逻辑块到物理块映射（只读快照）。
-  std::vector<int32_t> block_table;
+  std::vector<I32> block_table;
 
   // 本步之前该请求已处理的 token 数（prompt + generated）。
-  int32_t context_length = 0;
+  I32 context_length = 0;
 
   // 从 sample.out 回读 token 的 packed 下标；不产生 token 时为 -1。
-  int32_t output_slot = -1;
+  I32 output_slot = -1;
 
   // Prefill 是否未完成：true 表示本块不是 prompt 的最后一块。
-  bool is_chunk = false;
+  Bool is_chunk = false;
 
   // 阶段三投机解码的草稿 token；阶段一/二必须为空。
-  std::vector<int64_t> draft_token_ids;
+  std::vector<I64> draft_token_ids;
 };
 
 // 单步执行计划。
@@ -95,10 +96,10 @@ struct PlanEntry {
 //   - step_id 单调递增，用于统计与阶段三异步释放栅栏。
 struct ExecutionPlan {
   // 步序号，从 1 开始单调递增。
-  uint64_t step_id = 0;
+  U64 step_id = 0;
 
   // 本步总 token 数（所有请求之和）。
-  int32_t total_tokens = 0;
+  I32 total_tokens = 0;
 
   // 本步各请求的执行片段。
   std::vector<PlanEntry> entries;
@@ -114,13 +115,13 @@ struct ExecutionPlan {
 //   - 失败时 error 必须为非 kOk 错误码，由 Engine 转交 Scheduler.Fail。
 struct RequestStepResult {
   // 请求 ID。
-  uint64_t request_id = 0;
+  U64 request_id = 0;
 
   // 本步生成的 token（阶段一/二为 argmax 选中的 Token）。
   Token token;
 
   // 本请求本步是否执行成功。
-  bool ok = true;
+  Bool ok = true;
 
   // 失败原因；成功时为 kOk。
   ErrorCode error = ErrorCode::kOk;
@@ -150,37 +151,37 @@ struct StepResult {
 //   - 字段允许为 0 表示本步未采集。
 struct StepStats {
   // 本步序号，与 ExecutionPlan.step_id 对应。
-  uint64_t step_id = 0;
+  U64 step_id = 0;
 
   // 本步总 token 数。
-  int32_t total_tokens = 0;
+  I32 total_tokens = 0;
 
   // 本步 Prefill token 数。
-  int32_t prefill_tokens = 0;
+  I32 prefill_tokens = 0;
 
   // 本步 Decode token 数。
-  int32_t decode_tokens = 0;
+  I32 decode_tokens = 0;
 
   // 本步执行时的 running 请求数。
-  int32_t running_requests = 0;
+  I32 running_requests = 0;
 
   // 本步执行时的 waiting 请求数。
-  int32_t waiting_requests = 0;
+  I32 waiting_requests = 0;
 
   // Schedule 阶段耗时（纳秒）。
-  int64_t schedule_ns = 0;
+  I64 schedule_ns = 0;
 
   // Execute 阶段耗时（纳秒）。
-  int64_t execute_ns = 0;
+  I64 execute_ns = 0;
 
   // 本步使用的 KV 块数。
-  int64_t kv_used_blocks = 0;
+  I64 kv_used_blocks = 0;
 
   // 本步结束时的空闲 KV 块数。
-  int64_t kv_free_blocks = 0;
+  I64 kv_free_blocks = 0;
 
   // 本步发生抢占的请求数。
-  int32_t preempted_requests = 0;
+  I32 preempted_requests = 0;
 };
 
 }  // namespace runtime

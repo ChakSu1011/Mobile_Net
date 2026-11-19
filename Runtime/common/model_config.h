@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "Runtime/common/data_types.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime {
@@ -34,52 +35,52 @@ namespace runtime {
 //   - dtype 使用后端边界类型 DataType；图内精度由 Graph 的 Precision 表达。
 struct ModelConfig {
   // 层数。
-  int32_t num_layers = 0;
+  I32 num_layers = 0;
 
   // Query 头数。
-  int32_t num_heads = 0;
+  I32 num_heads = 0;
 
   // KV 头数（GQA）。
-  int32_t num_kv_heads = 0;
+  I32 num_kv_heads = 0;
 
   // 每头维度。
-  int32_t head_dim = 0;
+  I32 head_dim = 0;
 
   // 隐藏层维度。
-  int64_t hidden_size = 0;
+  I64 hidden_size = 0;
 
   // FFN 中间维度。
-  int64_t intermediate_size = 0;
+  I64 intermediate_size = 0;
 
   // 词表大小。
-  int64_t vocab_size = 0;
+  I64 vocab_size = 0;
 
   // 模型支持的最大上下文；仅作为停止上限。
-  int64_t context_length = 0;
+  I64 context_length = 0;
 
   // RMSNorm epsilon。
-  float rms_norm_eps = 0.0f;
+  F32 rms_norm_eps = 0.0f;
 
   // RoPE theta。
-  double rope_theta = 0.0;
+  F64 rope_theta = 0.0;
 
   // 权重/激活精度（模型包目标精度）。
   DataType dtype = DataType::kUnknown;
 
   // 单步 token 预算（manifest inference_config）。
-  int32_t max_num_tokens = 0;
+  I32 max_num_tokens = 0;
 
   // 模型包声明的最大 batch（图 B 维）；并发由 token packing 表达。
-  int32_t max_batch_size = 0;
+  I32 max_batch_size = 0;
 
   // pad token id。
-  int64_t pad_token_id = 0;
+  I64 pad_token_id = 0;
 
   // bos token id。
-  int64_t bos_token_id = 0;
+  I64 bos_token_id = 0;
 
   // 模型默认停止 token id 列表。
-  std::vector<int64_t> stop_token_ids;
+  std::vector<I64> stop_token_ids;
 };
 
 }  // namespace runtime

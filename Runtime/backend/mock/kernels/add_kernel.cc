@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "Runtime/backend/mock/kernels/kernel_common.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace mock {
@@ -35,18 +36,18 @@ class AddKernel final : public Kernel {
       return status;
     }
 
-    const std::vector<int64_t> first = Dims(context.inputs[0].shape);
-    const std::vector<int64_t> second = Dims(context.inputs[1].shape);
-    const std::vector<int64_t> output = Dims(context.outputs[0].shape);
+    const std::vector<I64> first = Dims(context.inputs[0].shape);
+    const std::vector<I64> second = Dims(context.inputs[1].shape);
+    const std::vector<I64> output = Dims(context.outputs[0].shape);
     if (first != second || first != output) {
       return MakeStatus(ErrorCode::kInvalidArgument,
                         "AddKernel: tensor shape mismatch");
     }
-    const int64_t total = NumElements(context.inputs[0].shape);
-    for (int64_t i = 0; i < total; ++i) {
-      WriteHalf(context.outputs[0], static_cast<uint64_t>(i),
-                ReadHalf(context.inputs[0], static_cast<uint64_t>(i)) +
-                    ReadHalf(context.inputs[1], static_cast<uint64_t>(i)));
+    const I64 total = NumElements(context.inputs[0].shape);
+    for (I64 i = 0; i < total; ++i) {
+      WriteHalf(context.outputs[0], static_cast<U64>(i),
+                ReadHalf(context.inputs[0], static_cast<U64>(i)) +
+                    ReadHalf(context.inputs[1], static_cast<U64>(i)));
     }
     return Status::Ok();
   }

@@ -13,6 +13,7 @@
 
 #include <cstddef>
 #include <limits>
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime_graph {
@@ -24,16 +25,16 @@ namespace {
 //   values：维度数组；
 //   count：有效维度数量，调用方保证在 [0, kMaxShapeDim] 内。
 // 返回：
-//   乘积；遇到负维度或 int64_t 溢出时返回 -1。
-int64_t MultiplyDims(const std::array<int64_t, kMaxShapeDim>& values,
-                     int64_t count) {
-  int64_t product = 1;
-  for (int64_t index = 0; index < count; ++index) {
-    const int64_t value = values[static_cast<size_t>(index)];
+//   乘积；遇到负维度或 I64 溢出时返回 -1。
+I64 MultiplyDims(const std::array<I64, kMaxShapeDim>& values,
+                     I64 count) {
+  I64 product = 1;
+  for (I64 index = 0; index < count; ++index) {
+    const I64 value = values[static_cast<Usize>(index)];
     if (value < 0) {
       return -1;
     }
-    if (value != 0 && product > std::numeric_limits<int64_t>::max() / value) {
+    if (value != 0 && product > std::numeric_limits<I64>::max() / value) {
       return -1;
     }
     product *= value;
@@ -48,14 +49,14 @@ Shape::Shape() : max_dim(0) {
   pitch.fill(1);
 }
 
-int64_t Shape::GetShapeSize() const {
+I64 Shape::GetShapeSize() const {
   if (max_dim < 0 || max_dim > kMaxShapeDim) {
     return -1;
   }
   return MultiplyDims(dims, max_dim);
 }
 
-int64_t Shape::GetByteSize() const {
+I64 Shape::GetByteSize() const {
   if (max_dim < 0 || max_dim > kMaxShapeDim) {
     return -1;
   }

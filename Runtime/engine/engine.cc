@@ -42,19 +42,20 @@
 #include "Runtime/kvcache/kv_cache_manager.h"
 #include "Runtime/loader/loader.h"
 #include "Runtime/scheduler/scheduler.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime {
 namespace {
 
 // KV 预算自动推导时为运行时保留的余量（字节）。
-constexpr uint64_t kKvBudgetReserveBytes = 64ull * 1024 * 1024;
+constexpr U64 kKvBudgetReserveBytes = 64ull * 1024 * 1024;
 
 // 返回单调时钟纳秒时间戳。
 //
 // 返回：
 //   当前 steady_clock 时间（纳秒），用于 Step 统计。
-int64_t NowNs() {
+I64 NowNs() {
   return std::chrono::duration_cast<std::chrono::nanoseconds>(
              std::chrono::steady_clock::now().time_since_epoch())
       .count();
@@ -66,14 +67,14 @@ int64_t NowNs() {
 //   left、right：待比较的 shape。
 // 返回：
 //   max_dim 与各逻辑维度完全一致时返回 true。
-bool ShapeEquals(const runtime_graph::Shape& left,
+Bool ShapeEquals(const runtime_graph::Shape& left,
                  const runtime_graph::Shape& right) {
   if (left.max_dim != right.max_dim) {
     return false;
   }
-  for (int64_t index = 0; index < left.max_dim; ++index) {
-    if (left.dims[static_cast<size_t>(index)] !=
-        right.dims[static_cast<size_t>(index)]) {
+  for (I64 index = 0; index < left.max_dim; ++index) {
+    if (left.dims[static_cast<Usize>(index)] !=
+        right.dims[static_cast<Usize>(index)]) {
       return false;
     }
   }
@@ -88,7 +89,7 @@ bool ShapeEquals(const runtime_graph::Shape& left,
 //   error：失败时写入可读原因。
 // 返回：
 //   true 表示 device_type/指针/精度/布局/字节数/形状均合法。
-bool ValidateHostStorage(const runtime_graph::Storage& expected,
+Bool ValidateHostStorage(const runtime_graph::Storage& expected,
                          const runtime_graph::Storage& host,
                          std::string* error) {
   if (host.device_type != runtime_graph::DeviceType::kHost) {
@@ -142,7 +143,7 @@ Status BuildSchedulerConfig(const RuntimeConfig& runtime,
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "scheduler config output must not be null");
   }
-  int32_t max_num_tokens = runtime.max_num_tokens > 0
+  I32 max_num_tokens = runtime.max_num_tokens > 0
                                ? runtime.max_num_tokens
                                : model.max_num_tokens;
   if (max_num_tokens <= 0) {
@@ -155,7 +156,7 @@ Status BuildSchedulerConfig(const RuntimeConfig& runtime,
         "max_num_tokens exceeds graph planning limit: " +
             std::to_string(model.max_num_tokens));
   }
-  int32_t max_concurrent =
+  I32 max_concurrent =
       runtime.max_concurrent_requests > 0
           ? runtime.max_concurrent_requests
           : std::min(max_num_tokens, 8);
@@ -192,7 +193,7 @@ Status BuildKvCacheSpec(const RuntimeConfig& runtime,
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "kv cache spec output must not be null");
   }
-  int32_t block_size = runtime.kv_block_size > 0
+  I32 block_size = runtime.kv_block_size > 0
                            ? runtime.kv_block_size
                            : capability.attention_block_size;
   if (block_size <= 0) {
@@ -227,7 +228,7 @@ Status BuildKvCacheSpec(const RuntimeConfig& runtime,
 //   - 保留余量固定为 64 MiB，供运行时缓冲与碎片使用；
 //   - 两者均为 0 或预算不足返回错误。
 Status ComputeKvBudget(const RuntimeConfig& runtime,
-                       const LoadResult& result, uint64_t* budget) {
+                       const LoadResult& result, U64* budget) {
   if (budget == nullptr) {
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "kv budget output must not be null");
@@ -241,13 +242,13 @@ Status ComputeKvBudget(const RuntimeConfig& runtime,
         ErrorCode::kInvalidArgument,
         "kv_cache_bytes or memory_budget_bytes must be configured");
   }
-  const uint64_t known_bytes =
+  const U64 known_bytes =
       result.weights_bytes + result.arena_bytes + result.io_bytes;
   if (runtime.memory_budget_bytes <= known_bytes) {
     return MakeStatus(ErrorCode::kDeviceOom,
                       "memory budget does not cover weights/arena/io");
   }
-  const uint64_t remaining = runtime.memory_budget_bytes - known_bytes;
+  const U64 remaining = runtime.memory_budget_bytes - known_bytes;
   if (remaining <= kKvBudgetReserveBytes) {
     return MakeStatus(ErrorCode::kDeviceOom,
                       "memory budget leaves no room for KV cache");
@@ -262,7 +263,7 @@ Status ComputeKvBudget(const RuntimeConfig& runtime,
 //   code：错误码。
 // 返回：
 //   设备/内核/缓冲/后端初始化错误返回 true；请求级错误返回 false。
-bool IsFatalError(ErrorCode code) {
+Bool IsFatalError(ErrorCode code) {
   switch (code) {
     case ErrorCode::kDeviceError:
     case ErrorCode::kKernelError:
@@ -368,13 +369,13 @@ Status Engine::Load(const EngineConfig& config) {
                       "resource stack is not empty before load");
   }
 
-  bool backend_initialized = false;
-  bool executor_initialized = false;
+  Bool backend_initialized = false;
+  Bool executor_initialized = false;
   LoadResult result;
 
   // 加载失败回滚：与正常 Destroy 共用 Destroyer 与 ResourceStack。
-  auto rollback = [&](Backend* pending_backend, bool backend_ready,
-                      bool executor_ready,
+  auto rollback = [&](Backend* pending_backend, Bool backend_ready,
+                      Bool executor_ready,
                       const Status& cause) -> Status {
     DestroyContext context;
     context.scheduler = scheduler_.get();
@@ -446,7 +447,7 @@ Status Engine::Load(const EngineConfig& config) {
                     executor_initialized, status);
   }
 
-  uint64_t kv_budget = 0;
+  U64 kv_budget = 0;
   status = ComputeKvBudget(config.runtime, result, &kv_budget);
   if (!status.ok()) {
     return rollback(result.backend.get(), backend_initialized,
@@ -513,7 +514,7 @@ Status Engine::Start() {
   return Status::Ok();
 }
 
-Status Engine::AddRequest(const Request& request, uint64_t* request_id) {
+Status Engine::AddRequest(const Request& request, U64* request_id) {
   if (request_id == nullptr) {
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "request_id output must not be null");
@@ -546,7 +547,7 @@ Status Engine::AddRequest(const Request& request, uint64_t* request_id) {
   return status;
 }
 
-Status Engine::CancelRequest(uint64_t request_id) {
+Status Engine::CancelRequest(U64 request_id) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (state_ != EngineState::kLoaded && state_ != EngineState::kRunning) {
@@ -566,7 +567,7 @@ Status Engine::CancelRequest(uint64_t request_id) {
   return status;
 }
 
-Status Engine::Update(uint64_t request_id,
+Status Engine::Update(U64 request_id,
                       const std::vector<Token>& tokens,
                       Response* response) {
   if (response == nullptr) {
@@ -630,7 +631,7 @@ Status Engine::ExecuteStep(StepStats* stats) {
   }
 
   // 将请求标记失败并通知 Service；失败路径不阻塞其他请求。
-  auto fail_request = [this](uint64_t request_id, ErrorCode code) {
+  auto fail_request = [this](U64 request_id, ErrorCode code) {
     Response response;
     Status status = scheduler_->Fail(request_id, code, &response);
     if (status.ok() && response.request_id != 0) {
@@ -638,10 +639,10 @@ Status Engine::ExecuteStep(StepStats* stats) {
     }
   };
 
-  const int64_t schedule_start_ns = NowNs();
+  const I64 schedule_start_ns = NowNs();
   ExecutionPlan plan;
   Status status = scheduler_->Schedule(&plan);
-  const int64_t schedule_ns = NowNs() - schedule_start_ns;
+  const I64 schedule_ns = NowNs() - schedule_start_ns;
   if (!status.ok()) {
     if (IsFatalError(status.code())) {
       fatal_.store(true);
@@ -651,7 +652,7 @@ Status Engine::ExecuteStep(StepStats* stats) {
   }
 
   StepResult step_result;
-  int64_t execute_ns = 0;
+  I64 execute_ns = 0;
   if (!plan.entries.empty()) {
     KvCacheView kv_view;
     status = kv_cache_->BuildView(&kv_view);
@@ -665,7 +666,7 @@ Status Engine::ExecuteStep(StepStats* stats) {
       }
       return status;
     }
-    const int64_t execute_start_ns = NowNs();
+    const I64 execute_start_ns = NowNs();
     status = executor_->Execute(plan, kv_view, &step_result);
     execute_ns = NowNs() - execute_start_ns;
     if (!status.ok()) {
@@ -680,13 +681,13 @@ Status Engine::ExecuteStep(StepStats* stats) {
     }
   }
 
-  std::unordered_map<uint64_t, const RequestStepResult*> result_by_id;
+  std::unordered_map<U64, const RequestStepResult*> result_by_id;
   for (const RequestStepResult& result : step_result.requests) {
     result_by_id.emplace(result.request_id, &result);
   }
 
-  std::unordered_set<uint64_t> handled_requests;
-  int32_t generated_tokens = 0;
+  std::unordered_set<U64> handled_requests;
+  I32 generated_tokens = 0;
   for (const PlanEntry& entry : plan.entries) {
     if (!handled_requests.insert(entry.request_id).second) {
       continue;
@@ -739,7 +740,7 @@ Status Engine::ExecuteStep(StepStats* stats) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
     stats_.total_steps += 1;
-    stats_.total_tokens += static_cast<uint64_t>(generated_tokens);
+    stats_.total_tokens += static_cast<U64>(generated_tokens);
     stats_.running_requests = step_stats.running_requests;
     stats_.waiting_requests = step_stats.waiting_requests;
     stats_.kv_used_blocks = step_stats.kv_used_blocks;
@@ -757,7 +758,7 @@ void Engine::InferenceLoop() {
         (fatal_.load() || status.code() == ErrorCode::kStateError)) {
       break;
     }
-    const bool has_requests = scheduler_ && scheduler_->HasRequests();
+    const Bool has_requests = scheduler_ && scheduler_->HasRequests();
     if (!has_requests) {
       std::unique_lock<std::mutex> lock(mutex_);
       idle_cv_.notify_all();
@@ -772,7 +773,7 @@ void Engine::InferenceLoop() {
   idle_cv_.notify_all();
 }
 
-Status Engine::RunUntilIdle(uint32_t timeout_ms) {
+Status Engine::RunUntilIdle(U32 timeout_ms) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (state_ != EngineState::kLoaded && state_ != EngineState::kRunning) {

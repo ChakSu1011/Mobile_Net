@@ -27,6 +27,7 @@
 #include "Runtime/common/plan.h"
 #include "Runtime/common/sequence.h"
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime {
@@ -42,19 +43,19 @@ namespace runtime {
 //   - context_length 只用于停止判定与单请求上限推导。
 struct SchedulerConfig {
   // 单步 token 预算（来自 manifest inference_config）。
-  int32_t max_num_tokens = 0;
+  I32 max_num_tokens = 0;
 
   // 并发请求上限。
-  int32_t max_concurrent_requests = 0;
+  I32 max_concurrent_requests = 0;
 
   // 单个 Prefill chunk 上限；0 表示等于 max_num_tokens。
-  int32_t max_prefill_chunk = 0;
+  I32 max_prefill_chunk = 0;
 
   // 模型上下文长度上限。
-  int64_t context_length = 0;
+  I64 context_length = 0;
 
   // 模型默认停止 token id。
-  std::vector<int64_t> stop_ids;
+  std::vector<I64> stop_ids;
 };
 
 // 调度统计。
@@ -63,19 +64,19 @@ struct SchedulerConfig {
 //   供 EngineStats、日志与测试断言。
 struct SchedulerStats {
   // 等待队列长度。
-  int32_t waiting_requests = 0;
+  I32 waiting_requests = 0;
 
   // 运行队列长度。
-  int32_t running_requests = 0;
+  I32 running_requests = 0;
 
   // 累计/当前被抢占请求数（由实现定义口径并注释）。
-  int32_t preempted_requests = 0;
+  I32 preempted_requests = 0;
 
   // 空闲 KV 块数。
-  int64_t free_blocks = 0;
+  I64 free_blocks = 0;
 
   // KV 总块数。
-  int64_t total_blocks = 0;
+  I64 total_blocks = 0;
 };
 
 // Scheduler 统一接口。
@@ -112,7 +113,7 @@ class IScheduler {
   // 返回：
   //   成功返回 kOk；prompt 为空、长度超限或无法容纳返回 kInvalidArgument/
   //   kDeviceOom。
-  virtual Status Merge(const Request& request, uint64_t* request_id) = 0;
+  virtual Status Merge(const Request& request, U64* request_id) = 0;
 
   // 生成本步执行计划。
   //
@@ -136,7 +137,7 @@ class IScheduler {
   //   判停并设置状态；不推进 num_computed_tokens（后者在 Schedule 时按已
   //   调度 token 推进）。请求进入终态时，实现必须通过 KvAllocator::Release
   //   释放其 KV；Engine 不重复释放。
-  virtual Status Update(uint64_t request_id,
+  virtual Status Update(U64 request_id,
                         const std::vector<Token>& tokens,
                         Response* response) = 0;
 
@@ -147,7 +148,7 @@ class IScheduler {
   //   response：输出参数，status=kStopped。
   // 返回：
   //   成功返回 kOk；请求不存在返回 kRequestNotFound。
-  virtual Status Stop(uint64_t request_id, Response* response) = 0;
+  virtual Status Stop(U64 request_id, Response* response) = 0;
 
   // 标记请求失败、释放 KV 并生成终态 Response。
   //
@@ -157,7 +158,7 @@ class IScheduler {
   //   response：输出参数，status=kIllegal。
   // 返回：
   //   成功返回 kOk；请求不存在返回 kRequestNotFound。
-  virtual Status Fail(uint64_t request_id, ErrorCode code,
+  virtual Status Fail(U64 request_id, ErrorCode code,
                       Response* response) = 0;
 
   // 返回全部请求的状态快照。
@@ -167,7 +168,7 @@ class IScheduler {
   virtual SchedulerStats Stats() const = 0;
 
   // 是否存在未结束请求。
-  virtual bool HasRequests() const = 0;
+  virtual Bool HasRequests() const = 0;
 };
 
 // 创建默认 Scheduler。

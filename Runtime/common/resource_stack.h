@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime {
@@ -55,7 +56,7 @@ class ResourceStack {
   Status Clear();
 
   // 返回当前登记的释放动作数量。
-  std::size_t size() const;
+  Usize size() const;
 
  private:
   // 单条释放记录。

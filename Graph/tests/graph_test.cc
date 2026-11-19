@@ -28,6 +28,7 @@
 #include "storage.h"
 #include "tensor.h"
 #include "types.h"
+#include "Utils/cpp/types.h"
 
 namespace {
 
@@ -57,7 +58,7 @@ class CountingOpEnv : public OpEnv {
   // 参数：
   //   op：所属 op；
   //   destroyed_count：析构次数计数器，生命周期由调用方保证。
-  CountingOpEnv(Op* op, int* destroyed_count)
+  CountingOpEnv(Op* op, I32* destroyed_count)
       : OpEnv(op), destroyed_count_(destroyed_count) {}
 
   ~CountingOpEnv() override { ++(*destroyed_count_); }
@@ -66,10 +67,10 @@ class CountingOpEnv : public OpEnv {
   Status Forward() override { return Status::Ok(); }
 
   // 本测试不需要临时数据。
-  bool NeedTempData() const override { return false; }
+  Bool NeedTempData() const override { return false; }
 
  private:
-  int* destroyed_count_ = nullptr;
+  I32* destroyed_count_ = nullptr;
 };
 
 // 断言辅助宏：条件失败时打印文件、行号和表达式，并从当前测试函数返回 false。
@@ -86,7 +87,7 @@ class CountingOpEnv : public OpEnv {
 //
 // 返回：
 //   true 表示全部断言通过；false 表示存在失败。
-bool TestShape() {
+Bool TestShape() {
   Shape shape;
   CHECK(shape.max_dim == 0);
   CHECK(shape.GetShapeSize() == 1);
@@ -111,7 +112,7 @@ bool TestShape() {
 
   Shape overflow;
   overflow.max_dim = 2;
-  overflow.dims[0] = std::numeric_limits<int64_t>::max();
+  overflow.dims[0] = std::numeric_limits<I64>::max();
   overflow.dims[1] = 2;
   CHECK(overflow.GetShapeSize() == -1);
   return true;
@@ -121,8 +122,8 @@ bool TestShape() {
 //
 // 返回：
 //   true 表示全部断言通过；false 表示存在失败。
-bool TestGraphConstruction() {
-  std::vector<uint16_t> weight_data(6, 0);
+Bool TestGraphConstruction() {
+  std::vector<U16> weight_data(6, 0);
   Storage weight_storage;
   weight_storage.shape.max_dim = 2;
   weight_storage.shape.dims[0] = 2;
@@ -167,7 +168,7 @@ bool TestGraphConstruction() {
 
   std::vector<Tensor*> linear_sources{input, weight};
   AttrMap linear_attr;
-  linear_attr["axis"] = int64_t{1};
+  linear_attr["axis"] = I64{1};
   std::vector<Tensor*> linear_outputs;
   CHECK(graph
             .CreateOp("linear", linear_sources, 1, OpType::kLinear, linear_attr,
@@ -202,7 +203,7 @@ bool TestGraphConstruction() {
   CHECK(std::get<std::string>(method_iterator->second) == "argmax");
   const auto axis_iterator = sample_op->Attrs().find("axis");
   CHECK(axis_iterator != sample_op->Attrs().end());
-  CHECK(std::get<int64_t>(axis_iterator->second) == -1);
+  CHECK(std::get<I64>(axis_iterator->second) == -1);
   const auto precision_iterator = sample_op->Attrs().find("precision");
   CHECK(precision_iterator != sample_op->Attrs().end());
   CHECK(std::get<std::string>(precision_iterator->second) == "int64");
@@ -230,7 +231,7 @@ bool TestGraphConstruction() {
   CHECK(graph.GetAllConstantTensor().size() == 1);
 
   CHECK(ordered[1]->SetAttr("eps", 1e-6).ok());
-  CHECK(!ordered[1]->SetAttr("", int64_t{1}).ok());
+  CHECK(!ordered[1]->SetAttr("", I64{1}).ok());
   CHECK(!ordered[1]->SetOpEnv(nullptr).ok());
 
   CHECK(graph.SortOp().ok());
@@ -242,7 +243,7 @@ bool TestGraphConstruction() {
 //
 // 返回：
 //   true 表示全部断言通过；false 表示存在失败。
-bool TestEnvironment() {
+Bool TestEnvironment() {
   GraphEnv graph_env;
   Storage shared_storage;
   shared_storage.shape.max_dim = 1;
@@ -295,7 +296,7 @@ bool TestEnvironment() {
   CHECK(graph.GetGraphEnv() == nullptr);
 
   // Graph 析构时应主动清理挂载的 OpEnv，且不应访问已释放的 GraphEnv。
-  int destroyed_count = 0;
+  I32 destroyed_count = 0;
   {
     Graph scoped_graph("scoped_graph");
     auto scoped_env = std::make_unique<GraphEnv>();
@@ -324,7 +325,7 @@ bool TestEnvironment() {
 //
 // 返回：
 //   true 表示全部断言通过；false 表示存在失败。
-bool TestErrors() {
+Bool TestErrors() {
   Graph graph("errors");
   std::vector<Tensor*> outputs;
   CHECK(!graph.SortOp().ok());
@@ -387,7 +388,7 @@ bool TestErrors() {
 //
 // 返回：
 //   0 表示全部通过；1 表示存在失败。
-int main() {
+I32 main() {
   if (!TestShape()) {
     return 1;
   }

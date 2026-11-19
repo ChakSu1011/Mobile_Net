@@ -16,6 +16,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
@@ -78,7 +79,7 @@ std::vector<std::string> BackendRegistry::Names() const {
   return names;
 }
 
-BackendRegistrar::BackendRegistrar(const char* name, BackendFactory factory) {
+BackendRegistrar::BackendRegistrar(const C8* name, BackendFactory factory) {
   // 静态初始化阶段无法向调用方返回错误；失败由注册测试或启动诊断发现。
   const Status status = BackendRegistry::Instance().Register(
       name != nullptr ? std::string(name) : std::string(), std::move(factory));

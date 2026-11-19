@@ -24,6 +24,7 @@
 #include "Runtime/backend/mock/half_utils.h"
 #include "Runtime/backend/mock/kernels/kernel_common.h"
 #include "Runtime/backend/ops/attr_utils.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace mock {
@@ -46,11 +47,11 @@ class PerHeadRmsNormRopeKernel final : public Kernel {
       return status;
     }
 
-    const std::vector<int64_t> input = Dims(context.inputs[0].shape);
-    const std::vector<int64_t> weight = Dims(context.inputs[1].shape);
-    const std::vector<int64_t> norm = Dims(context.inputs[2].shape);
-    const std::vector<int64_t> positions = Dims(context.inputs[3].shape);
-    const std::vector<int64_t> output = Dims(context.outputs[0].shape);
+    const std::vector<I64> input = Dims(context.inputs[0].shape);
+    const std::vector<I64> weight = Dims(context.inputs[1].shape);
+    const std::vector<I64> norm = Dims(context.inputs[2].shape);
+    const std::vector<I64> positions = Dims(context.inputs[3].shape);
+    const std::vector<I64> output = Dims(context.outputs[0].shape);
     if (input.empty() || weight.size() != 2 || norm.size() != 1 ||
         positions.size() + 1 != input.size() ||
         output.size() != input.size()) {
@@ -58,15 +59,15 @@ class PerHeadRmsNormRopeKernel final : public Kernel {
           ErrorCode::kInvalidArgument,
           "PerHeadRmsNormRopeKernel: unexpected tensor rank");
     }
-    const int64_t in_features = input.back();
-    const int64_t out_features = weight[0];
+    const I64 in_features = input.back();
+    const I64 out_features = weight[0];
     if (in_features <= 0 || out_features <= 0 ||
         weight[1] != in_features || output.back() != out_features) {
       return MakeStatus(
           ErrorCode::kInvalidArgument,
           "PerHeadRmsNormRopeKernel: weight/output shape mismatch");
     }
-    for (size_t i = 0; i + 1 < input.size(); ++i) {
+    for (Usize i = 0; i + 1 < input.size(); ++i) {
       if (output[i] != input[i]) {
         return MakeStatus(
             ErrorCode::kInvalidArgument,
@@ -74,10 +75,10 @@ class PerHeadRmsNormRopeKernel final : public Kernel {
       }
     }
 
-    int64_t num_heads = 0;
-    int64_t head_dim = 0;
-    double norm_eps = 0.0;
-    double rope_theta = 0.0;
+    I64 num_heads = 0;
+    I64 head_dim = 0;
+    F64 norm_eps = 0.0;
+    F64 rope_theta = 0.0;
     std::string rope_layout;
     status = GetIntAttr(*context.attrs, "num_heads", &num_heads);
     if (!status.ok()) {
@@ -114,73 +115,73 @@ class PerHeadRmsNormRopeKernel final : public Kernel {
           "PerHeadRmsNormRopeKernel: head/norm shape mismatch");
     }
 
-    const int64_t rows = NumElements(context.inputs[0].shape) / in_features;
+    const I64 rows = NumElements(context.inputs[0].shape) / in_features;
     if (NumElements(context.inputs[3].shape) != rows) {
       return MakeStatus(ErrorCode::kInvalidArgument,
                         "PerHeadRmsNormRopeKernel: positions size mismatch");
     }
-    const int64_t* position_data = Int64Data(context.inputs[3]);
-    const uint16_t* norm_data = HalfData(context.inputs[2]);
+    const I64* position_data = Int64Data(context.inputs[3]);
+    const U16* norm_data = HalfData(context.inputs[2]);
     if (position_data == nullptr || norm_data == nullptr) {
       return MakeStatus(ErrorCode::kInvalidArgument,
                         "PerHeadRmsNormRopeKernel: null tensor data");
     }
 
-    std::vector<float> values(static_cast<size_t>(out_features), 0.0f);
-    const int64_t half_dim = head_dim / 2;
-    for (int64_t row = 0; row < rows; ++row) {
-      const int64_t input_base = row * in_features;
-      for (int64_t out = 0; out < out_features; ++out) {
-        const int64_t weight_base = out * in_features;
-        float sum = 0.0f;
-        for (int64_t i = 0; i < in_features; ++i) {
+    std::vector<F32> values(static_cast<Usize>(out_features), 0.0f);
+    const I64 half_dim = head_dim / 2;
+    for (I64 row = 0; row < rows; ++row) {
+      const I64 input_base = row * in_features;
+      for (I64 out = 0; out < out_features; ++out) {
+        const I64 weight_base = out * in_features;
+        F32 sum = 0.0f;
+        for (I64 i = 0; i < in_features; ++i) {
           sum += ReadHalf(context.inputs[0], input_base + i) *
                  ReadHalf(context.inputs[1], weight_base + i);
         }
-        values[static_cast<size_t>(out)] = sum;
+        values[static_cast<Usize>(out)] = sum;
       }
 
-      for (int64_t head = 0; head < num_heads; ++head) {
-        const int64_t base = head * head_dim;
-        float square_sum = 0.0f;
-        for (int64_t i = 0; i < head_dim; ++i) {
-          const float value = values[static_cast<size_t>(base + i)];
+      for (I64 head = 0; head < num_heads; ++head) {
+        const I64 base = head * head_dim;
+        F32 square_sum = 0.0f;
+        for (I64 i = 0; i < head_dim; ++i) {
+          const F32 value = values[static_cast<Usize>(base + i)];
           square_sum += value * value;
         }
-        const float mean = square_sum / static_cast<float>(head_dim);
-        const float scale =
-            1.0f / std::sqrt(mean + static_cast<float>(norm_eps));
-        for (int64_t i = 0; i < head_dim; ++i) {
-          values[static_cast<size_t>(base + i)] *=
+        const F32 mean = square_sum / static_cast<F32>(head_dim);
+        const F32 scale =
+            1.0f / std::sqrt(mean + static_cast<F32>(norm_eps));
+        for (I64 i = 0; i < head_dim; ++i) {
+          values[static_cast<Usize>(base + i)] *=
               scale * HalfToFloat(norm_data[i]);
         }
       }
 
-      const int64_t position = position_data[row];
-      for (int64_t head = 0; head < num_heads; ++head) {
-        const int64_t base = head * head_dim;
-        for (int64_t i = 0; i < half_dim; ++i) {
-          const double exponent =
-              -2.0 * static_cast<double>(i) /
-              static_cast<double>(head_dim);
-          const double angle =
-              static_cast<double>(position) *
+      const I64 position = position_data[row];
+      for (I64 head = 0; head < num_heads; ++head) {
+        const I64 base = head * head_dim;
+        for (I64 i = 0; i < half_dim; ++i) {
+          const F64 exponent =
+              -2.0 * static_cast<F64>(i) /
+              static_cast<F64>(head_dim);
+          const F64 angle =
+              static_cast<F64>(position) *
               std::pow(rope_theta, exponent);
-          const float cosine = static_cast<float>(std::cos(angle));
-          const float sine = static_cast<float>(std::sin(angle));
-          const float first = values[static_cast<size_t>(base + i)];
-          const float second =
-              values[static_cast<size_t>(base + i + half_dim)];
-          values[static_cast<size_t>(base + i)] =
+          const F32 cosine = static_cast<F32>(std::cos(angle));
+          const F32 sine = static_cast<F32>(std::sin(angle));
+          const F32 first = values[static_cast<Usize>(base + i)];
+          const F32 second =
+              values[static_cast<Usize>(base + i + half_dim)];
+          values[static_cast<Usize>(base + i)] =
               first * cosine - second * sine;
-          values[static_cast<size_t>(base + i + half_dim)] =
+          values[static_cast<Usize>(base + i + half_dim)] =
               second * cosine + first * sine;
         }
       }
 
-      for (int64_t out = 0; out < out_features; ++out) {
+      for (I64 out = 0; out < out_features; ++out) {
         WriteHalf(context.outputs[0], row * out_features + out,
-                  values[static_cast<size_t>(out)]);
+                  values[static_cast<Usize>(out)]);
       }
     }
     return Status::Ok();

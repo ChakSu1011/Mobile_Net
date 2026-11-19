@@ -20,6 +20,7 @@
 #include <memory>
 
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 

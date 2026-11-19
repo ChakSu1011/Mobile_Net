@@ -22,6 +22,7 @@
 #include "Runtime/backend/exec_op_env.h"
 #include "Runtime/backend/kernel_context.h"
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
@@ -59,10 +60,10 @@ class IoOpEnv final : public ExecOpEnv {
   Status Forward() override;
 
   // I/O 节点不需要 workspace。
-  bool NeedTempData() const override { return false; }
+  Bool NeedTempData() const override { return false; }
 
   // 是否为 I/O 边界节点。
-  bool IsIoNode() const override { return true; }
+  Bool IsIoNode() const override { return true; }
 
  private:
   // 非拥有后端。
@@ -72,7 +73,7 @@ class IoOpEnv final : public ExecOpEnv {
   runtime_graph::TensorView device_view_;
 
   // true 表示 Input（H2D），false 表示 Output（D2H）。
-  bool is_input_ = true;
+  Bool is_input_ = true;
 };
 
 }  // namespace mobilenet

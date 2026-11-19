@@ -22,6 +22,7 @@
 #include "Graph/include/tensor.h"
 #include "Runtime/backend/backend.h"
 #include "Runtime/backend/kernel_types.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 

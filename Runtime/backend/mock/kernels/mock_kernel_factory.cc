@@ -15,6 +15,7 @@
 #include <string>
 
 #include "Runtime/backend/mock/kernels/mock_kernel_creators.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace mock {

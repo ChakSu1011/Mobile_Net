@@ -14,6 +14,7 @@
 #define MOBILENET_RUNTIME_BACKEND_OPS_OP_SPECS_H_
 
 #include "Runtime/backend/ops/op_spec.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 

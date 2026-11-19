@@ -22,6 +22,7 @@
 
 #include "shape.h"
 #include "types.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime_graph {
@@ -50,16 +51,16 @@ struct Storage {
   DeviceType device_type = DeviceType::kUnknown;
 
   // workspace buffer 中的逻辑偏移，单位由 Manager 约定（当前为字节）。
-  size_t offset = 0;
+  Usize offset = 0;
 
   // 当前 storage 对应的字节数。
-  size_t byte_size = 0;
+  Usize byte_size = 0;
 
   // 实际数据地址；不拥有该地址指向的内存。
   void* data_ptr = nullptr;
 
   // 是否允许参与 workspace 复用。
-  bool reusable = true;
+  Bool reusable = true;
 };
 
 // 返回 Storage 的稳定文本表示，用于 dump_ir 和日志。

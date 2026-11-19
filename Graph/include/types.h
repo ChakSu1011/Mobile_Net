@@ -19,6 +19,7 @@
 #define MOBILENET_GRAPH_INCLUDE_RUNTIME_GRAPH_TYPES_H_
 
 #include <cstdint>
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime_graph {
@@ -26,7 +27,7 @@ namespace runtime_graph {
 // Shape 支持的最大维度数。
 //
 // 取值 8 覆盖当前 Transformer/CNN 模型；超过该上限的 shape 应在构图前拒绝。
-inline constexpr int64_t kMaxShapeDim = 8;
+inline constexpr I64 kMaxShapeDim = 8;
 
 // 张量元素精度。
 //
@@ -36,7 +37,7 @@ inline constexpr int64_t kMaxShapeDim = 8;
 // 边界：
 //   - 不描述量化 scale/zero_point；量化参数必须由独立元数据承载；
 //   - kUnknown 表示尚未推导或未声明，不能用于真实 kernel 调用。
-enum class Precision : uint8_t {
+enum class Precision : U8 {
   kUnknown = 0,
   kFloat64 = 1,
   kFloat32 = 2,
@@ -61,7 +62,7 @@ enum class Precision : uint8_t {
 // 边界：
 //   不表达 padding、tiling 或 vendor 私有布局；这些信息由 Shape::pitch 与
 //   后端 kernel 约定共同描述。
-enum class Layout : uint8_t {
+enum class Layout : U8 {
   kRowMajor = 0,
   kColumnMajor = 1,
 };
@@ -73,7 +74,7 @@ enum class Layout : uint8_t {
 //
 // 边界：
 //   不携带具体设备索引；设备索引由 Runtime 后端单独维护。
-enum class DeviceType : uint8_t {
+enum class DeviceType : U8 {
   kUnknown = 0,
   kHost = 1,
   kDevice = 2,
@@ -85,7 +86,7 @@ enum class DeviceType : uint8_t {
 //   precision：精度枚举值。
 // 返回：
 //   常量字符串，例如 "float16"；未知值返回 "unknown"。
-const char* PrecisionName(Precision precision);
+const C8* PrecisionName(Precision precision);
 
 // 返回单个元素的字节数。
 //
@@ -93,7 +94,7 @@ const char* PrecisionName(Precision precision);
 //   precision：精度枚举值。
 // 返回：
 //   字节数；kUnknown 返回 0。该函数不处理打包低位宽类型。
-int64_t PrecisionByteSize(Precision precision);
+I64 PrecisionByteSize(Precision precision);
 
 // 返回布局枚举的稳定名称。
 //
@@ -101,7 +102,7 @@ int64_t PrecisionByteSize(Precision precision);
 //   layout：布局枚举值。
 // 返回：
 //   常量字符串 "row_major" 或 "column_major"。
-const char* LayoutName(Layout layout);
+const C8* LayoutName(Layout layout);
 
 // 返回设备类别枚举的稳定名称。
 //
@@ -109,7 +110,7 @@ const char* LayoutName(Layout layout);
 //   device：设备类别枚举值。
 // 返回：
 //   常量字符串 "unknown"、"host" 或 "device"。
-const char* DeviceTypeName(DeviceType device);
+const C8* DeviceTypeName(DeviceType device);
 
 }  // namespace runtime_graph
 }  // namespace mobilenet

@@ -17,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
@@ -57,7 +58,7 @@ enum class ErrorCode {
 //   code：错误码。
 // 返回：
 //   形如 "INVALID_ARGUMENT" 的常量字符串；未知错误码返回 "UNKNOWN"。
-const char* ErrorCodeName(ErrorCode code);
+const C8* ErrorCodeName(ErrorCode code);
 
 // 轻量状态对象。
 //
@@ -88,7 +89,7 @@ class Status {
   }
 
   // 是否成功。
-  bool ok() const { return code_ == ErrorCode::kOk; }
+  Bool ok() const { return code_ == ErrorCode::kOk; }
 
   // 错误码；成功时返回 kOk。
   ErrorCode code() const { return code_; }

@@ -26,6 +26,7 @@
 
 #include "Runtime/backend/backend.h"
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
@@ -113,7 +114,7 @@ class BackendRegistrar {
   // 参数：
   //   name：后端名称，非空；
   //   factory：工厂函数，非空。
-  BackendRegistrar(const char* name, BackendFactory factory);
+  BackendRegistrar(const C8* name, BackendFactory factory);
 
   BackendRegistrar(const BackendRegistrar&) = delete;
   BackendRegistrar& operator=(const BackendRegistrar&) = delete;

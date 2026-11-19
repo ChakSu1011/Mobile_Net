@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "Runtime/backend/mock/kernels/kernel_common.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace mock {
@@ -36,17 +37,17 @@ class GatherKernel final : public Kernel {
       return status;
     }
 
-    const std::vector<int64_t> ids = Dims(context.inputs[0].shape);
-    const std::vector<int64_t> weight = Dims(context.inputs[1].shape);
-    const std::vector<int64_t> output = Dims(context.outputs[0].shape);
+    const std::vector<I64> ids = Dims(context.inputs[0].shape);
+    const std::vector<I64> weight = Dims(context.inputs[1].shape);
+    const std::vector<I64> output = Dims(context.outputs[0].shape);
     if (ids.size() != 2 || weight.size() != 2 || output.size() != 3) {
       return MakeStatus(ErrorCode::kInvalidArgument,
                         "GatherKernel: unexpected tensor rank");
     }
-    const int64_t batch = ids[0];
-    const int64_t sequence = ids[1];
-    const int64_t vocab = weight[0];
-    const int64_t hidden = weight[1];
+    const I64 batch = ids[0];
+    const I64 sequence = ids[1];
+    const I64 vocab = weight[0];
+    const I64 hidden = weight[1];
     if (batch < 0 || sequence < 0 || vocab <= 0 || hidden <= 0) {
       return MakeStatus(ErrorCode::kInvalidArgument,
                         "GatherKernel: invalid shape");
@@ -57,20 +58,20 @@ class GatherKernel final : public Kernel {
                         "GatherKernel: output shape mismatch");
     }
 
-    const int64_t* ids_data = Int64Data(context.inputs[0]);
-    const uint16_t* weight_data = HalfData(context.inputs[1]);
-    uint16_t* output_data = MutableHalfData(context.outputs[0]);
+    const I64* ids_data = Int64Data(context.inputs[0]);
+    const U16* weight_data = HalfData(context.inputs[1]);
+    U16* output_data = MutableHalfData(context.outputs[0]);
     if (ids_data == nullptr || weight_data == nullptr ||
         output_data == nullptr) {
       return MakeStatus(ErrorCode::kInvalidArgument,
                         "GatherKernel: null tensor data");
     }
 
-    const int64_t token_count = batch * sequence;
-    const size_t row_bytes =
-        static_cast<size_t>(hidden) * sizeof(uint16_t);
-    for (int64_t token = 0; token < token_count; ++token) {
-      const int64_t id = ids_data[token];
+    const I64 token_count = batch * sequence;
+    const Usize row_bytes =
+        static_cast<Usize>(hidden) * sizeof(U16);
+    for (I64 token = 0; token < token_count; ++token) {
+      const I64 id = ids_data[token];
       if (id < 0 || id >= vocab) {
         return MakeStatus(ErrorCode::kKernelError,
                           "GatherKernel: token id out of range");

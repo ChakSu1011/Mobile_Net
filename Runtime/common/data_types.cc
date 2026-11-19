@@ -7,10 +7,11 @@
 //   不包含任何张量存储或设备后端逻辑。
 
 #include "Runtime/common/data_types.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
-const char* DataTypeName(DataType dtype) {
+const C8* DataTypeName(DataType dtype) {
   switch (dtype) {
     case DataType::kUnknown:
       return "unknown";
@@ -29,14 +30,14 @@ const char* DataTypeName(DataType dtype) {
     case DataType::kInt64:
       return "int64";
     case DataType::kBool:
-      return "bool";
+      return "Bool";
     case DataType::kFloat64:
       return "float64";
   }
   return "unknown";
 }
 
-const char* LayoutName(Layout layout) {
+const C8* LayoutName(Layout layout) {
   switch (layout) {
     case Layout::kRowMajor:
       return "row_major";
@@ -46,7 +47,7 @@ const char* LayoutName(Layout layout) {
   return "unknown";
 }
 
-const char* DeviceTypeName(DeviceType device) {
+const C8* DeviceTypeName(DeviceType device) {
   switch (device) {
     case DeviceType::kUnknown:
       return "unknown";
@@ -58,7 +59,7 @@ const char* DeviceTypeName(DeviceType device) {
   return "unknown";
 }
 
-uint32_t DataTypeSize(DataType dtype) {
+U32 DataTypeSize(DataType dtype) {
   switch (dtype) {
     case DataType::kFloat32:
       return 4;

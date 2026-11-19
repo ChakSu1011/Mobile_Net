@@ -12,6 +12,7 @@
 #include "op_env.h"
 
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime_graph {
@@ -31,7 +32,7 @@ Status MegaAttentionOpEnv::Forward() {
       "MegaAttentionOpEnv::Forward: MegaAttention kernel is not implemented");
 }
 
-bool MegaAttentionOpEnv::NeedTempData() const { return true; }
+Bool MegaAttentionOpEnv::NeedTempData() const { return true; }
 
 }  // namespace runtime_graph
 }  // namespace mobilenet

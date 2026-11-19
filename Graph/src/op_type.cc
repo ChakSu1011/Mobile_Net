@@ -10,11 +10,12 @@
 //   op_type.h。
 
 #include "op_type.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime_graph {
 
-const char* OpTypeToStr(OpType op_type) {
+const C8* OpTypeToStr(OpType op_type) {
   switch (op_type) {
     case OpType::kUnknown:
       return "unknown";

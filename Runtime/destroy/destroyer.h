@@ -20,6 +20,7 @@
 
 #include "Runtime/common/resource_stack.h"
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
@@ -68,10 +69,10 @@ struct DestroyContext {
   ResourceStack* resource_stack = nullptr;
 
   // 后端是否已成功初始化。
-  bool backend_initialized = false;
+  Bool backend_initialized = false;
 
   // Executor 是否已完成 Init（即是否持有 Backend 所有权）。
-  bool executor_initialized = false;
+  Bool executor_initialized = false;
 };
 
 // Destroy 统一接口。

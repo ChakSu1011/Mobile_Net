@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "storage.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime_graph {
@@ -68,16 +69,16 @@ class Tensor {
   const Storage& GetStorage() const;
 
   // 返回 tensor storage 是否允许参与 workspace 复用。
-  bool Reusable() const;
+  Bool Reusable() const;
 
   // 设置 tensor storage 是否允许参与 workspace 复用。
   //
   // 参数：
   //   reusable：true 表示允许复用，false 表示生命周期覆盖整个 graph。
-  void SetReusable(bool reusable);
+  void SetReusable(Bool reusable);
 
   // 返回 tensor 是否为 constant 权重 tensor。
-  bool IsConstant() const;
+  Bool IsConstant() const;
 
  private:
   friend class Graph;
@@ -98,14 +99,14 @@ class Tensor {
   //
   // 参数：
   //   is_constant：true 表示该 tensor 是权重常量。
-  void SetConstant(bool is_constant);
+  void SetConstant(Bool is_constant);
 
   std::string name_;
   std::vector<Op*> src_ops_;
   std::vector<Op*> dst_ops_;
   Storage storage_;
-  int ref_count_ = 0;
-  bool is_constant_ = false;
+  I32 ref_count_ = 0;
+  Bool is_constant_ = false;
 };
 
 }  // namespace runtime_graph

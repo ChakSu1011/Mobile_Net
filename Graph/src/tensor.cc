@@ -14,6 +14,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime_graph {
@@ -30,11 +31,11 @@ Storage& Tensor::GetStorage() { return storage_; }
 
 const Storage& Tensor::GetStorage() const { return storage_; }
 
-bool Tensor::Reusable() const { return storage_.reusable; }
+Bool Tensor::Reusable() const { return storage_.reusable; }
 
-void Tensor::SetReusable(bool reusable) { storage_.reusable = reusable; }
+void Tensor::SetReusable(Bool reusable) { storage_.reusable = reusable; }
 
-bool Tensor::IsConstant() const { return is_constant_; }
+Bool Tensor::IsConstant() const { return is_constant_; }
 
 void Tensor::AddSrcOp(Op* op) {
   if (op != nullptr) {
@@ -48,7 +49,7 @@ void Tensor::AddDstOp(Op* op) {
   }
 }
 
-void Tensor::SetConstant(bool is_constant) { is_constant_ = is_constant; }
+void Tensor::SetConstant(Bool is_constant) { is_constant_ = is_constant; }
 
 }  // namespace runtime_graph
 }  // namespace mobilenet

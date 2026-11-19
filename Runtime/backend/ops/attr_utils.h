@@ -21,6 +21,7 @@
 #include "Graph/include/attr.h"
 #include "Graph/include/op.h"
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
@@ -31,7 +32,7 @@ namespace mobilenet {
 //   name：属性名，非空。
 // 返回：
 //   存在返回 true。
-bool HasAttr(const runtime_graph::AttrMap& attrs, const std::string& name);
+Bool HasAttr(const runtime_graph::AttrMap& attrs, const std::string& name);
 
 // 读取 int64 属性。
 //
@@ -41,10 +42,10 @@ bool HasAttr(const runtime_graph::AttrMap& attrs, const std::string& name);
 //   value：输出参数，成功时写入。
 // 返回：
 //   成功返回 kOk；缺失/类型不符返回 kInvalidArgument。
-Status GetIntAttr(const runtime_graph::AttrMap& attrs, const char* name,
-                  int64_t* value);
+Status GetIntAttr(const runtime_graph::AttrMap& attrs, const C8* name,
+                  I64* value);
 
-// 读取浮点属性；允许 int64 自动提升为 double。
+// 读取浮点属性；允许 int64 自动提升为 F64。
 //
 // 参数：
 //   attrs：属性表；
@@ -52,31 +53,31 @@ Status GetIntAttr(const runtime_graph::AttrMap& attrs, const char* name,
 //   value：输出参数，成功时写入。
 // 返回：
 //   成功返回 kOk；缺失/类型不符返回 kInvalidArgument。
-Status GetFloatAttr(const runtime_graph::AttrMap& attrs, const char* name,
-                    double* value);
+Status GetFloatAttr(const runtime_graph::AttrMap& attrs, const C8* name,
+                    F64* value);
 
-// 读取 bool 属性。
-Status GetBoolAttr(const runtime_graph::AttrMap& attrs, const char* name,
-                   bool* value);
+// 读取 Bool 属性。
+Status GetBoolAttr(const runtime_graph::AttrMap& attrs, const C8* name,
+                   Bool* value);
 
 // 读取 string 属性。
-Status GetStringAttr(const runtime_graph::AttrMap& attrs, const char* name,
+Status GetStringAttr(const runtime_graph::AttrMap& attrs, const C8* name,
                      std::string* value);
 
 // 读取 op 的 int64 属性；错误消息带 op 名。
-Status GetIntAttr(const runtime_graph::Op& op, const char* name,
-                  int64_t* value);
+Status GetIntAttr(const runtime_graph::Op& op, const C8* name,
+                  I64* value);
 
 // 读取 op 的浮点属性；错误消息带 op 名。
-Status GetFloatAttr(const runtime_graph::Op& op, const char* name,
-                    double* value);
+Status GetFloatAttr(const runtime_graph::Op& op, const C8* name,
+                    F64* value);
 
-// 读取 op 的 bool 属性；错误消息带 op 名。
-Status GetBoolAttr(const runtime_graph::Op& op, const char* name,
-                   bool* value);
+// 读取 op 的 Bool 属性；错误消息带 op 名。
+Status GetBoolAttr(const runtime_graph::Op& op, const C8* name,
+                   Bool* value);
 
 // 读取 op 的 string 属性；错误消息带 op 名。
-Status GetStringAttr(const runtime_graph::Op& op, const char* name,
+Status GetStringAttr(const runtime_graph::Op& op, const C8* name,
                      std::string* value);
 
 }  // namespace mobilenet

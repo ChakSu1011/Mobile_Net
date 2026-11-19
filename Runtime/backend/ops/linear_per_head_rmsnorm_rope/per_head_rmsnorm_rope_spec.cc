@@ -21,6 +21,7 @@
 #include "Runtime/backend/ops/attr_utils.h"
 #include "Runtime/backend/ops/op_specs.h"
 #include "Runtime/backend/ops/op_validation.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace {
@@ -36,12 +37,12 @@ Status ValidatePerHeadRmsNormRope(const runtime_graph::Op& op) {
             ": per_head_rmsnorm_rope requires 4 inputs and 1 output");
   }
 
-  int64_t in_features = 0;
-  int64_t out_features = 0;
-  int64_t num_heads = 0;
-  int64_t head_dim = 0;
-  double norm_eps = 0.0;
-  double rope_theta = 0.0;
+  I64 in_features = 0;
+  I64 out_features = 0;
+  I64 num_heads = 0;
+  I64 head_dim = 0;
+  F64 norm_eps = 0.0;
+  F64 rope_theta = 0.0;
   std::string rope_layout;
   Status status = GetIntAttr(op, "in_features", &in_features);
   if (!status.ok()) {
@@ -71,7 +72,7 @@ Status ValidatePerHeadRmsNormRope(const runtime_graph::Op& op) {
   if (!status.ok()) {
     return status;
   }
-  bool transpose = true;
+  Bool transpose = true;
   status = GetBoolAttr(op, "transpose_weight", &transpose);
   if (!status.ok()) {
     return status;
@@ -102,7 +103,7 @@ Status ValidatePerHeadRmsNormRope(const runtime_graph::Op& op) {
     }
   }
   if (HasAttr(op.Attrs(), "scaling_factor")) {
-    double scaling = 1.0;
+    F64 scaling = 1.0;
     status = GetFloatAttr(op, "scaling_factor", &scaling);
     if (!status.ok()) {
       return status;
@@ -115,7 +116,7 @@ Status ValidatePerHeadRmsNormRope(const runtime_graph::Op& op) {
     }
   }
   if (HasAttr(op.Attrs(), "bias")) {
-    bool bias = false;
+    Bool bias = false;
     status = GetBoolAttr(op, "bias", &bias);
     if (!status.ok()) {
       return status;
@@ -136,7 +137,7 @@ Status ValidatePerHeadRmsNormRope(const runtime_graph::Op& op) {
             ": invalid per_head_rmsnorm_rope head/rope attrs");
   }
 
-  const char* op_name = op.Name().c_str();
+  const C8* op_name = op.Name().c_str();
   status = CheckTensor(*sources[0], runtime_graph::Precision::kFloat16,
                        op_name, "input[0]");
   if (!status.ok()) {
@@ -172,15 +173,15 @@ Status ValidatePerHeadRmsNormRope(const runtime_graph::Op& op) {
     return status;
   }
 
-  const std::vector<int64_t> input =
+  const std::vector<I64> input =
       ShapeToDims(sources[0]->GetStorage().shape);
-  const std::vector<int64_t> weight =
+  const std::vector<I64> weight =
       ShapeToDims(sources[1]->GetStorage().shape);
-  const std::vector<int64_t> norm =
+  const std::vector<I64> norm =
       ShapeToDims(sources[2]->GetStorage().shape);
-  const std::vector<int64_t> positions =
+  const std::vector<I64> positions =
       ShapeToDims(sources[3]->GetStorage().shape);
-  const std::vector<int64_t> output =
+  const std::vector<I64> output =
       ShapeToDims(destinations[0]->GetStorage().shape);
   if (input.empty() || positions.size() + 1 != input.size() ||
       output.size() != input.size()) {

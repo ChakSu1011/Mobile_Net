@@ -132,6 +132,37 @@ Agent 智能体在服务侧的应用部署已经非常广泛，手机端或者�
 - **资源受限**：手机内存与显存受限，必须支持 Activation 复用与 KV 分页，且具备 OOM 抢占能力。
 - **流程约束**：所有开发遵循项目 memory.md 的编码规范、中文注释、四件套与六段式设计文档要求。
 - **后端插件约束**：所有后端实现必须位于 `Runtime/backend/<name>/` 独立目录；公共头文件不得暴露后端专有类型；首期只验收 OCL，其他后端只验证插件机制。
+- **公共类型约束**：所有 C++ Host 端数据类型统一使用 `Utils/cpp/types.h` 中的别名；业务代码不得直接使用 `uint64_t`/`int32_t`/`size_t`/`float`/`double`/`bool`/`char` 等原始类型名。
+
+### 2.4.1 公共类型与工具约定（Utils）
+
+`Utils/` 存放全工程共享的公共类型、公共头文件与公约操作：
+
+```text
+Utils/
+├── cpp/types.h     # C++ Host 端类型别名（唯一定义处）
+└── python/         # Python 公共工具与公约（跨 ToolChain/Models 共享）
+```
+
+`Utils/cpp/types.h` 的类型映射：
+
+| 别名 | 底层类型 | 用途 |
+| --- | --- | --- |
+| `U8/U16/U32/U64` | `std::uint8_t/16/32/64_t` | 无符号整数 |
+| `I8/I16/I32/I64` | `std::int8_t/16/32/64_t` | 有符号整数 |
+| `F32/F64` | `float/double` | 浮点数 |
+| `Bool` | `bool` | 布尔 |
+| `C8` | `char` | 字符/字节文本 |
+| `Usize` | `std::size_t` | 尺寸/索引 |
+| `Isize` | `std::ptrdiff_t` | 指针差值/有符号尺寸 |
+
+执行要求：
+
+1. 所有 C++ `.h`/`.cc`/`.cpp` 文件在 include 区包含 `"Utils/cpp/types.h"`。
+2. 全工程 C++ 代码（Graph、Runtime、Tests、Tools 中的 C++ 部分）统一使用上述别名；新增代码不得使用原始类型名。
+3. 别名在全局命名空间定义，便于在 `mobilenet`、`runtime_graph` 及测试 `main` 中直接使用；不得在其它头文件重复定义。
+4. 例外：`Utils/cpp/types.h` 自身；第三方/厂商头文件与其公开 API 的原始类型出现在 include 边界时保持原样，不复制厂商类型。
+5. `Utils/python/` 用于跨模块 Python 公共工具（哈希、JSON、错误、路径等）；同一功能不得在 ToolChain/Models 中重复实现。
 
 ## 2.5 验收标准
 
@@ -278,6 +309,9 @@ MobileNet/
 │   ├── tokenizer/
 │   ├── prefix_cache/
 │   └── session/
+├── Utils/                 # 全工程公共类型与公约
+│   ├── cpp/types.h        # C++ Host 端类型别名（U8/U16/U32/U64/I8/I16/I32/I64/F32/F64/Bool/C8/Usize/Isize）
+│   └── python/            # Python 公共工具与公约
 ├── Tests/                 # 单元、集成、基准、金标准数据、后端契约测试
 └── Reference/             # 本地参考知识库（不提交 GitHub）
 ```

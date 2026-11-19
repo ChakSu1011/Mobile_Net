@@ -18,6 +18,7 @@
 #include "Runtime/backend/ops/attr_utils.h"
 #include "Runtime/backend/ops/op_specs.h"
 #include "Runtime/backend/ops/op_validation.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace {
@@ -31,7 +32,7 @@ Status ValidateRmsNorm(const runtime_graph::Op& op) {
                       "op=" + op.Name() +
                           ": rms_norm requires 2 inputs and 1 output");
   }
-  int64_t axis = -1;
+  I64 axis = -1;
   Status status = GetIntAttr(op, "axis", &axis);
   if (!status.ok()) {
     return status;
@@ -41,12 +42,12 @@ Status ValidateRmsNorm(const runtime_graph::Op& op) {
         ErrorCode::kUnsupportedOp,
         "op=" + op.Name() + ": rms_norm only supports axis=-1");
   }
-  int64_t normalized_shape = 0;
+  I64 normalized_shape = 0;
   status = GetIntAttr(op, "normalized_shape", &normalized_shape);
   if (!status.ok()) {
     return status;
   }
-  double eps = 0.0;
+  F64 eps = 0.0;
   status = GetFloatAttr(op, "eps", &eps);
   if (!status.ok()) {
     return status;
@@ -56,7 +57,7 @@ Status ValidateRmsNorm(const runtime_graph::Op& op) {
                       "op=" + op.Name() + ": invalid rms_norm attrs");
   }
 
-  const char* op_name = op.Name().c_str();
+  const C8* op_name = op.Name().c_str();
   status = CheckTensor(*sources[0], runtime_graph::Precision::kFloat16,
                        op_name, "input[0]");
   if (!status.ok()) {
@@ -78,11 +79,11 @@ Status ValidateRmsNorm(const runtime_graph::Op& op) {
     return status;
   }
 
-  const std::vector<int64_t> input =
+  const std::vector<I64> input =
       ShapeToDims(sources[0]->GetStorage().shape);
-  const std::vector<int64_t> weight =
+  const std::vector<I64> weight =
       ShapeToDims(sources[1]->GetStorage().shape);
-  const std::vector<int64_t> output =
+  const std::vector<I64> output =
       ShapeToDims(destinations[0]->GetStorage().shape);
   if (input.empty() || weight[0] != normalized_shape ||
       input.back() != normalized_shape || output != input) {

@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "storage.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime_graph {
@@ -43,7 +44,7 @@ template <typename T>
 std::string JoinNumbers(const std::vector<T>& values) {
   std::ostringstream stream;
   stream << "[";
-  for (size_t index = 0; index < values.size(); ++index) {
+  for (Usize index = 0; index < values.size(); ++index) {
     if (index != 0) {
       stream << ",";
     }
@@ -62,7 +63,7 @@ std::string JoinNumbers(const std::vector<T>& values) {
 std::string JoinStrings(const std::vector<std::string>& values) {
   std::ostringstream stream;
   stream << "[";
-  for (size_t index = 0; index < values.size(); ++index) {
+  for (Usize index = 0; index < values.size(); ++index) {
     if (index != 0) {
       stream << ",";
     }
@@ -77,16 +78,16 @@ std::string JoinStrings(const std::vector<std::string>& values) {
 std::string AttrValueToString(const AttrValue& value) {
   return std::visit(
       Overloaded{
-          [](bool item) { return std::string(item ? "true" : "false"); },
-          [](int64_t item) { return std::to_string(item); },
-          [](double item) {
+          [](Bool item) { return std::string(item ? "true" : "false"); },
+          [](I64 item) { return std::to_string(item); },
+          [](F64 item) {
             std::ostringstream stream;
             stream << item;
             return stream.str();
           },
           [](const std::string& item) { return item; },
-          [](const std::vector<int64_t>& item) { return JoinNumbers(item); },
-          [](const std::vector<double>& item) { return JoinNumbers(item); },
+          [](const std::vector<I64>& item) { return JoinNumbers(item); },
+          [](const std::vector<F64>& item) { return JoinNumbers(item); },
           [](const std::vector<std::string>& item) {
             return JoinStrings(item);
           },

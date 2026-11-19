@@ -23,6 +23,7 @@
 #include "Runtime/backend/ops/io_op_env.h"
 #include "Runtime/backend/ops/kernel_op_env.h"
 #include "Runtime/backend/ops/op_spec.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime {

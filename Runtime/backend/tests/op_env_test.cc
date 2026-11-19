@@ -40,6 +40,7 @@
 #include "Runtime/common/data_types.h"
 #include "Runtime/common/op_env_factory.h"
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace {
 
@@ -69,7 +70,7 @@ using mobilenet::runtime_graph::Storage;
 using mobilenet::runtime_graph::Tensor;
 
 // 输出一条断言结果。
-void Expect(bool condition, const std::string& message, int* failures) {
+void Expect(Bool condition, const std::string& message, I32* failures) {
   if (condition) {
     std::cout << "PASS " << message << "\n";
     return;
@@ -79,17 +80,17 @@ void Expect(bool condition, const std::string& message, int* failures) {
 }
 
 // 输出浮点比较断言。
-void ExpectNear(float actual, float expected, float tolerance,
-                const std::string& message, int* failures) {
+void ExpectNear(F32 actual, F32 expected, F32 tolerance,
+                const std::string& message, I32* failures) {
   Expect(std::fabs(actual - expected) <= tolerance, message, failures);
 }
 
 // 创建指定维度的 Shape。
-Shape MakeShape(std::initializer_list<int64_t> dims) {
+Shape MakeShape(std::initializer_list<I64> dims) {
   Shape shape;
-  shape.max_dim = static_cast<int64_t>(dims.size());
-  size_t index = 0;
-  for (const int64_t dim : dims) {
+  shape.max_dim = static_cast<I64>(dims.size());
+  Usize index = 0;
+  for (const I64 dim : dims) {
     shape.dims[index] = dim;
     shape.pitch[index] = dim;
     ++index;
@@ -98,7 +99,7 @@ Shape MakeShape(std::initializer_list<int64_t> dims) {
 }
 
 // 创建 Mock 设备缓冲。
-bool CreateBuffer(Backend* backend, uint64_t bytes,
+Bool CreateBuffer(Backend* backend, U64 bytes,
                   std::unique_ptr<Buffer>* buffer) {
   BufferDesc desc;
   desc.bytes = bytes;
@@ -109,7 +110,7 @@ bool CreateBuffer(Backend* backend, uint64_t bytes,
 
 // 构造设备 Storage。
 Storage DeviceStorage(Buffer* buffer, const Shape& shape,
-                      Precision precision, uint64_t bytes) {
+                      Precision precision, U64 bytes) {
   Storage storage;
   storage.shape = shape;
   storage.precision = precision;
@@ -124,7 +125,7 @@ Storage DeviceStorage(Buffer* buffer, const Shape& shape,
 
 // 构造主机 Storage。
 Storage HostStorage(void* data, const Shape& shape, Precision precision,
-                    uint64_t bytes) {
+                    U64 bytes) {
   Storage storage;
   storage.shape = shape;
   storage.precision = precision;
@@ -137,27 +138,27 @@ Storage HostStorage(void* data, const Shape& shape, Precision precision,
   return storage;
 }
 
-// 把 float 序列写成 half 设备张量。
-void WriteHalves(Buffer* buffer, const std::vector<float>& values) {
-  auto* data = static_cast<uint16_t*>(buffer->DevicePtr());
-  for (size_t i = 0; i < values.size(); ++i) {
+// 把 F32 序列写成 half 设备张量。
+void WriteHalves(Buffer* buffer, const std::vector<F32>& values) {
+  auto* data = static_cast<U16*>(buffer->DevicePtr());
+  for (Usize i = 0; i < values.size(); ++i) {
     data[i] = FloatToHalf(values[i]);
   }
 }
 
 // 读取 half 设备张量。
-std::vector<float> ReadHalves(Buffer* buffer, size_t count) {
-  const auto* data = static_cast<const uint16_t*>(buffer->DevicePtr());
-  std::vector<float> values(count, 0.0f);
-  for (size_t i = 0; i < count; ++i) {
+std::vector<F32> ReadHalves(Buffer* buffer, Usize count) {
+  const auto* data = static_cast<const U16*>(buffer->DevicePtr());
+  std::vector<F32> values(count, 0.0f);
+  for (Usize i = 0; i < count; ++i) {
     values[i] = HalfToFloat(data[i]);
   }
   return values;
 }
 
-// 把 float 序列写入主机 half 数组。
-void WriteHostHalves(uint16_t* data, const std::vector<float>& values) {
-  for (size_t i = 0; i < values.size(); ++i) {
+// 把 F32 序列写入主机 half 数组。
+void WriteHostHalves(U16* data, const std::vector<F32>& values) {
+  for (Usize i = 0; i < values.size(); ++i) {
     data[i] = FloatToHalf(values[i]);
   }
 }
@@ -173,14 +174,14 @@ Status CreateMockBackend(std::unique_ptr<Backend>* backend) {
 }
 
 // 对 Graph 的全部 op 创建 OpEnv。
-bool CreateOpEnvs(Graph* graph, Backend* backend, GraphEnv* graph_env,
-                  int* failures) {
+Bool CreateOpEnvs(Graph* graph, Backend* backend, GraphEnv* graph_env,
+                  I32* failures) {
   auto factory = CreateDefaultOpEnvFactory();
   if (factory == nullptr) {
     Expect(false, "factory created", failures);
     return false;
   }
-  bool ok = true;
+  Bool ok = true;
   for (Op* op : graph->GetOrderlyOPList()) {
     std::unique_ptr<OpEnv> op_env;
     const Status status =
@@ -197,14 +198,14 @@ bool CreateOpEnvs(Graph* graph, Backend* backend, GraphEnv* graph_env,
 }
 
 // 设置 StepContext 并执行全部 op。
-bool ExecuteGraph(Graph* graph, Backend* backend, int* failures) {
+Bool ExecuteGraph(Graph* graph, Backend* backend, I32* failures) {
   mobilenet::StepContext step;
   step.backend = backend;
   step.batch = 1;
   step.packed_tokens = 4;
   step.is_prefill = true;
 
-  bool ok = true;
+  Bool ok = true;
   for (Op* op : graph->GetOrderlyOPList()) {
     OpEnv* op_env = op->GetOpEnv();
     if (op_env == nullptr) {
@@ -232,7 +233,7 @@ bool ExecuteGraph(Graph* graph, Backend* backend, int* failures) {
 }
 
 // 验证 8 个融合算子 OpSpec 已登记，未支持类型返回空。
-void TestSpecRegistry(int* failures) {
+void TestSpecRegistry(I32* failures) {
   const OpType supported[] = {
       OpType::kGather,
       OpType::kRmsNorm,
@@ -254,7 +255,7 @@ void TestSpecRegistry(int* failures) {
 }
 
 // 验证 Input → Add → Output 的完整执行链。
-void TestAddGraph(int* failures) {
+void TestAddGraph(I32* failures) {
   std::unique_ptr<Backend> backend;
   if (!CreateMockBackend(&backend).ok()) {
     Expect(false, "add graph backend init", failures);
@@ -265,7 +266,7 @@ void TestAddGraph(int* failures) {
   std::unique_ptr<Buffer> rhs_device;
   std::unique_ptr<Buffer> output_device;
   const Shape tensor_shape = MakeShape({1, 2, 2});
-  constexpr uint64_t kTensorBytes = 4 * sizeof(uint16_t);
+  constexpr U64 kTensorBytes = 4 * sizeof(U16);
   if (!CreateBuffer(backend.get(), kTensorBytes, &input_device) ||
       !CreateBuffer(backend.get(), kTensorBytes, &rhs_device) ||
       !CreateBuffer(backend.get(), kTensorBytes, &output_device)) {
@@ -276,9 +277,9 @@ void TestAddGraph(int* failures) {
   WriteHalves(rhs_device.get(), {10.0f, 20.0f, 30.0f, 40.0f});
   WriteHalves(output_device.get(), {0.0f, 0.0f, 0.0f, 0.0f});
 
-  std::vector<uint16_t> input_host(4, 0);
+  std::vector<U16> input_host(4, 0);
   WriteHostHalves(input_host.data(), {1.0f, 2.0f, 3.0f, 4.0f});
-  std::vector<uint16_t> output_host(4, 0);
+  std::vector<U16> output_host(4, 0);
 
   Graph graph("op_env_add");
   Tensor* input = nullptr;
@@ -342,13 +343,13 @@ void TestAddGraph(int* failures) {
   Expect(backend->Synchronize(nullptr).ok(), "synchronize add graph",
          failures);
 
-  const std::vector<float> values = ReadHalves(output_device.get(), 4);
+  const std::vector<F32> values = ReadHalves(output_device.get(), 4);
   ExpectNear(values[0], 11.0f, 1e-3f, "graph add value 0", failures);
   ExpectNear(values[1], 22.0f, 1e-3f, "graph add value 1", failures);
   ExpectNear(values[2], 33.0f, 1e-3f, "graph add value 2", failures);
   ExpectNear(values[3], 44.0f, 1e-3f, "graph add value 3", failures);
 
-  const std::vector<float> host_values = {
+  const std::vector<F32> host_values = {
       HalfToFloat(output_host[0]), HalfToFloat(output_host[1]),
       HalfToFloat(output_host[2]), HalfToFloat(output_host[3])};
   ExpectNear(host_values[0], 11.0f, 1e-3f, "D2H add value 0", failures);
@@ -363,7 +364,7 @@ void TestAddGraph(int* failures) {
 }
 
 // 验证未知 op 在工厂创建期返回 kUnsupportedOp。
-void TestUnsupportedOp(int* failures) {
+void TestUnsupportedOp(I32* failures) {
   std::unique_ptr<Backend> backend;
   if (!CreateMockBackend(&backend).ok()) {
     Expect(false, "unsupported backend init", failures);
@@ -393,7 +394,7 @@ void TestUnsupportedOp(int* failures) {
 }
 
 // 验证缺失 attr 在加载期返回 kInvalidArgument。
-void TestMissingAttr(int* failures) {
+void TestMissingAttr(I32* failures) {
   std::unique_ptr<Backend> backend;
   if (!CreateMockBackend(&backend).ok()) {
     Expect(false, "missing attr backend init", failures);
@@ -425,8 +426,8 @@ void TestMissingAttr(int* failures) {
 
 }  // namespace
 
-int main() {
-  int failures = 0;
+I32 main() {
+  I32 failures = 0;
   TestSpecRegistry(&failures);
   TestAddGraph(&failures);
   TestUnsupportedOp(&failures);

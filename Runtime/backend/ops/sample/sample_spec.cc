@@ -18,6 +18,7 @@
 #include "Runtime/backend/ops/attr_utils.h"
 #include "Runtime/backend/ops/op_specs.h"
 #include "Runtime/backend/ops/op_validation.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace {
@@ -41,7 +42,7 @@ Status ValidateSample(const runtime_graph::Op& op) {
                       "op=" + op.Name() +
                           ": sample only supports method=argmax");
   }
-  int64_t axis = -1;
+  I64 axis = -1;
   status = GetIntAttr(op, "axis", &axis);
   if (!status.ok()) {
     return status;
@@ -52,7 +53,7 @@ Status ValidateSample(const runtime_graph::Op& op) {
                           ": sample only supports axis=-1");
   }
 
-  const char* op_name = op.Name().c_str();
+  const C8* op_name = op.Name().c_str();
   status = CheckTensor(*sources[0], runtime_graph::Precision::kFloat16,
                        op_name, "input[0]");
   if (!status.ok()) {
@@ -64,15 +65,15 @@ Status ValidateSample(const runtime_graph::Op& op) {
   if (!status.ok()) {
     return status;
   }
-  const std::vector<int64_t> logits =
+  const std::vector<I64> logits =
       ShapeToDims(sources[0]->GetStorage().shape);
-  const std::vector<int64_t> output =
+  const std::vector<I64> output =
       ShapeToDims(destinations[0]->GetStorage().shape);
   if (logits.size() < 2 || output.size() + 1 != logits.size()) {
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "op=" + op.Name() + ": sample rank mismatch");
   }
-  for (size_t i = 0; i < output.size(); ++i) {
+  for (Usize i = 0; i < output.size(); ++i) {
     if (output[i] != logits[i]) {
       return MakeStatus(
           ErrorCode::kInvalidArgument,

@@ -16,12 +16,13 @@
 
 #include "Runtime/backend/kernel_types.h"
 #include "Runtime/common/data_types.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace {
 
 // 拼接带 op/role 的错误消息。
-std::string TensorError(const char* op_name, const char* role,
+std::string TensorError(const C8* op_name, const C8* role,
                         const std::string& detail) {
   return std::string("op=") + (op_name != nullptr ? op_name : "?") +
          " " + (role != nullptr ? role : "tensor") + ": " + detail;
@@ -29,14 +30,14 @@ std::string TensorError(const char* op_name, const char* role,
 
 }  // namespace
 
-std::vector<int64_t> ShapeToDims(const runtime_graph::Shape& shape) {
+std::vector<I64> ShapeToDims(const runtime_graph::Shape& shape) {
   if (shape.max_dim < 0 || shape.max_dim > runtime_graph::kMaxShapeDim) {
     return {};
   }
-  std::vector<int64_t> dims;
-  dims.reserve(static_cast<size_t>(shape.max_dim));
-  for (int64_t i = 0; i < shape.max_dim; ++i) {
-    dims.push_back(shape.dims[static_cast<size_t>(i)]);
+  std::vector<I64> dims;
+  dims.reserve(static_cast<Usize>(shape.max_dim));
+  for (I64 i = 0; i < shape.max_dim; ++i) {
+    dims.push_back(shape.dims[static_cast<Usize>(i)]);
   }
   return dims;
 }
@@ -46,8 +47,8 @@ DataType TensorDataType(const runtime_graph::Tensor& tensor) {
 }
 
 Status CheckTensor(const runtime_graph::Tensor& tensor,
-                   runtime_graph::Precision precision, const char* op_name,
-                   const char* role) {
+                   runtime_graph::Precision precision, const C8* op_name,
+                   const C8* role) {
   const runtime_graph::Storage& storage = tensor.GetStorage();
   if (storage.precision != precision) {
     return MakeStatus(ErrorCode::kUnsupportedDtype,
@@ -65,23 +66,23 @@ Status CheckTensor(const runtime_graph::Tensor& tensor,
                                   "tensor is not bound to device"));
   }
   const DataType dtype = DataTypeFromPrecision(precision);
-  const uint32_t element_size = DataTypeSize(dtype);
+  const U32 element_size = DataTypeSize(dtype);
   if (element_size == 0) {
     return MakeStatus(ErrorCode::kUnsupportedDtype,
                       TensorError(op_name, role,
                                   "dtype has no element size"));
   }
-  const std::vector<int64_t> dims = ShapeToDims(storage.shape);
-  int64_t elements = 1;
-  for (const int64_t dim : dims) {
+  const std::vector<I64> dims = ShapeToDims(storage.shape);
+  I64 elements = 1;
+  for (const I64 dim : dims) {
     if (dim < 0) {
       return MakeStatus(ErrorCode::kInvalidArgument,
                         TensorError(op_name, role, "negative dimension"));
     }
     elements *= dim;
   }
-  const uint64_t expected =
-      static_cast<uint64_t>(elements) * element_size;
+  const U64 expected =
+      static_cast<U64>(elements) * element_size;
   if (storage.byte_size != expected) {
     return MakeStatus(
         ErrorCode::kInvalidArgument,
@@ -90,9 +91,9 @@ Status CheckTensor(const runtime_graph::Tensor& tensor,
   return Status::Ok();
 }
 
-Status CheckRank(const runtime_graph::Tensor& tensor, size_t rank,
-                 const char* op_name, const char* role) {
-  const std::vector<int64_t> dims =
+Status CheckRank(const runtime_graph::Tensor& tensor, Usize rank,
+                 const C8* op_name, const C8* role) {
+  const std::vector<I64> dims =
       ShapeToDims(tensor.GetStorage().shape);
   if (dims.size() != rank) {
     return MakeStatus(
@@ -102,15 +103,15 @@ Status CheckRank(const runtime_graph::Tensor& tensor, size_t rank,
   return Status::Ok();
 }
 
-Status CheckSamePrefix(const std::vector<int64_t>& first,
-                       const std::vector<int64_t>& second,
-                       size_t prefix_len, const char* message) {
+Status CheckSamePrefix(const std::vector<I64>& first,
+                       const std::vector<I64>& second,
+                       Usize prefix_len, const C8* message) {
   if (first.size() < prefix_len || second.size() < prefix_len) {
     return MakeStatus(ErrorCode::kInvalidArgument,
                       std::string(message != nullptr ? message : "shape") +
                           ": rank is too small");
   }
-  for (size_t i = 0; i < prefix_len; ++i) {
+  for (Usize i = 0; i < prefix_len; ++i) {
     if (first[i] != second[i]) {
       return MakeStatus(
           ErrorCode::kInvalidArgument,
@@ -122,7 +123,7 @@ Status CheckSamePrefix(const std::vector<int64_t>& first,
 }
 
 Status BuildKernelDesc(const runtime_graph::Op& op,
-                       const char* kernel_key,
+                       const C8* kernel_key,
                        const runtime_graph::Tensor& precision_tensor,
                        KernelDesc* desc) {
   if (desc == nullptr || kernel_key == nullptr) {

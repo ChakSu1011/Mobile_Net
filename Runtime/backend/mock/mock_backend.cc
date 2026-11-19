@@ -25,13 +25,14 @@
 #include "Runtime/backend/mock/kernels/mock_kernel_factory.h"
 #include "Runtime/backend/mock/mock_buffer.h"
 #include "Runtime/common/data_types.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace mock {
 namespace {
 
 // 判断是否为 2 的幂；0 返回 false。
-bool IsPowerOfTwo(uint64_t value) {
+Bool IsPowerOfTwo(U64 value) {
   return value != 0 && (value & (value - 1)) == 0;
 }
 
@@ -43,40 +44,40 @@ bool IsPowerOfTwo(uint64_t value) {
 // 返回：
 //   成功返回 kOk；未知 dtype 返回 kUnsupportedDtype。
 Status ConvertParamData(const ParamDesc& desc, MockBuffer* target) {
-  const uint32_t source_size = DataTypeSize(desc.source_dtype);
-  const uint32_t target_size = DataTypeSize(desc.target_dtype);
+  const U32 source_size = DataTypeSize(desc.source_dtype);
+  const U32 target_size = DataTypeSize(desc.target_dtype);
   if (source_size == 0 || target_size == 0) {
     return MakeStatus(ErrorCode::kUnsupportedDtype,
                       "MockBackend::ConvertParam: unsupported dtype");
   }
-  const uint64_t count = desc.bytes / source_size;
+  const U64 count = desc.bytes / source_size;
   if (desc.source_dtype == desc.target_dtype) {
     std::memcpy(target->Data(), desc.host_ptr, desc.bytes);
     return Status::Ok();
   }
   if (desc.source_dtype == DataType::kFloat32 &&
       desc.target_dtype == DataType::kFloat16) {
-    const auto* source = static_cast<const float*>(desc.host_ptr);
-    auto* destination = static_cast<uint16_t*>(target->Data());
-    for (uint64_t i = 0; i < count; ++i) {
+    const auto* source = static_cast<const F32*>(desc.host_ptr);
+    auto* destination = static_cast<U16*>(target->Data());
+    for (U64 i = 0; i < count; ++i) {
       destination[i] = FloatToHalf(source[i]);
     }
     return Status::Ok();
   }
   if (desc.source_dtype == DataType::kBFloat16 &&
       desc.target_dtype == DataType::kFloat16) {
-    const auto* source = static_cast<const uint16_t*>(desc.host_ptr);
-    auto* destination = static_cast<uint16_t*>(target->Data());
-    for (uint64_t i = 0; i < count; ++i) {
+    const auto* source = static_cast<const U16*>(desc.host_ptr);
+    auto* destination = static_cast<U16*>(target->Data());
+    for (U64 i = 0; i < count; ++i) {
       destination[i] = BFloat16ToHalf(source[i]);
     }
     return Status::Ok();
   }
   if (desc.source_dtype == DataType::kFloat16 &&
       desc.target_dtype == DataType::kFloat32) {
-    const auto* source = static_cast<const uint16_t*>(desc.host_ptr);
-    auto* destination = static_cast<float*>(target->Data());
-    for (uint64_t i = 0; i < count; ++i) {
+    const auto* source = static_cast<const U16*>(desc.host_ptr);
+    auto* destination = static_cast<F32*>(target->Data());
+    for (U64 i = 0; i < count; ++i) {
       destination[i] = HalfToFloat(source[i]);
     }
     return Status::Ok();
@@ -105,7 +106,7 @@ MockBackend::MockBackend() {
   capability_.h2d = true;
   capability_.d2h = true;
   capability_.max_buffer_bytes =
-      std::numeric_limits<uint64_t>::max() / 2;
+      std::numeric_limits<U64>::max() / 2;
   capability_.min_alignment = 1;
   capability_.attention_block_size = 16;
   capability_.kv_layout = KvLayout::kNhd;
@@ -161,14 +162,14 @@ Status MockBackend::CreateBuffer(const BufferDesc& desc,
         ErrorCode::kBufferError,
         "MockBackend::CreateBuffer: buffer exceeds max_buffer_bytes");
   }
-  const uint64_t requested = desc.alignment == 0 ? 64 : desc.alignment;
+  const U64 requested = desc.alignment == 0 ? 64 : desc.alignment;
   if (!IsPowerOfTwo(requested)) {
     return MakeStatus(
         ErrorCode::kBufferError,
         "MockBackend::CreateBuffer: alignment must be a power of two");
   }
   // 主机分配器通常要求至少指针宽度对齐；大于请求值仍满足请求。
-  const uint64_t alignment = std::max<uint64_t>(requested, 64);
+  const U64 alignment = std::max<U64>(requested, 64);
   try {
     *buffer = std::make_unique<MockBuffer>(desc.bytes, alignment);
   } catch (const std::bad_alloc&) {
@@ -194,16 +195,16 @@ Status MockBackend::ConvertParam(const ParamDesc& desc,
         ErrorCode::kInvalidArgument,
         "MockBackend::ConvertParam: invalid argument");
   }
-  const uint32_t source_size = DataTypeSize(desc.source_dtype);
-  const uint32_t target_size = DataTypeSize(desc.target_dtype);
+  const U32 source_size = DataTypeSize(desc.source_dtype);
+  const U32 target_size = DataTypeSize(desc.target_dtype);
   if (source_size == 0 || target_size == 0 ||
       desc.bytes % source_size != 0) {
     return MakeStatus(
         ErrorCode::kUnsupportedDtype,
         "MockBackend::ConvertParam: unsupported dtype or misaligned bytes");
   }
-  const uint64_t count = desc.bytes / source_size;
-  const uint64_t target_bytes = count * target_size;
+  const U64 count = desc.bytes / source_size;
+  const U64 target_bytes = count * target_size;
   std::unique_ptr<MockBuffer> target;
   try {
     target = std::make_unique<MockBuffer>(target_bytes, 64);
@@ -220,7 +221,7 @@ Status MockBackend::ConvertParam(const ParamDesc& desc,
 }
 
 Status MockBackend::Upload(void* device_ptr, const void* host_ptr,
-                           uint64_t bytes, Stream*) {
+                           U64 bytes, Stream*) {
   if (!initialized_) {
     return MakeStatus(ErrorCode::kStateError,
                       "MockBackend::Upload: not initialized");
@@ -229,12 +230,12 @@ Status MockBackend::Upload(void* device_ptr, const void* host_ptr,
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "MockBackend::Upload: invalid argument");
   }
-  std::memcpy(device_ptr, host_ptr, static_cast<size_t>(bytes));
+  std::memcpy(device_ptr, host_ptr, static_cast<Usize>(bytes));
   return Status::Ok();
 }
 
 Status MockBackend::Download(void* host_ptr, const void* device_ptr,
-                             uint64_t bytes, Stream*) {
+                             U64 bytes, Stream*) {
   if (!initialized_) {
     return MakeStatus(ErrorCode::kStateError,
                       "MockBackend::Download: not initialized");
@@ -243,7 +244,7 @@ Status MockBackend::Download(void* host_ptr, const void* device_ptr,
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "MockBackend::Download: invalid argument");
   }
-  std::memcpy(host_ptr, device_ptr, static_cast<size_t>(bytes));
+  std::memcpy(host_ptr, device_ptr, static_cast<Usize>(bytes));
   return Status::Ok();
 }
 

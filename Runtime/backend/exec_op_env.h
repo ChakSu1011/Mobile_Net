@@ -24,6 +24,7 @@
 #include "Runtime/common/kv_view.h"
 #include "Runtime/common/plan.h"
 #include "Runtime/common/status.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 
@@ -54,19 +55,19 @@ struct StepContext {
   const runtime::KvCacheView* kv_view = nullptr;
 
   // 每 batch 行有效序列长度；长度至少为 batch，可为空。
-  const int32_t* seq_lens = nullptr;
+  const I32* seq_lens = nullptr;
 
   // batch 行数。
-  int32_t batch = 1;
+  I32 batch = 1;
 
   // 本步打包后的有效 token 数。
-  int32_t packed_tokens = 0;
+  I32 packed_tokens = 0;
 
   // 图级临时工作区；无 workspace 时 data 为空。
   runtime_graph::TensorView workspace;
 
   // 是否处于 Prefill 阶段。
-  bool is_prefill = true;
+  Bool is_prefill = true;
 };
 
 // 执行型 OpEnv。
@@ -99,7 +100,7 @@ class ExecOpEnv : public runtime_graph::OpEnv {
   //
   // 返回：
   //   默认返回 false；IoOpEnv 返回 true。
-  virtual bool IsIoNode() const { return false; }
+  virtual Bool IsIoNode() const { return false; }
 
   // 写入本步上下文。
   //

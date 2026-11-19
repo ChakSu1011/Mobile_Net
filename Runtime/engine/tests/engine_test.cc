@@ -40,6 +40,7 @@
 #include "Runtime/kvcache/kv_cache_manager.h"
 #include "Runtime/loader/loader.h"
 #include "Runtime/scheduler/scheduler.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace runtime {
@@ -48,8 +49,8 @@ namespace runtime {
 class FakeBuffer final : public Buffer {
  public:
   // 构造指定字节数的缓冲。
-  explicit FakeBuffer(uint64_t bytes)
-      : bytes_(static_cast<size_t>(bytes)) {}
+  explicit FakeBuffer(U64 bytes)
+      : bytes_(static_cast<Usize>(bytes)) {}
 
   // 返回缓冲地址；空缓冲返回 nullptr。
   void* DevicePtr() const override {
@@ -57,12 +58,12 @@ class FakeBuffer final : public Buffer {
   }
 
   // 返回缓冲字节数。
-  uint64_t Bytes() const override { return bytes_.size(); }
+  U64 Bytes() const override { return bytes_.size(); }
 
  private:
   // Buffer::DevicePtr 为 const 方法但返回可写地址，故数据成员声明为
   // mutable，模拟设备内存的"逻辑只读、物理可写"语义。
-  mutable std::vector<uint8_t> bytes_;
+  mutable std::vector<U8> bytes_;
 };
 
 // 测试用 Kernel：始终成功，不执行真实计算。
@@ -135,21 +136,21 @@ class FakeBackend final : public Backend {
   }
 
   // 主机到设备拷贝。
-  Status Upload(void* device_ptr, const void* host_ptr, uint64_t bytes,
+  Status Upload(void* device_ptr, const void* host_ptr, U64 bytes,
                 Stream* stream) override {
     (void)stream;
     if (bytes > 0) {
-      std::memcpy(device_ptr, host_ptr, static_cast<size_t>(bytes));
+      std::memcpy(device_ptr, host_ptr, static_cast<Usize>(bytes));
     }
     return Status::Ok();
   }
 
   // 设备到主机拷贝。
-  Status Download(void* host_ptr, const void* device_ptr, uint64_t bytes,
+  Status Download(void* host_ptr, const void* device_ptr, U64 bytes,
                   Stream* stream) override {
     (void)stream;
     if (bytes > 0) {
-      std::memcpy(host_ptr, device_ptr, static_cast<size_t>(bytes));
+      std::memcpy(host_ptr, device_ptr, static_cast<Usize>(bytes));
     }
     return Status::Ok();
   }
@@ -178,11 +179,11 @@ class FakeBackend final : public Backend {
   }
 
   // 返回 Deinit 调用次数。
-  int deinit_count() const { return deinit_count_; }
+  I32 deinit_count() const { return deinit_count_; }
 
  private:
-  bool initialized_ = false;
-  int deinit_count_ = 0;
+  Bool initialized_ = false;
+  I32 deinit_count_ = 0;
 };
 
 // 测试用 KVCache：记录规格并返回固定视图，不做真实块分配。
@@ -190,7 +191,7 @@ class FakeKVCache final : public IKVCache {
  public:
   // 保存规格。
   Status Init(Backend* backend, const KvCacheSpec& spec,
-              uint64_t kv_budget_bytes,
+              U64 kv_budget_bytes,
               ResourceStack* resource_stack) override {
     (void)backend;
     (void)kv_budget_bytes;
@@ -211,7 +212,7 @@ class FakeKVCache final : public IKVCache {
   }
 
   // 记录追加分配。
-  Status Reserve(uint64_t request_id, int64_t new_tokens) override {
+  Status Reserve(U64 request_id, I64 new_tokens) override {
     (void)request_id;
     if (new_tokens <= 0) {
       return MakeStatus(ErrorCode::kInvalidArgument,
@@ -221,22 +222,22 @@ class FakeKVCache final : public IKVCache {
   }
 
   // 释放请求（测试无状态）。
-  void Release(uint64_t request_id) override { (void)request_id; }
+  void Release(U64 request_id) override { (void)request_id; }
 
   // 返回固定空闲块数。
-  int64_t FreeBlocks() const override { return 16; }
+  I64 FreeBlocks() const override { return 16; }
 
   // 返回块大小。
-  int32_t BlockSize() const override {
+  I32 BlockSize() const override {
     return spec_.block_size > 0 ? spec_.block_size : 16;
   }
 
   // 返回固定最大 token 数。
-  int64_t MaxTotalTokens() const override { return 64; }
+  I64 MaxTotalTokens() const override { return 64; }
 
   // 返回固定块表。
-  Status GetBlockTable(uint64_t request_id,
-                       std::vector<int32_t>* table) const override {
+  Status GetBlockTable(U64 request_id,
+                       std::vector<I32>* table) const override {
     (void)request_id;
     if (table == nullptr) {
       return MakeStatus(ErrorCode::kInvalidArgument, "table is null");
@@ -246,14 +247,14 @@ class FakeKVCache final : public IKVCache {
   }
 
   // 返回固定 slot 列表。
-  Status GetSlots(uint64_t request_id, int64_t first_token, int64_t count,
-                  std::vector<int64_t>* slots) const override {
+  Status GetSlots(U64 request_id, I64 first_token, I64 count,
+                  std::vector<I64>* slots) const override {
     (void)request_id;
     (void)first_token;
     if (slots == nullptr || count < 0) {
       return MakeStatus(ErrorCode::kInvalidArgument, "invalid slots query");
     }
-    slots->assign(static_cast<size_t>(count), 0);
+    slots->assign(static_cast<Usize>(count), 0);
     return Status::Ok();
   }
 
@@ -284,7 +285,7 @@ class FakeScheduler final : public IScheduler {
   }
 
   // 接收请求并分配 ID。
-  Status Merge(const Request& request, uint64_t* request_id) override {
+  Status Merge(const Request& request, U64* request_id) override {
     std::lock_guard<std::mutex> lock(mutex_);
     if (request_id == nullptr || request.prompt_token_ids.empty()) {
       return MakeStatus(ErrorCode::kInvalidArgument, "invalid request");
@@ -293,7 +294,7 @@ class FakeScheduler final : public IScheduler {
     data.request_id = next_request_id_++;
     data.state = RequestStatus::kWaiting;
     data.prompt_tokens =
-        static_cast<int32_t>(request.prompt_token_ids.size());
+        static_cast<I32>(request.prompt_token_ids.size());
     data.computed_tokens = 0;
     data.generated_tokens = 0;
     data.sample_param = request.sample_param;
@@ -343,7 +344,7 @@ class FakeScheduler final : public IScheduler {
   }
 
   // 回写 token、更新 Sequence 并结束请求。
-  Status Update(uint64_t request_id, const std::vector<Token>& tokens,
+  Status Update(U64 request_id, const std::vector<Token>& tokens,
                 Response* response) override {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = requests_.find(request_id);
@@ -366,7 +367,7 @@ class FakeScheduler final : public IScheduler {
   }
 
   // 取消请求并生成终态 Response。
-  Status Stop(uint64_t request_id, Response* response) override {
+  Status Stop(U64 request_id, Response* response) override {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = requests_.find(request_id);
     if (it == requests_.end()) {
@@ -381,7 +382,7 @@ class FakeScheduler final : public IScheduler {
   }
 
   // 标记请求失败并生成终态 Response。
-  Status Fail(uint64_t request_id, ErrorCode code,
+  Status Fail(U64 request_id, ErrorCode code,
               Response* response) override {
     (void)code;
     std::lock_guard<std::mutex> lock(mutex_);
@@ -430,7 +431,7 @@ class FakeScheduler final : public IScheduler {
   }
 
   // 是否存在未结束请求。
-  bool HasRequests() const override {
+  Bool HasRequests() const override {
     std::lock_guard<std::mutex> lock(mutex_);
     for (const auto& entry : requests_) {
       if (entry.second.state == RequestStatus::kWaiting ||
@@ -444,11 +445,11 @@ class FakeScheduler final : public IScheduler {
  private:
   // 请求内部状态。
   struct RequestData {
-    uint64_t request_id = 0;
+    U64 request_id = 0;
     RequestStatus state = RequestStatus::kWaiting;
-    int32_t prompt_tokens = 0;
-    int32_t computed_tokens = 0;
-    int32_t generated_tokens = 0;
+    I32 prompt_tokens = 0;
+    I32 computed_tokens = 0;
+    I32 generated_tokens = 0;
     Sequence sequence;
     SampleParams sample_param;
   };
@@ -466,12 +467,12 @@ class FakeScheduler final : public IScheduler {
   }
 
   mutable std::mutex mutex_;
-  std::unordered_map<uint64_t, RequestData> requests_;
+  std::unordered_map<U64, RequestData> requests_;
   SchedulerConfig config_;
   ModelConfig model_;
   KvAllocator* kv_allocator_ = nullptr;
-  uint64_t next_request_id_ = 1;
-  uint64_t step_id_ = 0;
+  U64 next_request_id_ = 1;
+  U64 step_id_ = 0;
 };
 
 // 测试用 Executor：为每个计划项返回 token 42。
@@ -548,7 +549,7 @@ class FakeDestroyer final : public IDestroyer {
 //   bytes：字节数。
 // 返回：
 //   成功返回 kOk。
-Status SetTestTensorStorage(runtime_graph::Tensor* tensor, uint64_t bytes) {
+Status SetTestTensorStorage(runtime_graph::Tensor* tensor, U64 bytes) {
   if (tensor == nullptr) {
     return MakeStatus(ErrorCode::kInvalidArgument, "tensor is null");
   }
@@ -556,7 +557,7 @@ Status SetTestTensorStorage(runtime_graph::Tensor* tensor, uint64_t bytes) {
   storage.precision = runtime_graph::Precision::kInt64;
   storage.layout = runtime_graph::Layout::kRowMajor;
   storage.device_type = runtime_graph::DeviceType::kDevice;
-  storage.byte_size = static_cast<size_t>(bytes);
+  storage.byte_size = static_cast<Usize>(bytes);
   storage.reusable = false;
   storage.shape.max_dim = 2;
   storage.shape.dims[0] = 1;
@@ -665,10 +666,10 @@ std::unique_ptr<IDestroyer> CreateDefaultDestroyer() { return nullptr; }
 namespace {
 
 // 断言计数。
-int g_failures = 0;
+I32 g_failures = 0;
 
 // 检查布尔条件。
-void Check(bool condition, const char* message) {
+void Check(Bool condition, const C8* message) {
   if (!condition) {
     std::printf("FAIL: %s\n", message);
     ++g_failures;
@@ -677,14 +678,14 @@ void Check(bool condition, const char* message) {
 
 // 检查 Status 错误码。
 void CheckStatus(const mobilenet::Status& status,
-                 mobilenet::ErrorCode expected, const char* message) {
+                 mobilenet::ErrorCode expected, const C8* message) {
   Check(status.code() == expected, message);
 }
 
 }  // namespace
 
 // Engine 测试入口。
-int main() {
+I32 main() {
   using mobilenet::ErrorCode;
   using mobilenet::runtime::Engine;
   using mobilenet::runtime::EngineConfig;
@@ -716,7 +717,7 @@ int main() {
                 "RunOnce rejects CREATED state");
     Request request;
     request.prompt_token_ids = {1, 2, 3};
-    uint64_t request_id = 0;
+    U64 request_id = 0;
     CheckStatus(engine.AddRequest(request, &request_id),
                 ErrorCode::kStateError,
                 "AddRequest rejects CREATED state");
@@ -774,12 +775,12 @@ int main() {
                 "Load succeeds with fake modules");
     Check(engine.state() == EngineState::kLoaded, "state becomes LOADED");
 
-    std::vector<int64_t> input_data(4, 1);
+    std::vector<I64> input_data(4, 1);
     Storage input_storage;
     input_storage.precision = Precision::kInt64;
     input_storage.layout = Layout::kRowMajor;
     input_storage.device_type = DeviceType::kHost;
-    input_storage.byte_size = input_data.size() * sizeof(int64_t);
+    input_storage.byte_size = input_data.size() * sizeof(I64);
     input_storage.data_ptr = input_data.data();
     input_storage.shape.max_dim = 2;
     input_storage.shape.dims[0] = 1;
@@ -787,12 +788,12 @@ int main() {
     CheckStatus(engine.SetInput("input.input_ids", input_storage),
                 ErrorCode::kOk, "SetInput succeeds");
 
-    std::vector<int64_t> output_data(4, 0);
+    std::vector<I64> output_data(4, 0);
     Storage output_storage;
     output_storage.precision = Precision::kInt64;
     output_storage.layout = Layout::kRowMajor;
     output_storage.device_type = DeviceType::kHost;
-    output_storage.byte_size = output_data.size() * sizeof(int64_t);
+    output_storage.byte_size = output_data.size() * sizeof(I64);
     output_storage.data_ptr = output_data.data();
     output_storage.shape.max_dim = 2;
     output_storage.shape.dims[0] = 1;
@@ -800,9 +801,9 @@ int main() {
     CheckStatus(engine.SetOutput("output.tokens", output_storage),
                 ErrorCode::kOk, "SetOutput succeeds");
 
-    int64_t callback_token = -1;
-    bool callback_finished = false;
-    int callback_count = 0;
+    I64 callback_token = -1;
+    Bool callback_finished = false;
+    I32 callback_count = 0;
     engine.SetResponseCallback([&](const Response& response) {
       if (!response.sequences.empty()) {
         callback_token = response.sequences[0].current_token.token_id;
@@ -814,7 +815,7 @@ int main() {
 
     Request request;
     request.prompt_token_ids = {1, 2, 3};
-    uint64_t request_id = 0;
+    U64 request_id = 0;
     CheckStatus(engine.AddRequest(request, &request_id), ErrorCode::kOk,
                 "AddRequest succeeds");
     Check(request_id != 0, "request id is assigned");
@@ -861,9 +862,9 @@ int main() {
     CheckStatus(engine.RunOnce(nullptr), ErrorCode::kStateError,
                 "RunOnce is disabled in threaded mode");
 
-    std::atomic<int64_t> callback_token{-1};
-    std::atomic<bool> callback_finished{false};
-    std::atomic<int> callback_count{0};
+    std::atomic<I64> callback_token{-1};
+    std::atomic<Bool> callback_finished{false};
+    std::atomic<I32> callback_count{0};
     engine.SetResponseCallback([&](const Response& response) {
       if (!response.sequences.empty()) {
         callback_token.store(response.sequences[0].current_token.token_id);
@@ -875,10 +876,10 @@ int main() {
 
     Request request;
     request.prompt_token_ids = {1, 2, 3};
-    uint64_t request_id = 0;
+    U64 request_id = 0;
     CheckStatus(engine.AddRequest(request, &request_id), ErrorCode::kOk,
                 "threaded AddRequest succeeds");
-    for (int i = 0; i < 2000 && !callback_finished.load(); ++i) {
+    for (I32 i = 0; i < 2000 && !callback_finished.load(); ++i) {
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     Check(callback_count.load() == 1 && callback_token.load() == 42 &&

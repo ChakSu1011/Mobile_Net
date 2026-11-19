@@ -19,6 +19,7 @@
 #include "Runtime/backend/ops/attr_utils.h"
 #include "Runtime/backend/ops/op_specs.h"
 #include "Runtime/backend/ops/op_validation.h"
+#include "Utils/cpp/types.h"
 
 namespace mobilenet {
 namespace {
@@ -32,8 +33,8 @@ Status ValidateLinear(const runtime_graph::Op& op) {
                       "op=" + op.Name() +
                           ": linear requires 2 inputs and 1 output");
   }
-  int64_t in_features = 0;
-  int64_t out_features = 0;
+  I64 in_features = 0;
+  I64 out_features = 0;
   Status status = GetIntAttr(op, "in_features", &in_features);
   if (!status.ok()) {
     return status;
@@ -42,7 +43,7 @@ Status ValidateLinear(const runtime_graph::Op& op) {
   if (!status.ok()) {
     return status;
   }
-  bool transpose = true;
+  Bool transpose = true;
   status = GetBoolAttr(op, "transpose_weight", &transpose);
   if (!status.ok()) {
     return status;
@@ -53,7 +54,7 @@ Status ValidateLinear(const runtime_graph::Op& op) {
         "op=" + op.Name() + ": linear only supports transpose_weight=true");
   }
   if (HasAttr(op.Attrs(), "bias")) {
-    bool bias = false;
+    Bool bias = false;
     status = GetBoolAttr(op, "bias", &bias);
     if (!status.ok()) {
       return status;
@@ -68,7 +69,7 @@ Status ValidateLinear(const runtime_graph::Op& op) {
                       "op=" + op.Name() + ": invalid linear features");
   }
 
-  const char* op_name = op.Name().c_str();
+  const C8* op_name = op.Name().c_str();
   status = CheckTensor(*sources[0], runtime_graph::Precision::kFloat16,
                        op_name, "input[0]");
   if (!status.ok()) {
@@ -90,11 +91,11 @@ Status ValidateLinear(const runtime_graph::Op& op) {
     return status;
   }
 
-  const std::vector<int64_t> input =
+  const std::vector<I64> input =
       ShapeToDims(sources[0]->GetStorage().shape);
-  const std::vector<int64_t> weight =
+  const std::vector<I64> weight =
       ShapeToDims(sources[1]->GetStorage().shape);
-  const std::vector<int64_t> output =
+  const std::vector<I64> output =
       ShapeToDims(destinations[0]->GetStorage().shape);
   if (input.empty() || output.size() != input.size()) {
     return MakeStatus(ErrorCode::kInvalidArgument,

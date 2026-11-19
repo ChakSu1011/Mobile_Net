@@ -77,8 +77,8 @@ class PerHeadRmsNormRopeKernel final : public Kernel {
 
     I64 num_heads = 0;
     I64 head_dim = 0;
-    F64 norm_eps = 0.0;
-    F64 rope_theta = 0.0;
+    FP64 norm_eps = 0.0;
+    FP64 rope_theta = 0.0;
     std::string rope_layout;
     status = GetIntAttr(*context.attrs, "num_heads", &num_heads);
     if (!status.ok()) {
@@ -127,13 +127,13 @@ class PerHeadRmsNormRopeKernel final : public Kernel {
                         "PerHeadRmsNormRopeKernel: null tensor data");
     }
 
-    std::vector<F32> values(static_cast<Usize>(out_features), 0.0f);
+    std::vector<FP32> values(static_cast<Usize>(out_features), 0.0f);
     const I64 half_dim = head_dim / 2;
     for (I64 row = 0; row < rows; ++row) {
       const I64 input_base = row * in_features;
       for (I64 out = 0; out < out_features; ++out) {
         const I64 weight_base = out * in_features;
-        F32 sum = 0.0f;
+        FP32 sum = 0.0f;
         for (I64 i = 0; i < in_features; ++i) {
           sum += ReadHalf(context.inputs[0], input_base + i) *
                  ReadHalf(context.inputs[1], weight_base + i);
@@ -143,14 +143,14 @@ class PerHeadRmsNormRopeKernel final : public Kernel {
 
       for (I64 head = 0; head < num_heads; ++head) {
         const I64 base = head * head_dim;
-        F32 square_sum = 0.0f;
+        FP32 square_sum = 0.0f;
         for (I64 i = 0; i < head_dim; ++i) {
-          const F32 value = values[static_cast<Usize>(base + i)];
+          const FP32 value = values[static_cast<Usize>(base + i)];
           square_sum += value * value;
         }
-        const F32 mean = square_sum / static_cast<F32>(head_dim);
-        const F32 scale =
-            1.0f / std::sqrt(mean + static_cast<F32>(norm_eps));
+        const FP32 mean = square_sum / static_cast<FP32>(head_dim);
+        const FP32 scale =
+            1.0f / std::sqrt(mean + static_cast<FP32>(norm_eps));
         for (I64 i = 0; i < head_dim; ++i) {
           values[static_cast<Usize>(base + i)] *=
               scale * HalfToFloat(norm_data[i]);
@@ -161,16 +161,16 @@ class PerHeadRmsNormRopeKernel final : public Kernel {
       for (I64 head = 0; head < num_heads; ++head) {
         const I64 base = head * head_dim;
         for (I64 i = 0; i < half_dim; ++i) {
-          const F64 exponent =
-              -2.0 * static_cast<F64>(i) /
-              static_cast<F64>(head_dim);
-          const F64 angle =
-              static_cast<F64>(position) *
+          const FP64 exponent =
+              -2.0 * static_cast<FP64>(i) /
+              static_cast<FP64>(head_dim);
+          const FP64 angle =
+              static_cast<FP64>(position) *
               std::pow(rope_theta, exponent);
-          const F32 cosine = static_cast<F32>(std::cos(angle));
-          const F32 sine = static_cast<F32>(std::sin(angle));
-          const F32 first = values[static_cast<Usize>(base + i)];
-          const F32 second =
+          const FP32 cosine = static_cast<FP32>(std::cos(angle));
+          const FP32 sine = static_cast<FP32>(std::sin(angle));
+          const FP32 first = values[static_cast<Usize>(base + i)];
+          const FP32 second =
               values[static_cast<Usize>(base + i + half_dim)];
           values[static_cast<Usize>(base + i)] =
               first * cosine - second * sine;

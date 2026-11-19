@@ -59,10 +59,10 @@ struct ModelConfig {
   I64 context_length = 0;
 
   // RMSNorm epsilon。
-  F32 rms_norm_eps = 0.0f;
+  FP32 rms_norm_eps = 0.0f;
 
   // RoPE theta。
-  F64 rope_theta = 0.0;
+  FP64 rope_theta = 0.0;
 
   // 权重/激活精度（模型包目标精度）。
   DataType dtype = DataType::kUnknown;

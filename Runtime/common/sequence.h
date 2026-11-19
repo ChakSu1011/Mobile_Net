@@ -61,19 +61,19 @@ struct SampleParams {
   Bool is_valid = false;
 
   // 温度；阶段三。
-  F32 temperature = 0.0f;
+  FP32 temperature = 0.0f;
 
   // 出现惩罚；阶段三。
-  F32 presence_penalty = 0.0f;
+  FP32 presence_penalty = 0.0f;
 
   // 频率惩罚；阶段三。
-  F32 frequency_penalty = 0.0f;
+  FP32 frequency_penalty = 0.0f;
 
   // Beam 宽度；阶段三。
   I32 num_beam = 1;
 
   // Nucleus 采样阈值；阶段三。
-  F32 top_p = 0.0f;
+  FP32 top_p = 0.0f;
 
   // Top-k 采样上限；阶段三。
   I32 top_k = 0;
@@ -187,10 +187,10 @@ struct Token {
   I64 token_id = -1;
 
   // 概率；未计算时为 0。
-  F32 token_prob = 0.0f;
+  FP32 token_prob = 0.0f;
 
   // 对数概率；未计算时为 0。
-  F32 log_prob = 0.0f;
+  FP32 log_prob = 0.0f;
 
   // 是否为选中 token。
   Bool select = false;
@@ -232,7 +232,7 @@ struct Sequence {
   I32 prompt_count = 0;
 
   // Beam 累计 logprob。
-  F64 cumulative_score = 0.0;
+  FP64 cumulative_score = 0.0;
 
   // 词表大小。
   I32 vocab_size = 0;

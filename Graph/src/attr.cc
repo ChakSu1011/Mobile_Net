@@ -80,14 +80,14 @@ std::string AttrValueToString(const AttrValue& value) {
       Overloaded{
           [](Bool item) { return std::string(item ? "true" : "false"); },
           [](I64 item) { return std::to_string(item); },
-          [](F64 item) {
+          [](FP64 item) {
             std::ostringstream stream;
             stream << item;
             return stream.str();
           },
           [](const std::string& item) { return item; },
           [](const std::vector<I64>& item) { return JoinNumbers(item); },
-          [](const std::vector<F64>& item) { return JoinNumbers(item); },
+          [](const std::vector<FP64>& item) { return JoinNumbers(item); },
           [](const std::vector<std::string>& item) {
             return JoinStrings(item);
           },

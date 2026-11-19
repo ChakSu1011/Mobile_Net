@@ -58,7 +58,7 @@ class RmsNormKernel final : public Kernel {
                         "RmsNormKernel: normalized shape mismatch");
     }
 
-    F64 eps = 0.0;
+    FP64 eps = 0.0;
     status = GetFloatAttr(*context.attrs, "eps", &eps);
     if (!status.ok()) {
       return status;
@@ -81,16 +81,16 @@ class RmsNormKernel final : public Kernel {
     }
     const I64 rows = NumElements(context.inputs[0].shape) / last_dim;
     for (I64 row = 0; row < rows; ++row) {
-      F32 sum = 0.0f;
+      FP32 sum = 0.0f;
       for (I64 i = 0; i < last_dim; ++i) {
-        const F32 value = ReadHalf(context.inputs[0], row * last_dim + i);
+        const FP32 value = ReadHalf(context.inputs[0], row * last_dim + i);
         sum += value * value;
       }
-      const F32 mean = sum / static_cast<F32>(last_dim);
-      const F32 scale = 1.0f / std::sqrt(mean + static_cast<F32>(eps));
+      const FP32 mean = sum / static_cast<FP32>(last_dim);
+      const FP32 scale = 1.0f / std::sqrt(mean + static_cast<FP32>(eps));
       for (I64 i = 0; i < last_dim; ++i) {
-        const F32 value = ReadHalf(context.inputs[0], row * last_dim + i);
-        const F32 weight_value = HalfToFloat(weight_data[i]);
+        const FP32 value = ReadHalf(context.inputs[0], row * last_dim + i);
+        const FP32 weight_value = HalfToFloat(weight_data[i]);
         WriteHalf(context.outputs[0], row * last_dim + i,
                   value * scale * weight_value);
       }

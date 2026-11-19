@@ -59,8 +59,8 @@ class GatherKernel final : public Kernel {
     }
 
     const I64* ids_data = Int64Data(context.inputs[0]);
-    const U16* weight_data = HalfData(context.inputs[1]);
-    U16* output_data = MutableHalfData(context.outputs[0]);
+    const FP16* weight_data = HalfData(context.inputs[1]);
+    FP16* output_data = MutableHalfData(context.outputs[0]);
     if (ids_data == nullptr || weight_data == nullptr ||
         output_data == nullptr) {
       return MakeStatus(ErrorCode::kInvalidArgument,
@@ -69,7 +69,7 @@ class GatherKernel final : public Kernel {
 
     const I64 token_count = batch * sequence;
     const Usize row_bytes =
-        static_cast<Usize>(hidden) * sizeof(U16);
+        static_cast<Usize>(hidden) * sizeof(FP16);
     for (I64 token = 0; token < token_count; ++token) {
       const I64 id = ids_data[token];
       if (id < 0 || id >= vocab) {

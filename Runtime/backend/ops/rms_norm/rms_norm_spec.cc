@@ -47,7 +47,7 @@ Status ValidateRmsNorm(const runtime_graph::Op& op) {
   if (!status.ok()) {
     return status;
   }
-  F64 eps = 0.0;
+  FP64 eps = 0.0;
   status = GetFloatAttr(op, "eps", &eps);
   if (!status.ok()) {
     return status;

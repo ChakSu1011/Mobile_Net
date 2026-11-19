@@ -31,11 +31,11 @@ namespace runtime_graph {
 // Op 属性值。
 //
 // 允许的类型：
-//   Bool、I64、F64、std::string、std::vector<I64>、
-//   std::vector<F64>、std::vector<std::string>、Storage。
+//   Bool、I64、FP64、std::string、std::vector<I64>、
+//   std::vector<FP64>、std::vector<std::string>、Storage。
 using AttrValue =
-    std::variant<Bool, I64, F64, std::string, std::vector<I64>,
-                 std::vector<F64>, std::vector<std::string>, Storage>;
+    std::variant<Bool, I64, FP64, std::string, std::vector<I64>,
+                 std::vector<FP64>, std::vector<std::string>, Storage>;
 
 // Op 属性表，按属性名排序，保证 dump_ir 输出稳定。
 using AttrMap = std::map<std::string, AttrValue>;

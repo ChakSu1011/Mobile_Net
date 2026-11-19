@@ -35,8 +35,17 @@ using I32 = std::int32_t;
 using I64 = std::int64_t;
 
 // 浮点类型。
-using F32 = float;
-using F64 = double;
+using FP32 = float;
+using FP64 = double;
+
+// 16 位浮点位型。
+//
+// 说明：
+//   FP16 为 IEEE 754 binary16 的 16 位位模式；BF16 为 bfloat16 的 16 位
+//   位模式。二者是存储类型而非可直接算术的 C++ 浮点类型，转换由 Kernel
+//   或工具函数（如 half_utils）完成。
+using FP16 = std::uint16_t;
+using BF16 = std::uint16_t;
 
 // 布尔类型。
 using Bool = bool;

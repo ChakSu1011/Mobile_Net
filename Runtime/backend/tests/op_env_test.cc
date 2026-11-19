@@ -80,7 +80,7 @@ void Expect(Bool condition, const std::string& message, I32* failures) {
 }
 
 // 输出浮点比较断言。
-void ExpectNear(F32 actual, F32 expected, F32 tolerance,
+void ExpectNear(FP32 actual, FP32 expected, FP32 tolerance,
                 const std::string& message, I32* failures) {
   Expect(std::fabs(actual - expected) <= tolerance, message, failures);
 }
@@ -138,8 +138,8 @@ Storage HostStorage(void* data, const Shape& shape, Precision precision,
   return storage;
 }
 
-// 把 F32 序列写成 half 设备张量。
-void WriteHalves(Buffer* buffer, const std::vector<F32>& values) {
+// 把 FP32 序列写成 half 设备张量。
+void WriteHalves(Buffer* buffer, const std::vector<FP32>& values) {
   auto* data = static_cast<U16*>(buffer->DevicePtr());
   for (Usize i = 0; i < values.size(); ++i) {
     data[i] = FloatToHalf(values[i]);
@@ -147,17 +147,17 @@ void WriteHalves(Buffer* buffer, const std::vector<F32>& values) {
 }
 
 // 读取 half 设备张量。
-std::vector<F32> ReadHalves(Buffer* buffer, Usize count) {
+std::vector<FP32> ReadHalves(Buffer* buffer, Usize count) {
   const auto* data = static_cast<const U16*>(buffer->DevicePtr());
-  std::vector<F32> values(count, 0.0f);
+  std::vector<FP32> values(count, 0.0f);
   for (Usize i = 0; i < count; ++i) {
     values[i] = HalfToFloat(data[i]);
   }
   return values;
 }
 
-// 把 F32 序列写入主机 half 数组。
-void WriteHostHalves(U16* data, const std::vector<F32>& values) {
+// 把 FP32 序列写入主机 half 数组。
+void WriteHostHalves(U16* data, const std::vector<FP32>& values) {
   for (Usize i = 0; i < values.size(); ++i) {
     data[i] = FloatToHalf(values[i]);
   }
@@ -343,13 +343,13 @@ void TestAddGraph(I32* failures) {
   Expect(backend->Synchronize(nullptr).ok(), "synchronize add graph",
          failures);
 
-  const std::vector<F32> values = ReadHalves(output_device.get(), 4);
+  const std::vector<FP32> values = ReadHalves(output_device.get(), 4);
   ExpectNear(values[0], 11.0f, 1e-3f, "graph add value 0", failures);
   ExpectNear(values[1], 22.0f, 1e-3f, "graph add value 1", failures);
   ExpectNear(values[2], 33.0f, 1e-3f, "graph add value 2", failures);
   ExpectNear(values[3], 44.0f, 1e-3f, "graph add value 3", failures);
 
-  const std::vector<F32> host_values = {
+  const std::vector<FP32> host_values = {
       HalfToFloat(output_host[0]), HalfToFloat(output_host[1]),
       HalfToFloat(output_host[2]), HalfToFloat(output_host[3])};
   ExpectNear(host_values[0], 11.0f, 1e-3f, "D2H add value 0", failures);

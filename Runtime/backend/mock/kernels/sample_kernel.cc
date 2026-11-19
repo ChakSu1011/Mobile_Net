@@ -64,10 +64,10 @@ class SampleKernel final : public Kernel {
     }
     for (I64 row = 0; row < rows; ++row) {
       const I64 base = row * vocab;
-      F32 best = ReadHalf(context.inputs[0], static_cast<U64>(base));
+      FP32 best = ReadHalf(context.inputs[0], static_cast<U64>(base));
       I64 best_index = 0;
       for (I64 i = 1; i < vocab; ++i) {
-        const F32 value =
+        const FP32 value =
             ReadHalf(context.inputs[0], static_cast<U64>(base + i));
         if (value > best) {
           best = value;

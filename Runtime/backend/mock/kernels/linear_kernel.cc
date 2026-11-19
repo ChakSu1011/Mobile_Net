@@ -67,7 +67,7 @@ class LinearKernel final : public Kernel {
       const I64 input_base = row * in_features;
       for (I64 out = 0; out < out_features; ++out) {
         const I64 weight_base = out * in_features;
-        F32 sum = 0.0f;
+        FP32 sum = 0.0f;
         for (I64 i = 0; i < in_features; ++i) {
           sum += ReadHalf(context.inputs[0], input_base + i) *
                  ReadHalf(context.inputs[1], weight_base + i);

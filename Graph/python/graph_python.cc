@@ -75,23 +75,23 @@ std::vector<I64> ToInt64Vector(const py::handle& value) {
   return result;
 }
 
-// 把 Python 列表转换为 F64 数组。
+// 把 Python 列表转换为 FP64 数组。
 //
 // 参数：
 //   value：Python list 或 tuple。
 // 返回：
-//   F64 数组。
+//   FP64 数组。
 // 异常：
-//   元素不是 I32/F32 时抛出 std::invalid_argument。
-std::vector<F64> ToDoubleVector(const py::handle& value) {
-  std::vector<F64> result;
+//   元素不是 I32/FP32 时抛出 std::invalid_argument。
+std::vector<FP64> ToDoubleVector(const py::handle& value) {
+  std::vector<FP64> result;
   for (py::handle item : py::reinterpret_borrow<py::sequence>(value)) {
     if (!py::isinstance<py::int_>(item) &&
         !py::isinstance<py::float_>(item)) {
       throw std::invalid_argument(
           "attribute array elements must be numeric");
     }
-    result.push_back(py::cast<F64>(item));
+    result.push_back(py::cast<FP64>(item));
   }
   return result;
 }
@@ -119,7 +119,7 @@ std::vector<std::string> ToStringVector(const py::handle& value) {
 // 把 Python 值转换为 AttrValue。
 //
 // 参数：
-//   value：Python Bool/I32/F32/str/list/tuple。
+//   value：Python Bool/I32/FP32/str/list/tuple。
 // 返回：
 //   AttrValue；空 list 按 vector<I64> 处理。
 // 异常：
@@ -132,7 +132,7 @@ AttrValue ToAttrValue(const py::handle& value) {
     return py::cast<I64>(value);
   }
   if (py::isinstance<py::float_>(value)) {
-    return py::cast<F64>(value);
+    return py::cast<FP64>(value);
   }
   if (py::isinstance<py::str>(value)) {
     return py::cast<std::string>(value);
@@ -166,7 +166,7 @@ AttrValue ToAttrValue(const py::handle& value) {
     return ToInt64Vector(value);
   }
   throw std::invalid_argument(
-      "attribute value must be Bool, I32, F32, str, list, or tuple");
+      "attribute value must be Bool, I32, FP32, str, list, or tuple");
 }
 
 // 把 Python dict 转换为 AttrMap。

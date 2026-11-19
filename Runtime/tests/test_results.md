@@ -193,6 +193,8 @@ remaining raw token counts: {}
 ```
 
 结论：98 个 C++ 文件全部包含 `Utils/cpp/types.h`，无原始类型名残留。
+类型别名集合包含 `FP16/BF16/FP32/FP64`；其中 `FP16/BF16` 为 16 位存储位型，
+转换由 Kernel/`half_utils` 完成。
 
 回归编译：
 

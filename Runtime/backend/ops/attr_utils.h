@@ -45,7 +45,7 @@ Bool HasAttr(const runtime_graph::AttrMap& attrs, const std::string& name);
 Status GetIntAttr(const runtime_graph::AttrMap& attrs, const C8* name,
                   I64* value);
 
-// 读取浮点属性；允许 int64 自动提升为 F64。
+// 读取浮点属性；允许 int64 自动提升为 FP64。
 //
 // 参数：
 //   attrs：属性表；
@@ -54,7 +54,7 @@ Status GetIntAttr(const runtime_graph::AttrMap& attrs, const C8* name,
 // 返回：
 //   成功返回 kOk；缺失/类型不符返回 kInvalidArgument。
 Status GetFloatAttr(const runtime_graph::AttrMap& attrs, const C8* name,
-                    F64* value);
+                    FP64* value);
 
 // 读取 Bool 属性。
 Status GetBoolAttr(const runtime_graph::AttrMap& attrs, const C8* name,
@@ -70,7 +70,7 @@ Status GetIntAttr(const runtime_graph::Op& op, const C8* name,
 
 // 读取 op 的浮点属性；错误消息带 op 名。
 Status GetFloatAttr(const runtime_graph::Op& op, const C8* name,
-                    F64* value);
+                    FP64* value);
 
 // 读取 op 的 Bool 属性；错误消息带 op 名。
 Status GetBoolAttr(const runtime_graph::Op& op, const C8* name,

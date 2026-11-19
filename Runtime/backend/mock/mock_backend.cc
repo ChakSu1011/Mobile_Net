@@ -57,8 +57,8 @@ Status ConvertParamData(const ParamDesc& desc, MockBuffer* target) {
   }
   if (desc.source_dtype == DataType::kFloat32 &&
       desc.target_dtype == DataType::kFloat16) {
-    const auto* source = static_cast<const F32*>(desc.host_ptr);
-    auto* destination = static_cast<U16*>(target->Data());
+    const auto* source = static_cast<const FP32*>(desc.host_ptr);
+    auto* destination = static_cast<FP16*>(target->Data());
     for (U64 i = 0; i < count; ++i) {
       destination[i] = FloatToHalf(source[i]);
     }
@@ -66,8 +66,8 @@ Status ConvertParamData(const ParamDesc& desc, MockBuffer* target) {
   }
   if (desc.source_dtype == DataType::kBFloat16 &&
       desc.target_dtype == DataType::kFloat16) {
-    const auto* source = static_cast<const U16*>(desc.host_ptr);
-    auto* destination = static_cast<U16*>(target->Data());
+    const auto* source = static_cast<const BF16*>(desc.host_ptr);
+    auto* destination = static_cast<FP16*>(target->Data());
     for (U64 i = 0; i < count; ++i) {
       destination[i] = BFloat16ToHalf(source[i]);
     }
@@ -75,8 +75,8 @@ Status ConvertParamData(const ParamDesc& desc, MockBuffer* target) {
   }
   if (desc.source_dtype == DataType::kFloat16 &&
       desc.target_dtype == DataType::kFloat32) {
-    const auto* source = static_cast<const U16*>(desc.host_ptr);
-    auto* destination = static_cast<F32*>(target->Data());
+    const auto* source = static_cast<const FP16*>(desc.host_ptr);
+    auto* destination = static_cast<FP32*>(target->Data());
     for (U64 i = 0; i < count; ++i) {
       destination[i] = HalfToFloat(source[i]);
     }

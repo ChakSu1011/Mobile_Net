@@ -73,7 +73,7 @@ class MegaAttentionKernel final : public Kernel {
     I64 num_kv_heads = 0;
     I64 head_dim = 0;
     Bool causal = true;
-    F64 softmax_scale = 0.0;
+    FP64 softmax_scale = 0.0;
     status = GetIntAttr(*context.attrs, "num_heads", &num_heads);
     if (!status.ok()) {
       return status;
@@ -111,8 +111,8 @@ class MegaAttentionKernel final : public Kernel {
     }
 
     const I64 group = num_heads / num_kv_heads;
-    const F32 scale = static_cast<F32>(softmax_scale);
-    std::vector<F32> accumulator(static_cast<Usize>(head_dim), 0.0f);
+    const FP32 scale = static_cast<FP32>(softmax_scale);
+    std::vector<FP32> accumulator(static_cast<Usize>(head_dim), 0.0f);
     for (I64 b = 0; b < batch; ++b) {
       for (I64 i = 0; i < sequence; ++i) {
         const I64 query_base = (b * sequence + i) * query[2];
@@ -121,31 +121,31 @@ class MegaAttentionKernel final : public Kernel {
           const I64 query_head_base = query_base + head * head_dim;
           const I64 kv_base = (b * sequence) * key[2] +
                                   kv_head * head_dim;
-          F32 max_score = -std::numeric_limits<F32>::infinity();
+          FP32 max_score = -std::numeric_limits<FP32>::infinity();
           const I64 last_key = causal ? i : sequence - 1;
           for (I64 j = 0; j <= last_key; ++j) {
-            F32 dot = 0.0f;
+            FP32 dot = 0.0f;
             const I64 key_base = kv_base + j * key[2];
             for (I64 d = 0; d < head_dim; ++d) {
               dot += ReadHalf(context.inputs[0], query_head_base + d) *
                      ReadHalf(context.inputs[1], key_base + d);
             }
-            const F32 score = dot * scale;
+            const FP32 score = dot * scale;
             if (score > max_score) {
               max_score = score;
             }
           }
 
-          F32 sum = 0.0f;
+          FP32 sum = 0.0f;
           std::fill(accumulator.begin(), accumulator.end(), 0.0f);
           for (I64 j = 0; j <= last_key; ++j) {
-            F32 dot = 0.0f;
+            FP32 dot = 0.0f;
             const I64 key_base = kv_base + j * key[2];
             for (I64 d = 0; d < head_dim; ++d) {
               dot += ReadHalf(context.inputs[0], query_head_base + d) *
                      ReadHalf(context.inputs[1], key_base + d);
             }
-            const F32 probability = std::exp(dot * scale - max_score);
+            const FP32 probability = std::exp(dot * scale - max_score);
             sum += probability;
             for (I64 d = 0; d < head_dim; ++d) {
               const I64 value_index =
@@ -158,7 +158,7 @@ class MegaAttentionKernel final : public Kernel {
             return MakeStatus(ErrorCode::kKernelError,
                               "MegaAttentionKernel: softmax sum is zero");
           }
-          const F32 inverse = 1.0f / sum;
+          const FP32 inverse = 1.0f / sum;
           const I64 output_base = query_base + head * head_dim;
           for (I64 d = 0; d < head_dim; ++d) {
             WriteHalf(context.outputs[0], output_base + d,

@@ -41,8 +41,8 @@ Status ValidatePerHeadRmsNormRope(const runtime_graph::Op& op) {
   I64 out_features = 0;
   I64 num_heads = 0;
   I64 head_dim = 0;
-  F64 norm_eps = 0.0;
-  F64 rope_theta = 0.0;
+  FP64 norm_eps = 0.0;
+  FP64 rope_theta = 0.0;
   std::string rope_layout;
   Status status = GetIntAttr(op, "in_features", &in_features);
   if (!status.ok()) {
@@ -103,7 +103,7 @@ Status ValidatePerHeadRmsNormRope(const runtime_graph::Op& op) {
     }
   }
   if (HasAttr(op.Attrs(), "scaling_factor")) {
-    F64 scaling = 1.0;
+    FP64 scaling = 1.0;
     status = GetFloatAttr(op, "scaling_factor", &scaling);
     if (!status.ok()) {
       return status;

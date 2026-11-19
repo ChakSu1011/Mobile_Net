@@ -150,7 +150,8 @@ Utils/
 | --- | --- | --- |
 | `U8/U16/U32/U64` | `std::uint8_t/16/32/64_t` | 无符号整数 |
 | `I8/I16/I32/I64` | `std::int8_t/16/32/64_t` | 有符号整数 |
-| `F32/F64` | `float/double` | 浮点数 |
+| `FP32/FP64` | `float/double` | 浮点数 |
+| `FP16/BF16` | `std::uint16_t` | 16 位浮点位型（binary16/bfloat16 存储模式，非算术类型） |
 | `Bool` | `bool` | 布尔 |
 | `C8` | `char` | 字符/字节文本 |
 | `Usize` | `std::size_t` | 尺寸/索引 |
@@ -310,7 +311,7 @@ MobileNet/
 │   ├── prefix_cache/
 │   └── session/
 ├── Utils/                 # 全工程公共类型与公约
-│   ├── cpp/types.h        # C++ Host 端类型别名（U8/U16/U32/U64/I8/I16/I32/I64/F32/F64/Bool/C8/Usize/Isize）
+│   ├── cpp/types.h        # C++ Host 端类型别名（U8/U16/U32/U64/I8/I16/I32/I64/FP16/BF16/FP32/FP64/Bool/C8/Usize/Isize）
 │   └── python/            # Python 公共工具与公约
 ├── Tests/                 # 单元、集成、基准、金标准数据、后端契约测试
 └── Reference/             # 本地参考知识库（不提交 GitHub）

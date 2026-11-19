@@ -43,7 +43,7 @@ Status GetIntAttr(const runtime_graph::AttrMap& attrs, const C8* name,
 }
 
 Status GetFloatAttr(const runtime_graph::AttrMap& attrs, const C8* name,
-                    F64* value) {
+                    FP64* value) {
   if (name == nullptr || value == nullptr) {
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "GetFloatAttr: null name or output");
@@ -53,12 +53,12 @@ Status GetFloatAttr(const runtime_graph::AttrMap& attrs, const C8* name,
     return MakeStatus(ErrorCode::kInvalidArgument,
                       std::string("attr '") + name + "' is missing");
   }
-  if (const auto* typed = std::get_if<F64>(&it->second)) {
+  if (const auto* typed = std::get_if<FP64>(&it->second)) {
     *value = *typed;
     return Status::Ok();
   }
   if (const auto* integer = std::get_if<I64>(&it->second)) {
-    *value = static_cast<F64>(*integer);
+    *value = static_cast<FP64>(*integer);
     return Status::Ok();
   }
   return MakeStatus(ErrorCode::kInvalidArgument,
@@ -117,7 +117,7 @@ Status GetIntAttr(const runtime_graph::Op& op, const C8* name,
 }
 
 Status GetFloatAttr(const runtime_graph::Op& op, const C8* name,
-                    F64* value) {
+                    FP64* value) {
   const Status status = GetFloatAttr(op.Attrs(), name, value);
   if (!status.ok()) {
     return PrefixStatus(status, "op=" + op.Name());

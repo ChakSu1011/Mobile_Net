@@ -71,14 +71,14 @@ class LinearSwiGluKernel final : public Kernel {
       const I64 input_base = row * in_features;
       for (I64 out = 0; out < intermediate; ++out) {
         const I64 weight_base = out * in_features;
-        F32 gate_sum = 0.0f;
-        F32 up_sum = 0.0f;
+        FP32 gate_sum = 0.0f;
+        FP32 up_sum = 0.0f;
         for (I64 i = 0; i < in_features; ++i) {
-          const F32 value = ReadHalf(context.inputs[0], input_base + i);
+          const FP32 value = ReadHalf(context.inputs[0], input_base + i);
           gate_sum += value * ReadHalf(context.inputs[1], weight_base + i);
           up_sum += value * ReadHalf(context.inputs[2], weight_base + i);
         }
-        const F32 activated = gate_sum / (1.0f + std::exp(-gate_sum));
+        const FP32 activated = gate_sum / (1.0f + std::exp(-gate_sum));
         WriteHalf(context.outputs[0], row * intermediate + out,
                   activated * up_sum);
       }

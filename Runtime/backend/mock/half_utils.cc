@@ -1,7 +1,7 @@
 // 模块：Mock 后端半精度转换实现
 //
 // 职责：
-//   实现 F32↔half、bfloat16→half 的位级转换。
+//   实现 FP32↔half、bfloat16→half 的位级转换。
 //
 // 边界：
 //   不做批量/向量化；不处理设备内存；不抛异常。
@@ -54,7 +54,7 @@ FloatParts SplitFloat(U32 bits) {
 
 }  // namespace
 
-U16 FloatToHalf(F32 value) {
+FP16 FloatToHalf(FP32 value) {
   U32 bits = 0;
   std::memcpy(&bits, &value, sizeof(bits));
   const FloatParts parts = SplitFloat(bits);
@@ -106,7 +106,7 @@ U16 FloatToHalf(F32 value) {
   return half;
 }
 
-F32 HalfToFloat(U16 value) {
+FP32 HalfToFloat(FP16 value) {
   const U32 sign = static_cast<U32>(value & kHalfSignMask) << 16;
   const U32 exponent = (value & kHalfExponentMask) >> 10;
   const U32 mantissa = value & kHalfMantissaMask;
@@ -136,14 +136,14 @@ F32 HalfToFloat(U16 value) {
            (mantissa << 13);
   }
 
-  F32 result = 0.0f;
+  FP32 result = 0.0f;
   std::memcpy(&result, &bits, sizeof(result));
   return result;
 }
 
-U16 BFloat16ToHalf(U16 value) {
+FP16 BFloat16ToHalf(BF16 value) {
   const U32 bits = static_cast<U32>(value) << 16;
-  F32 result = 0.0f;
+  FP32 result = 0.0f;
   std::memcpy(&result, &bits, sizeof(result));
   return FloatToHalf(result);
 }

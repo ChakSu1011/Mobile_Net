@@ -41,7 +41,7 @@ Status ValidateMegaAttention(const runtime_graph::Op& op) {
   I64 head_dim = 0;
   Bool causal = true;
   Bool merge_heads = true;
-  F64 softmax_scale = 0.0;
+  FP64 softmax_scale = 0.0;
   Status status = GetIntAttr(op, "num_heads", &num_heads);
   if (!status.ok()) {
     return status;

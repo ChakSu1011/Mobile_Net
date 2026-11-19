@@ -65,7 +65,7 @@ void Expect(Bool condition, const std::string& message, I32* failures) {
 }
 
 // 输出浮点比较断言。
-void ExpectNear(F32 actual, F32 expected, F32 tolerance,
+void ExpectNear(FP32 actual, FP32 expected, FP32 tolerance,
                 const std::string& message, I32* failures) {
   Expect(std::fabs(actual - expected) <= tolerance, message, failures);
 }
@@ -111,11 +111,11 @@ Bool CreateTensor(Backend* backend, const std::vector<I64>& dims,
   return true;
 }
 
-// 把 F32 序列写成 half 张量。
+// 把 FP32 序列写成 half 张量。
 void WriteHalves(const TensorView& view,
-                 const std::vector<F32>& values) {
+                 const std::vector<FP32>& values) {
   auto* buffer = static_cast<Buffer*>(view.data);
-  auto* data = static_cast<U16*>(buffer->DevicePtr());
+  auto* data = static_cast<FP16*>(buffer->DevicePtr());
   for (Usize i = 0; i < values.size(); ++i) {
     data[i] = FloatToHalf(values[i]);
   }
@@ -131,12 +131,12 @@ void WriteInt64(const TensorView& view,
   }
 }
 
-// 读取 half 张量为 F32 序列。
-std::vector<F32> ReadHalves(const TensorView& view, Usize count) {
+// 读取 half 张量为 FP32 序列。
+std::vector<FP32> ReadHalves(const TensorView& view, Usize count) {
   const auto* buffer = static_cast<const Buffer*>(view.data);
   const auto* data =
-      static_cast<const U16*>(buffer->DevicePtr());
-  std::vector<F32> values(count, 0.0f);
+      static_cast<const FP16*>(buffer->DevicePtr());
+  std::vector<FP32> values(count, 0.0f);
   for (Usize i = 0; i < count; ++i) {
     values[i] = HalfToFloat(data[i]);
   }
@@ -200,9 +200,9 @@ void TestLifecycle(I32* failures) {
   }
   Expect(backend->Init(BackendConfig{}).ok(), "lifecycle Init", failures);
   Expect(backend->Init(BackendConfig{}).code() == ErrorCode::kStateError,
-         "F64 Init rejected", failures);
+         "FP64 Init rejected", failures);
   Expect(backend->Deinit().ok(), "lifecycle Deinit", failures);
-  Expect(backend->Deinit().ok(), "F64 Deinit idempotent", failures);
+  Expect(backend->Deinit().ok(), "FP64 Deinit idempotent", failures);
   mobilenet::BackendCapability capability;
   Expect(backend->Capability(&capability).code() ==
              ErrorCode::kStateError,
@@ -280,7 +280,7 @@ void TestConvertParam(I32* failures) {
     Expect(false, "convert backend init", failures);
     return;
   }
-  const F32 source[] = {1.0f, -2.5f, 0.5f};
+  const FP32 source[] = {1.0f, -2.5f, 0.5f};
   ParamDesc desc;
   desc.host_ptr = source;
   desc.bytes = sizeof(source);
@@ -291,12 +291,12 @@ void TestConvertParam(I32* failures) {
          "ConvertParam float32->float16", failures);
   if (buffer != nullptr) {
     const auto* data =
-        static_cast<const U16*>(buffer->DevicePtr());
+        static_cast<const FP16*>(buffer->DevicePtr());
     Expect(data[0] == FloatToHalf(1.0f) &&
                data[1] == FloatToHalf(-2.5f) &&
                data[2] == FloatToHalf(0.5f),
            "ConvertParam half values", failures);
-    Expect(buffer->Bytes() == 3 * sizeof(U16),
+    Expect(buffer->Bytes() == 3 * sizeof(FP16),
            "ConvertParam target bytes", failures);
   }
 
@@ -353,21 +353,21 @@ void TestHalfUtils(I32* failures) {
   Expect(FloatToHalf(1.0e5f) == 0x7C00u, "half overflow to inf", failures);
   Expect(FloatToHalf(-1.0e5f) == 0xFC00u,
          "half negative overflow to inf", failures);
-  Expect(FloatToHalf(std::numeric_limits<F32>::infinity()) == 0x7C00u,
+  Expect(FloatToHalf(std::numeric_limits<FP32>::infinity()) == 0x7C00u,
          "half +inf", failures);
-  Expect(FloatToHalf(-std::numeric_limits<F32>::infinity()) == 0xFC00u,
+  Expect(FloatToHalf(-std::numeric_limits<FP32>::infinity()) == 0xFC00u,
          "half -inf", failures);
-  const U16 nan_bits =
-      FloatToHalf(std::numeric_limits<F32>::quiet_NaN());
+  const FP16 nan_bits =
+      FloatToHalf(std::numeric_limits<FP32>::quiet_NaN());
   Expect((nan_bits & 0x7C00u) == 0x7C00u && (nan_bits & 0x03FFu) != 0,
          "half NaN", failures);
 
-  ExpectNear(HalfToFloat(0x3C00u), 1.0f, 0.0f, "half->F32 1.0",
+  ExpectNear(HalfToFloat(0x3C00u), 1.0f, 0.0f, "half->FP32 1.0",
              failures);
-  ExpectNear(HalfToFloat(0xC100u), -2.5f, 0.0f, "half->F32 -2.5",
+  ExpectNear(HalfToFloat(0xC100u), -2.5f, 0.0f, "half->FP32 -2.5",
              failures);
   ExpectNear(HalfToFloat(0x0001u), 5.9604645e-8f, 1e-14f,
-             "half->F32 smallest subnormal", failures);
+             "half->FP32 smallest subnormal", failures);
   Expect(BFloat16ToHalf(0x3F80u) == 0x3C00u,
          "bfloat16 1.0 -> half 1.0", failures);
 }
@@ -426,7 +426,7 @@ void TestKernels(I32* failures) {
       const Status status = RunKernel(backend.get(), "add", OpType::kAdd,
                                       {a, b}, {out}, empty_attrs);
       Expect(status.ok(), "add kernel executes", failures);
-      const std::vector<F32> values = ReadHalves(out, 4);
+      const std::vector<FP32> values = ReadHalves(out, 4);
       ExpectNear(values[0], 11.0f, 1e-3f, "add value 0", failures);
       ExpectNear(values[1], 22.0f, 1e-3f, "add value 1", failures);
       ExpectNear(values[2], 33.0f, 1e-3f, "add value 2", failures);
@@ -458,7 +458,7 @@ void TestKernels(I32* failures) {
                                       OpType::kGather, {ids, weight},
                                       {out}, attrs);
       Expect(status.ok(), "gather kernel executes", failures);
-      const std::vector<F32> values = ReadHalves(out, 4);
+      const std::vector<FP32> values = ReadHalves(out, 4);
       ExpectNear(values[0], 1.0f, 0.0f, "gather value 0", failures);
       ExpectNear(values[1], 2.0f, 0.0f, "gather value 1", failures);
       ExpectNear(values[2], 3.0f, 0.0f, "gather value 2", failures);
@@ -491,8 +491,8 @@ void TestKernels(I32* failures) {
                                       OpType::kRmsNorm, {x, w}, {out},
                                       attrs);
       Expect(status.ok(), "rms_norm kernel executes", failures);
-      const std::vector<F32> values = ReadHalves(out, 2);
-      const F32 scale = 1.0f / std::sqrt(12.5f);
+      const std::vector<FP32> values = ReadHalves(out, 2);
+      const FP32 scale = 1.0f / std::sqrt(12.5f);
       ExpectNear(values[0], 3.0f * scale, 1e-3f,
                  "rms_norm value 0", failures);
       ExpectNear(values[1], 4.0f * scale, 1e-3f,
@@ -522,7 +522,7 @@ void TestKernels(I32* failures) {
                                       OpType::kLinear, {x, weight}, {out},
                                       empty_attrs);
       Expect(status.ok(), "linear kernel executes", failures);
-      const std::vector<F32> values = ReadHalves(out, 2);
+      const std::vector<FP32> values = ReadHalves(out, 2);
       ExpectNear(values[0], 1.0f, 1e-3f, "linear value 0", failures);
       ExpectNear(values[1], 2.0f, 1e-3f, "linear value 1", failures);
     } else {
@@ -555,9 +555,9 @@ void TestKernels(I32* failures) {
                                       OpType::kLinearSwiGlu, {x, gate, up},
                                       {out}, empty_attrs);
       Expect(status.ok(), "linear_swi_glu kernel executes", failures);
-      const std::vector<F32> values = ReadHalves(out, 2);
-      const F32 silu_one = 1.0f / (1.0f + std::exp(-1.0f));
-      const F32 silu_two = 2.0f / (1.0f + std::exp(-2.0f));
+      const std::vector<FP32> values = ReadHalves(out, 2);
+      const FP32 silu_one = 1.0f / (1.0f + std::exp(-1.0f));
+      const FP32 silu_two = 2.0f / (1.0f + std::exp(-2.0f));
       ExpectNear(values[0], silu_one, 1e-3f,
                  "linear_swi_glu value 0", failures);
       ExpectNear(values[1], silu_two * 2.0f, 1e-3f,
@@ -605,8 +605,8 @@ void TestKernels(I32* failures) {
           {x, weight, norm, positions}, {out}, attrs);
       Expect(status.ok(), "per_head_rmsnorm_rope kernel executes",
              failures);
-      const std::vector<F32> values = ReadHalves(out, 2);
-      const F32 scale = 1.0f / std::sqrt(2.5f);
+      const std::vector<FP32> values = ReadHalves(out, 2);
+      const FP32 scale = 1.0f / std::sqrt(2.5f);
       ExpectNear(values[0], scale, 1e-3f,
                  "per_head_rmsnorm_rope value 0", failures);
       ExpectNear(values[1], 2.0f * scale, 1e-3f,
@@ -647,7 +647,7 @@ void TestKernels(I32* failures) {
                                       OpType::kMegaAttention, {q, k, v},
                                       {out}, attrs);
       Expect(status.ok(), "mega_attention kernel executes", failures);
-      const std::vector<F32> values = ReadHalves(out, 2);
+      const std::vector<FP32> values = ReadHalves(out, 2);
       ExpectNear(values[0], 3.0f, 1e-3f,
                  "mega_attention value 0", failures);
       ExpectNear(values[1], 4.0f, 1e-3f,

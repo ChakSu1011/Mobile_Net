@@ -33,10 +33,10 @@ const MockBuffer* GetBuffer(const runtime_graph::TensorView& view);
 MockBuffer* GetMutableBuffer(const runtime_graph::TensorView& view);
 
 // 返回 half 数据起始指针；buffer 为空时返回 nullptr。
-const U16* HalfData(const runtime_graph::TensorView& view);
+const FP16* HalfData(const runtime_graph::TensorView& view);
 
 // 返回可写 half 数据起始指针；buffer 为空时返回 nullptr。
-U16* MutableHalfData(const runtime_graph::TensorView& view);
+FP16* MutableHalfData(const runtime_graph::TensorView& view);
 
 // 返回 int64 数据起始指针；buffer 为空时返回 nullptr。
 const I64* Int64Data(const runtime_graph::TensorView& view);
@@ -50,12 +50,12 @@ std::vector<I64> Dims(const runtime_graph::Shape& shape);
 // 返回元素总数；max_dim 为 0 时返回 1。
 I64 NumElements(const runtime_graph::Shape& shape);
 
-// 读取 half 张量第 index 个元素的 F32 值。
-F32 ReadHalf(const runtime_graph::TensorView& view, U64 index);
+// 读取 half 张量第 index 个元素的 FP32 值。
+FP32 ReadHalf(const runtime_graph::TensorView& view, U64 index);
 
-// 把 F32 写入 half 张量第 index 个元素（RN-even）。
+// 把 FP32 写入 half 张量第 index 个元素（RN-even）。
 void WriteHalf(const runtime_graph::TensorView& view, U64 index,
-               F32 value);
+               FP32 value);
 
 // 校验 KernelContext 至少包含 count 个输入。
 Status RequireInputCount(const runtime_graph::KernelContext& context,

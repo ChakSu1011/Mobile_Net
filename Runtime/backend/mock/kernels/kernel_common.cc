@@ -25,22 +25,22 @@ MockBuffer* GetMutableBuffer(const runtime_graph::TensorView& view) {
   return static_cast<MockBuffer*>(view.data);
 }
 
-const U16* HalfData(const runtime_graph::TensorView& view) {
+const FP16* HalfData(const runtime_graph::TensorView& view) {
   const MockBuffer* buffer = GetBuffer(view);
   if (buffer == nullptr) {
     return nullptr;
   }
   const auto* base = static_cast<const U8*>(buffer->Data());
-  return reinterpret_cast<const U16*>(base + view.offset);
+  return reinterpret_cast<const FP16*>(base + view.offset);
 }
 
-U16* MutableHalfData(const runtime_graph::TensorView& view) {
+FP16* MutableHalfData(const runtime_graph::TensorView& view) {
   MockBuffer* buffer = GetMutableBuffer(view);
   if (buffer == nullptr) {
     return nullptr;
   }
   auto* base = static_cast<U8*>(buffer->Data());
-  return reinterpret_cast<U16*>(base + view.offset);
+  return reinterpret_cast<FP16*>(base + view.offset);
 }
 
 const I64* Int64Data(const runtime_graph::TensorView& view) {
@@ -85,8 +85,8 @@ I64 NumElements(const runtime_graph::Shape& shape) {
   return total;
 }
 
-F32 ReadHalf(const runtime_graph::TensorView& view, U64 index) {
-  const U16* data = HalfData(view);
+FP32 ReadHalf(const runtime_graph::TensorView& view, U64 index) {
+  const FP16* data = HalfData(view);
   if (data == nullptr) {
     return 0.0f;
   }
@@ -94,8 +94,8 @@ F32 ReadHalf(const runtime_graph::TensorView& view, U64 index) {
 }
 
 void WriteHalf(const runtime_graph::TensorView& view, U64 index,
-               F32 value) {
-  U16* data = MutableHalfData(view);
+               FP32 value) {
+  FP16* data = MutableHalfData(view);
   if (data == nullptr) {
     return;
   }

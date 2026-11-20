@@ -790,7 +790,10 @@ ocl/kernels/<op>.cl             # OCL 源（构建期嵌入）
 
 ### 4.5 OCL 后端（摘要）
 
-详细设计见 `Runtime/backend/ocl/.doc/ocl_design.md`。本文件冻结以下原则：
+OCL 后端设计已完成，见 [`Runtime/backend/ocl/.doc/ocl_design.md`](../ocl/.doc/ocl_design.md)；
+8 个算子的接入框架与优化文档在 `Runtime/backend/ocl/kernels/<op>/.doc/<op>_design.md`，
+每目录同时包含 `.skill/SKILL.md` 与 `tests/test_plan.md`。代码、真机数值/性能与端到端
+Token 一致性测试待 P4 落地。本文件冻结以下原则：
 
 1. **动态加载**：`OpenCL.dll`/`libOpenCL.so` 通过 `LoadLibrary/dlopen` 加载，函数指针表由本后端维护；
    公共头不出现 `cl_*`。构建期可切换为直接链接（`MOBILENET_OCL_STATIC`）。

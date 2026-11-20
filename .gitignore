@@ -11,6 +11,7 @@ Models/
 Graph/build/
 Runtime/build/
 Runtime/backend/build/
+Runtime/backend/build-android/
 ToolChain/*.log
 
 # Python 缓存

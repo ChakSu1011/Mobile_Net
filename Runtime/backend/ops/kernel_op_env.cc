@@ -125,6 +125,8 @@ Status KernelOpEnv::Forward() {
   context.batch = step_context_->batch;
   context.token_count = step_context_->packed_tokens;
   context.seq_len = step_context_->packed_tokens;
+  // Executor 按 packed 布局写入 token；Kernel 可据此跳过静态 padding 行。
+  context.packed_tokens = true;
   if (!outputs_.empty() && outputs_[0].shape.max_dim >= 3) {
     context.seq_len =
         static_cast<I32>(outputs_[0].shape.dims[1]);

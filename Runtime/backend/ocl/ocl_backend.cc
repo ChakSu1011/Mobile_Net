@@ -218,6 +218,7 @@ Status OclBackend::ConvertParam(const ParamDesc& desc,
   auto* ocl_buffer = static_cast<OclBuffer*>(target.get());
   OclFunctions* functions = context_.functions();
   cl_int error = CL_SUCCESS;
+  // cl_mem 是句柄，偏移必须作为 buffer_offset 传入。
   error = functions->clEnqueueWriteBuffer(
       context_.queue(), ocl_buffer->mem(), CL_TRUE, 0,
       static_cast<size_t>(target_bytes), host_data, 0, nullptr, nullptr);
@@ -230,38 +231,64 @@ Status OclBackend::ConvertParam(const ParamDesc& desc,
 }
 
 Status OclBackend::Upload(void* device_ptr, const void* host_ptr, U64 bytes,
-                          Stream*) {
+                          Stream* stream) {
+  return UploadAt(device_ptr, 0, host_ptr, bytes, stream);
+}
+
+Status OclBackend::UploadAt(void* device_ptr, U64 offset,
+                            const void* host_ptr, U64 bytes, Stream*) {
   if (!initialized_) {
     return MakeStatus(ErrorCode::kStateError,
-                      "OclBackend::Upload: not initialized");
+                      "OclBackend::UploadAt: not initialized");
   }
   if (device_ptr == nullptr || host_ptr == nullptr || bytes == 0) {
     return MakeStatus(ErrorCode::kInvalidArgument,
-                      "OclBackend::Upload: invalid argument");
+                      "OclBackend::UploadAt: invalid argument");
+  }
+  const U64 max_bytes =
+      static_cast<U64>(std::numeric_limits<size_t>::max());
+  if (offset > max_bytes || bytes > max_bytes - offset) {
+    return MakeStatus(ErrorCode::kInvalidArgument,
+                      "OclBackend::UploadAt: offset/bytes overflow");
   }
   OclFunctions* functions = context_.functions();
+  // cl_mem 是句柄，偏移必须作为 buffer_offset 传入，不能做指针加法。
   cl_int error = functions->clEnqueueWriteBuffer(
-      context_.queue(), reinterpret_cast<cl_mem>(device_ptr), CL_TRUE, 0,
-      static_cast<size_t>(bytes), host_ptr, 0, nullptr, nullptr);
-  return CheckCl(error, "Upload", "clEnqueueWriteBuffer");
+      context_.queue(), reinterpret_cast<cl_mem>(device_ptr), CL_TRUE,
+      static_cast<size_t>(offset), static_cast<size_t>(bytes), host_ptr, 0,
+      nullptr, nullptr);
+  return CheckCl(error, "UploadAt", "clEnqueueWriteBuffer");
 }
 
 Status OclBackend::Download(void* host_ptr, const void* device_ptr,
-                            U64 bytes, Stream*) {
+                            U64 bytes, Stream* stream) {
+  return DownloadAt(host_ptr, device_ptr, 0, bytes, stream);
+}
+
+Status OclBackend::DownloadAt(void* host_ptr, const void* device_ptr,
+                              U64 offset, U64 bytes, Stream*) {
   if (!initialized_) {
     return MakeStatus(ErrorCode::kStateError,
-                      "OclBackend::Download: not initialized");
+                      "OclBackend::DownloadAt: not initialized");
   }
   if (host_ptr == nullptr || device_ptr == nullptr || bytes == 0) {
     return MakeStatus(ErrorCode::kInvalidArgument,
-                      "OclBackend::Download: invalid argument");
+                      "OclBackend::DownloadAt: invalid argument");
+  }
+  const U64 max_bytes =
+      static_cast<U64>(std::numeric_limits<size_t>::max());
+  if (offset > max_bytes || bytes > max_bytes - offset) {
+    return MakeStatus(ErrorCode::kInvalidArgument,
+                      "OclBackend::DownloadAt: offset/bytes overflow");
   }
   OclFunctions* functions = context_.functions();
+  // 同上：偏移走 buffer_offset，cl_mem 句柄保持原值。
   cl_int error = functions->clEnqueueReadBuffer(
-      context_.queue(), reinterpret_cast<cl_mem>(
-                            const_cast<void*>(device_ptr)),
-      CL_TRUE, 0, static_cast<size_t>(bytes), host_ptr, 0, nullptr, nullptr);
-  return CheckCl(error, "Download", "clEnqueueReadBuffer");
+      context_.queue(),
+      reinterpret_cast<cl_mem>(const_cast<void*>(device_ptr)), CL_TRUE,
+      static_cast<size_t>(offset), static_cast<size_t>(bytes), host_ptr, 0,
+      nullptr, nullptr);
+  return CheckCl(error, "DownloadAt", "clEnqueueReadBuffer");
 }
 
 Status OclBackend::CreateKernel(const KernelDesc& desc,

@@ -35,7 +35,8 @@ Engine 线程模型；这些模块只作为借用方出现。
 - token/position 主机缓冲必须 `int64`，`byte_size % 8 == 0`；
 - plan 的 `packed_offset` 是 packed 下标；未覆盖位置必须补 0；
 - sample 输出从 `GetSampleOp()->DstTensors()[0]->GetStorage()` 读取，
-  `data_ptr` 是 `Buffer*`，有效地址加 `offset`；
+  `data_ptr` 是 `Buffer*`，`offset` 单独传给 `DownloadAt`，不要对
+  `DevicePtr()` 做指针加法；
 - 全部尺寸来自 Graph Storage，禁止写死模型/词表/序列长度。
 
 ### 2. 实现 Init
@@ -60,7 +61,8 @@ Engine 线程模型；这些模块只作为借用方出现。
 7. 遍历 `GetOrderlyOPList()`：`SetStepContext(env,&ctx)` → `Forward()` →
    `SetStepContext(env,nullptr)`，Forward 失败立即返回；
 8. `Backend::Synchronize`；
-9. 从 sample Storage `Download` 到 `vector<I64>`（`byte_size/8`）；
+9. 从 sample Storage 用 `DownloadAt` 回读到 `vector<I64>`（`byte_size/8`），
+   `offset` 取 Storage；
 10. 按 `output_slot` 填 `RequestStepResult`；`output_slot<0` 跳过。
 
 ### 4. 实现 Deinit

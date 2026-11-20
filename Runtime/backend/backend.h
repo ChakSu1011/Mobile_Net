@@ -249,6 +249,55 @@ class Backend {
   virtual Status Download(void* host_ptr, const void* device_ptr,
                           U64 bytes, Stream* stream) = 0;
 
+  // 主机到设备拷贝（带缓冲内字节偏移）。
+  //
+  // 功能：
+  //   在 device_ptr 所指缓冲的 offset 字节处写入主机数据。Loader 会把多个
+  //   激活张量绑定到同一个 arena 缓冲的不同切片，OpEnv/Executor 按切片
+  //   传输时必须使用本方法。
+  //
+  // 参数：
+  //   device_ptr：缓冲基址（Buffer::DevicePtr()），非空；
+  //   offset：缓冲内字节偏移，必须满足 offset + bytes 不超过缓冲大小；
+  //   host_ptr：主机源地址，非空；
+  //   bytes：拷贝字节数；
+  //   stream：执行流，可为空表示默认流。
+  // 返回：
+  //   成功返回 kOk；失败返回 kBufferError/kDeviceError。
+  //
+  // 主要逻辑：
+  //   默认实现把 offset 加到 device_ptr 上，适用于设备指针可做主机地址
+  //   运算的后端（Mock）；OpenCL 等句柄型设备指针必须覆盖本方法。
+  virtual Status UploadAt(void* device_ptr, U64 offset, const void* host_ptr,
+                          U64 bytes, Stream* stream) {
+    auto* base = static_cast<U8*>(device_ptr);
+    return Upload(base + offset, host_ptr, bytes, stream);
+  }
+
+  // 设备到主机拷贝（带缓冲内字节偏移）。
+  //
+  // 功能：
+  //   把 device_ptr 所指缓冲 offset 字节起的数据读到主机，用于回读
+  //   arena 内的切片（如 sample.out）。
+  //
+  // 参数：
+  //   host_ptr：主机目标地址，非空；
+  //   device_ptr：缓冲基址（Buffer::DevicePtr()），非空；
+  //   offset：缓冲内字节偏移，必须满足 offset + bytes 不超过缓冲大小；
+  //   bytes：拷贝字节数；
+  //   stream：执行流，可为空表示默认流。
+  // 返回：
+  //   成功返回 kOk；失败返回 kBufferError/kDeviceError。
+  //
+  // 主要逻辑：
+  //   默认实现把 offset 加到 device_ptr 上，适用于设备指针可做主机地址
+  //   运算的后端（Mock）；OpenCL 等句柄型设备指针必须覆盖本方法。
+  virtual Status DownloadAt(void* host_ptr, const void* device_ptr,
+                            U64 offset, U64 bytes, Stream* stream) {
+    const auto* base = static_cast<const U8*>(device_ptr);
+    return Download(host_ptr, base + offset, bytes, stream);
+  }
+
   // 创建 Kernel。
   //
   // 参数：

@@ -6,7 +6,7 @@
 #
 # 边界：
 #   - 复用 Graph 静态库与 Runtime/backend 公共契约；
-#   - 只构建 Mock 后端，不包含 OCL/CUDA/Vulkan 产品后端；
+#   - 构建 Mock 与 OCL 后端，不包含 CUDA/Vulkan 产品后端；
 #   - 不生成模型包、不下载依赖。
 #
 # 用法：
@@ -95,8 +95,8 @@ else()
   target_compile_options(mobilenet_runtime PRIVATE -Wall -Wextra)
 endif()
 
-# Mock 端到端测试：Qwen3-0.6B 单步前向与 PyTorch token 对齐。
-option(MOBILENET_BUILD_E2E_TESTS "Build mock end-to-end tests" ON)
+# 端到端测试：Qwen3-0.6B 单步前向与 PyTorch token 对齐（Mock/OCL）。
+option(MOBILENET_BUILD_E2E_TESTS "Build mock/ocl end-to-end tests" ON)
 if(MOBILENET_BUILD_E2E_TESTS)
   enable_testing()
   add_executable(mock_e2e_test tests/mock_e2e_test.cc)
@@ -114,4 +114,25 @@ if(MOBILENET_BUILD_E2E_TESTS)
     NAME mock_e2e_qwen3
     COMMAND mock_e2e_test
       "${MOBILENET_ROOT}/Models/Qwen3/artifacts/qwen3_0_6b" 0)
+
+  # OCL 端到端测试：同一进程内用相同 prompt 分别跑 OCL 与 Mock，
+  # 比较生成 token 与 PyTorch 参考值；无 OpenCL 设备时返回 77。
+  if(TARGET backend_ocl AND TARGET backend_mock)
+    add_executable(ocl_e2e_test backend/ocl/tests/ocl_e2e_test.cc)
+    target_link_libraries(
+      ocl_e2e_test PRIVATE
+      "$<LINK_LIBRARY:WHOLE_ARCHIVE,mobilenet_runtime>"
+      "$<LINK_LIBRARY:WHOLE_ARCHIVE,runtime_backend>"
+      graph Threads::Threads)
+    if(MSVC)
+      target_compile_options(ocl_e2e_test PRIVATE /W4)
+    else()
+      target_compile_options(ocl_e2e_test PRIVATE -Wall -Wextra)
+    endif()
+    add_test(
+      NAME ocl_e2e_qwen3
+      COMMAND ocl_e2e_test
+        "${MOBILENET_ROOT}/Models/Qwen3/artifacts/qwen3_0_6b" 0)
+    set_tests_properties(ocl_e2e_qwen3 PROPERTIES SKIP_RETURN_CODE 77)
+  endif()
 endif()

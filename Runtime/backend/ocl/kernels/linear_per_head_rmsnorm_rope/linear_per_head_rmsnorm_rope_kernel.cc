@@ -153,6 +153,8 @@ Status PerHeadRmsNormRopeOclKernel::ExecuteImpl(
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "PerHeadRmsNormRopeOclKernel: invalid attrs/shape");
   }
+  // 生产执行时只处理本步有效 token 的行；positions 按行号读取。
+  const I64 valid_rows = EffectiveRows(context, rows);
 
   I32 x_offset = 0;
   I32 w_offset = 0;
@@ -220,7 +222,7 @@ Status PerHeadRmsNormRopeOclKernel::ExecuteImpl(
   if (!status.ok()) {
     return status;
   }
-  status = SetIntArg(10, static_cast<I32>(rows));
+  status = SetIntArg(10, static_cast<I32>(valid_rows));
   if (!status.ok()) {
     return status;
   }
@@ -244,8 +246,9 @@ Status PerHeadRmsNormRopeOclKernel::ExecuteImpl(
   if (!status.ok()) {
     return status;
   }
-  return Enqueue1D(static_cast<Usize>(rows) * num_heads * kRopeLocalSize,
-                   kRopeLocalSize);
+  return Enqueue1D(
+      static_cast<Usize>(valid_rows) * num_heads * kRopeLocalSize,
+      kRopeLocalSize);
 }
 
 Status CreatePerHeadRmsNormRopeOclKernel(

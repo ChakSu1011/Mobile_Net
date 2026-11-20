@@ -52,5 +52,8 @@
 ## P4.3 实现状态
 
 - `linear_per_head_rmsnorm_rope` OCL 基线 Kernel 已实现，并在主机 Intel Arc 上通过 `ocl_vs_mock_test` 与 Mock 数值对齐；
-- 当前为基线；真实形状/多 seed 误差与性能优化待 P4.5；
-- 手机 Mali-G925 已断开，历史结果保留。
+- 真实形状性能见 `ocl/tests/test_results.md` 11.5；多 seed 误差待补。
+- 手机 Mali-G925 已断开，历史结果保留；
+- P4.5：接入 `packed_tokens` 有效 token 截断；
+- P4.5：per-head GEMM 的 K 维改为 `vload_half8` + FP32 累加，K 非 8 倍数
+  保留标量尾部；`ocl_vs_mock_test` 增加 K=16 向量路径用例。

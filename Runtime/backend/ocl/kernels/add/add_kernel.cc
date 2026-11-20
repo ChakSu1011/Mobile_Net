@@ -99,11 +99,18 @@ Status AddOclKernel::ExecuteImpl(
     return status;
   }
 
-  const bool vectorized = (elements % 8 == 0) && (a_offset % 8 == 0) &&
-                          (b_offset % 8 == 0) && (out_offset % 8 == 0);
+  // 生产执行时只处理本步有效 token 对应的元素，跳过 padding 行。
+  const I64 last_dim = a.shape.dims[a.shape.max_dim - 1];
+  I64 valid_elements = elements;
+  if (last_dim > 0 && elements % last_dim == 0) {
+    valid_elements = EffectiveRows(context, elements / last_dim) * last_dim;
+  }
+  const bool vectorized = (valid_elements % 8 == 0) &&
+                          (a_offset % 8 == 0) && (b_offset % 8 == 0) &&
+                          (out_offset % 8 == 0);
   const Usize work_items =
-      vectorized ? static_cast<Usize>(elements / 8)
-                 : static_cast<Usize>(elements);
+      vectorized ? static_cast<Usize>(valid_elements / 8)
+                 : static_cast<Usize>(valid_elements);
   const Usize global = RoundUp(work_items, kAddLocalSize);
 
   status = SetMemArg(0, a);
@@ -130,7 +137,7 @@ Status AddOclKernel::ExecuteImpl(
   if (!status.ok()) {
     return status;
   }
-  status = SetIntArg(6, static_cast<I32>(elements));
+  status = SetIntArg(6, static_cast<I32>(valid_elements));
   if (!status.ok()) {
     return status;
   }

@@ -96,6 +96,21 @@ class OclKernel : public Kernel {
   // 计算 tensor 元素数（按 shape）。
   static I64 ElementCount(const runtime_graph::TensorView& view);
 
+  // 计算本步有效行数。
+  //
+  // 功能：
+  //   Executor 执行（`packed_tokens=true`）且 batch==1 时，把按静态 shape
+  //   计算的行数截断到本步有效 token 数，跳过 padding 行；直接调用 Kernel
+  //   的测试/基准（`packed_tokens=false`）保持全量计算。
+  //
+  // 参数：
+  //   context：节点执行上下文；
+  //   static_rows：按静态 shape 计算的行数，必须为正。
+  // 返回：
+  //   有效行数，范围为 [1, static_rows]。
+  I64 EffectiveRows(const runtime_graph::KernelContext& context,
+                    I64 static_rows) const;
+
   // 非拥有 Context/ProgramCache。
   OclContext* context_ = nullptr;
   OclProgramCache* programs_ = nullptr;

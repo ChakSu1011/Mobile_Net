@@ -86,6 +86,9 @@ Status SampleOclKernel::ExecuteImpl(
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "SampleOclKernel: shape exceeds int32");
   }
+  // 生产执行时只对有效 token 行做 argmax；Executor 的 output_slot 必落在
+  // 有效行内（packed 布局），padding 行不参与采样。
+  const I64 valid_rows = EffectiveRows(context, rows);
 
   I32 logits_offset = 0;
   I32 out_offset = 0;
@@ -115,7 +118,7 @@ Status SampleOclKernel::ExecuteImpl(
   if (!status.ok()) {
     return status;
   }
-  status = SetIntArg(4, static_cast<I32>(rows));
+  status = SetIntArg(4, static_cast<I32>(valid_rows));
   if (!status.ok()) {
     return status;
   }
@@ -123,7 +126,7 @@ Status SampleOclKernel::ExecuteImpl(
   if (!status.ok()) {
     return status;
   }
-  return Enqueue1D(static_cast<Usize>(rows) * kSampleLocalSize,
+  return Enqueue1D(static_cast<Usize>(valid_rows) * kSampleLocalSize,
                    kSampleLocalSize);
 }
 

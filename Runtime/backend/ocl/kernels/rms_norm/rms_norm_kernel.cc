@@ -100,6 +100,8 @@ Status RmsNormOclKernel::ExecuteImpl(
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "RmsNormOclKernel: shape exceeds int32");
   }
+  // 生产执行时只归一化本步有效 token 的行。
+  const I64 valid_rows = EffectiveRows(context, rows);
   FP64 eps = 0.0;
   Status status = GetFloatAttr(*context.attrs, "eps", &eps);
   if (!status.ok()) {
@@ -146,7 +148,7 @@ Status RmsNormOclKernel::ExecuteImpl(
   if (!status.ok()) {
     return status;
   }
-  status = SetIntArg(6, static_cast<I32>(rows));
+  status = SetIntArg(6, static_cast<I32>(valid_rows));
   if (!status.ok()) {
     return status;
   }
@@ -158,7 +160,7 @@ Status RmsNormOclKernel::ExecuteImpl(
   if (!status.ok()) {
     return status;
   }
-  return Enqueue1D(static_cast<Usize>(rows) * kRmsNormLocalSize,
+  return Enqueue1D(static_cast<Usize>(valid_rows) * kRmsNormLocalSize,
                    kRmsNormLocalSize);
 }
 

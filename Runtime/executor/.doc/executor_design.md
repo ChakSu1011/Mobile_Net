@@ -61,7 +61,7 @@ Runtime 的单步执行链路为
 | REQ-EX-08 | 构造 `StepContext`：backend、plan、kv_view、seq_lens（每 entry 的 token_count）、batch、packed_tokens、is_prefill | TC-EX-04/05 |
 | REQ-EX-09 | 按 `GetOrderlyOPList()` 依次 `SetStepContext(env,&ctx)`、`Forward()`、`SetStepContext(env,nullptr)` | TC-EX-04/05 |
 | REQ-EX-10 | 全部 op 后执行 `Backend::Synchronize`；从 `GetSampleOp()->DstTensors()[0]` 的 Storage 读取 sample | TC-EX-04 |
-| REQ-EX-11 | sample Storage 的 `data_ptr` 为 `Buffer*`，加 `offset` 后 `Download` 到 `vector<I64>`，大小 `byte_size/8` | TC-EX-04 |
+| REQ-EX-11 | sample Storage 的 `data_ptr` 为 `Buffer*`，通过 `Backend::DownloadAt(host, DevicePtr(), offset, bytes)` 回读到 `vector<I64>`，大小 `byte_size/8`；不得对设备句柄做指针加法 | TC-EX-04 |
 | REQ-EX-12 | 按 `output_slot` 从 sample 取 token；`output_slot<0` 跳过；填 `Token{id,0,0,true}`、`ok=true` | TC-EX-04/05/06 |
 | REQ-EX-13 | 缺失 OpEnv、I/O 绑定失败、尺寸不匹配返回明确错误码 | TC-EX-07/08/09/11 |
 | REQ-EX-14 | `Deinit` 清空缓冲，调用 `Backend::Deinit` 并释放；幂等；未 Init 调用返回成功 | TC-EX-02/12 |
@@ -81,7 +81,9 @@ Runtime 的单步执行链路为
 ### 2.3 约束条件
 
 - Graph Storage 的 `data_ptr` 在设备侧是 `Buffer*`，不是裸设备地址；
-  有效地址 = `static_cast<Buffer*>(data_ptr)->DevicePtr() + offset`。
+  Buffer 基址为 `static_cast<Buffer*>(data_ptr)->DevicePtr()`，`offset` 是缓冲内
+  字节偏移。带偏移的传输必须调用 `Backend::UploadAt/DownloadAt`；`cl_mem`
+  等句柄型设备指针不能通过 `DevicePtr() + offset` 表达偏移。
 - `IoOpEnv::Forward` 从 op 的 `attr["storage"]` 读取主机 Storage，并且要求
   `device_type=kHost`、`byte_size` 与精度和设备视图一致。
 - `KernelOpEnv::Forward` 要求 `StepContext` 非空；未设置时返回 `kStateError`。
@@ -154,7 +156,7 @@ OpEnv (Graph 持有)
 → for op in GetOrderlyOPList():
      SetStepContext(env,&ctx) → Forward() → SetStepContext(env,nullptr)
 → Backend::Synchronize
-→ Download sample.out（Buffer* + offset）到 vector<I64>
+→ DownloadAt sample.out（Buffer* + offset）到 vector<I64>
 → 按 output_slot 填充 StepResult
 ```
 
@@ -318,8 +320,8 @@ for op in graph_->GetOrderlyOPList():
    - `byte_size == 0` 或不能被 8 整除 → `kInvalidArgument`；
    - `Buffer*` 的 `DevicePtr()` 为空 → `kInternal`。
 3. `vector<I64> sample_tokens(byte_size/8, 0)`；
-4. `Download(sample_tokens.data(), DevicePtr()+offset, byte_size, nullptr)`
-   失败 → 透传错误码。
+4. `DownloadAt(sample_tokens.data(), DevicePtr(), Storage.offset, byte_size,
+   nullptr)` 失败 → 透传错误码。不得先对 `DevicePtr()` 做 `+offset`。
 
 #### 4.4.7 StepResult
 
@@ -471,6 +473,7 @@ python -m ziglang c++ -std=c++17 -Wall -Wextra -I "d:/Mobile_Net" \
 - `Runtime/.doc/Runtime_design.md` 4.2.4 明确 Executor 是 Backend 唯一所有者；
   本实现遵循 `Init` 失败释放、`Deinit` 幂等。
 - 4.3.4 的 `Backend::Download` 语义为“主机指针 + 设备指针 + 字节数 +
-  流”，本实现用 `Buffer*` + `offset` 组装设备指针。
+  流”；带 arena 偏移的 sample 回读使用新增的 `DownloadAt`（设备指针保持
+  `Buffer::DevicePtr()`，偏移单独传入），避免对 `cl_mem` 句柄做指针加法。
 - 3.5 的调用链要求 Executor 是唯一遍历 `GetOrderlyOPList()` 并调用
   `Forward()` 的对象；本实现满足。

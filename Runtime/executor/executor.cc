@@ -599,8 +599,8 @@ Status ExecBackend::Execute(const ExecutionPlan& plan,
     return PrefixStatus(status, "Backend::Synchronize");
   }
 
-  // 从 sample.out 的 Storage 回读 token：data_ptr 是 Buffer*，加上 offset
-  // 得到有效设备地址。
+  // 从 sample.out 的 Storage 回读 token：data_ptr 是 Buffer*，offset 是
+  // 缓冲内字节偏移；偏移由后端传输接口处理，不能对设备句柄做指针加法。
   const runtime_graph::Storage& sample_storage =
       sample_op->DstTensors()[0]->GetStorage();
   if (sample_storage.precision != runtime_graph::Precision::kInt64) {
@@ -626,11 +626,11 @@ Status ExecBackend::Execute(const ExecutionPlan& plan,
         ErrorCode::kInternal,
         "Executor::Execute: sample output device pointer is null");
   }
-  const auto* sample_bytes =
-      static_cast<const U8*>(sample_device) + sample_storage.offset;
   std::vector<I64> sample_tokens(sample_storage.byte_size / kI64Bytes, 0);
-  status = backend_->Download(sample_tokens.data(), sample_bytes,
-                              sample_storage.byte_size, nullptr);
+  status = backend_->DownloadAt(
+      sample_tokens.data(), sample_device,
+      static_cast<U64>(sample_storage.offset), sample_storage.byte_size,
+      nullptr);
   if (!status.ok()) {
     return PrefixStatus(status, "Executor::Download(sample)");
   }

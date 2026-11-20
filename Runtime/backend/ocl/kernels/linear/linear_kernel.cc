@@ -98,6 +98,8 @@ Status LinearOclKernel::ExecuteImpl(
                       "LinearOclKernel: invalid shape");
   }
   const I64 m = total / k;
+  // 生产执行时只计算本步有效 token 的行，跳过静态 padding 行。
+  const I64 valid_m = EffectiveRows(context, m);
 
   I32 a_offset = 0;
   I32 b_offset = 0;
@@ -139,7 +141,7 @@ Status LinearOclKernel::ExecuteImpl(
   if (!status.ok()) {
     return status;
   }
-  status = SetIntArg(6, static_cast<I32>(m));
+  status = SetIntArg(6, static_cast<I32>(valid_m));
   if (!status.ok()) {
     return status;
   }
@@ -153,7 +155,7 @@ Status LinearOclKernel::ExecuteImpl(
   }
 
   const I64 tiles_n = (n + kLinearTile - 1) / kLinearTile;
-  const I64 tiles_m = (m + kLinearTile - 1) / kLinearTile;
+  const I64 tiles_m = (valid_m + kLinearTile - 1) / kLinearTile;
   const Usize tiles = static_cast<Usize>(tiles_m * tiles_n);
   return Enqueue1D(RoundUp(tiles, kLinearLocalSize), kLinearLocalSize);
 }

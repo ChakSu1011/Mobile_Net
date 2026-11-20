@@ -40,7 +40,16 @@ __kernel void per_head_rmsnorm_rope(
     const int column = head * head_dim + lane;
     const int x_base = x_offset + row * in_features;
     const int w_base = weight_offset + column * in_features;
-    for (int i = 0; i < in_features; ++i) {
+    // K 维 half8 向量化：同址读 x 与 weight 各 8 个 half，FP32 累加。
+    int i = 0;
+    for (; i + 8 <= in_features; i += 8) {
+      const float8 xv = vload_half8(0, x + x_base + i);
+      const float8 wv = vload_half8(0, weight + w_base + i);
+      value += xv.s0 * wv.s0 + xv.s1 * wv.s1 + xv.s2 * wv.s2 +
+               xv.s3 * wv.s3 + xv.s4 * wv.s4 + xv.s5 * wv.s5 +
+               xv.s6 * wv.s6 + xv.s7 * wv.s7;
+    }
+    for (; i < in_features; ++i) {
       value += (float)x[x_base + i] * (float)weight[w_base + i];
     }
     values[lane] = value;

@@ -224,6 +224,208 @@ Status RunKernel(Backend* backend, const char* key, OpType op_type,
   return status;
 }
 
+// 验证 packed_tokens 有效行截断。
+//
+// 功能：
+//   用 8 行 `add` 张量模拟静态 S=8、本步只有 3 个有效 token 的生产场景，
+//   验证 packed_tokens=true 时只写前 3 行、padding 行保持原值；随后关闭
+//   该标志，验证回退到全量 8 行计算。
+//
+// 参数：
+//   backend：已初始化的 OCL 后端；
+//   failures：失败计数，发现错误时递增。
+void TestPackedTokens(Backend* backend, int* failures) {
+  std::unique_ptr<Buffer> a_buffer;
+  std::unique_ptr<Buffer> b_buffer;
+  std::unique_ptr<Buffer> out_buffer;
+  TensorView a;
+  TensorView b;
+  TensorView out;
+  if (!CreateTensor(backend, {1, 8, 4}, DataType::kFloat16, &a_buffer, &a) ||
+      !CreateTensor(backend, {1, 8, 4}, DataType::kFloat16, &b_buffer, &b) ||
+      !CreateTensor(backend, {1, 8, 4}, DataType::kFloat16, &out_buffer,
+                    &out)) {
+    Expect(false, "packed add buffers", failures);
+    return;
+  }
+
+  std::vector<float> first(32, 0.0f);
+  std::vector<float> second(32, 0.0f);
+  std::vector<float> zeros(32, 0.0f);
+  for (int i = 0; i < 32; ++i) {
+    first[i] = static_cast<float>(i + 1);
+    second[i] = static_cast<float>(i + 101);
+  }
+  UploadHalves(backend, a_buffer.get(), first);
+  UploadHalves(backend, b_buffer.get(), second);
+  UploadHalves(backend, out_buffer.get(), zeros);
+
+  KernelDesc desc;
+  desc.op_type = OpType::kAdd;
+  desc.precision = DataType::kFloat16;
+  desc.kernel_key = "add";
+  std::unique_ptr<Kernel> kernel;
+  Status status = backend->CreateKernel(desc, &kernel);
+  Expect(status.ok(), "packed add kernel", failures);
+  if (!status.ok()) {
+    return;
+  }
+
+  TensorView inputs[2] = {a, b};
+  TensorView outputs[1] = {out};
+  AttrMap attrs;
+  KernelContext context;
+  context.inputs = inputs;
+  context.input_count = 2;
+  context.outputs = outputs;
+  context.output_count = 1;
+  context.attrs = &attrs;
+  context.backend = backend;
+  context.batch = 1;
+  context.token_count = 3;
+  context.seq_len = 8;
+  context.packed_tokens = true;
+
+  status = kernel->Execute(context);
+  Expect(status.ok(), "packed add executes", failures);
+  (void)backend->Synchronize(nullptr);
+  std::vector<float> values =
+      DownloadHalves(backend, out_buffer.get(), 32);
+  bool valid_rows_ok = true;
+  for (int i = 0; i < 12; ++i) {
+    if (values[i] != first[i] + second[i]) {
+      valid_rows_ok = false;
+    }
+  }
+  bool padding_ok = true;
+  for (int i = 12; i < 32; ++i) {
+    if (values[i] != 0.0f) {
+      padding_ok = false;
+    }
+  }
+  Expect(valid_rows_ok, "packed add valid rows", failures);
+  Expect(padding_ok, "packed add skips padding rows", failures);
+
+  // 关闭 packed_tokens 后应恢复全量计算（测试/基准语义）。
+  context.packed_tokens = false;
+  status = kernel->Execute(context);
+  Expect(status.ok(), "packed add fallback executes", failures);
+  (void)backend->Synchronize(nullptr);
+  values = DownloadHalves(backend, out_buffer.get(), 32);
+  bool full_rows_ok = true;
+  for (int i = 0; i < 32; ++i) {
+    if (values[i] != first[i] + second[i]) {
+      full_rows_ok = false;
+    }
+  }
+  Expect(full_rows_ok, "packed add fallback full rows", failures);
+  (void)backend->DestroyKernel(std::move(kernel));
+}
+
+// 验证 Attention 的有效长度与静态行跨度解耦。
+//
+// 功能：
+//   构造静态 S=8、有效 S=3 的 causal GQA 输入，先按全量计算，再按 packed
+//   截断计算；比较有效行的输出完全一致，padding 行保持不变。
+//
+// 参数：
+//   backend：已初始化的 OCL 后端；
+//   failures：失败计数，发现错误时递增。
+void TestPackedAttention(Backend* backend, int* failures) {
+  std::unique_ptr<Buffer> q_buffer;
+  std::unique_ptr<Buffer> k_buffer;
+  std::unique_ptr<Buffer> v_buffer;
+  std::unique_ptr<Buffer> out_buffer;
+  TensorView q;
+  TensorView k;
+  TensorView v;
+  TensorView out;
+  if (!CreateTensor(backend, {1, 8, 8}, DataType::kFloat16, &q_buffer, &q) ||
+      !CreateTensor(backend, {1, 8, 4}, DataType::kFloat16, &k_buffer, &k) ||
+      !CreateTensor(backend, {1, 8, 4}, DataType::kFloat16, &v_buffer, &v) ||
+      !CreateTensor(backend, {1, 8, 8}, DataType::kFloat16, &out_buffer,
+                    &out)) {
+    Expect(false, "packed attention buffers", failures);
+    return;
+  }
+  std::vector<float> q_values(64, 0.0f);
+  std::vector<float> k_values(32, 0.0f);
+  std::vector<float> v_values(32, 0.0f);
+  std::vector<float> zeros(64, 0.0f);
+  for (int i = 0; i < 64; ++i) {
+    q_values[i] = static_cast<float>((i % 13) - 6) * 0.125f;
+    v_values[i % 32] = static_cast<float>((i % 7) - 3) * 0.25f;
+  }
+  for (int i = 0; i < 32; ++i) {
+    k_values[i] = static_cast<float>((i % 11) - 5) * 0.125f;
+  }
+  UploadHalves(backend, q_buffer.get(), q_values);
+  UploadHalves(backend, k_buffer.get(), k_values);
+  UploadHalves(backend, v_buffer.get(), v_values);
+  UploadHalves(backend, out_buffer.get(), zeros);
+
+  KernelDesc desc;
+  desc.op_type = OpType::kMegaAttention;
+  desc.precision = DataType::kFloat16;
+  desc.kernel_key = "mega_attention";
+  std::unique_ptr<Kernel> kernel;
+  Status status = backend->CreateKernel(desc, &kernel);
+  Expect(status.ok(), "packed attention kernel", failures);
+  if (!status.ok()) {
+    return;
+  }
+
+  AttrMap attrs;
+  attrs["num_heads"] = static_cast<I64>(2);
+  attrs["num_kv_heads"] = static_cast<I64>(1);
+  attrs["head_dim"] = static_cast<I64>(4);
+  attrs["causal"] = true;
+  attrs["use_kv_cache"] = false;
+  attrs["softmax_scale"] = 0.5;
+  TensorView inputs[3] = {q, k, v};
+  TensorView outputs[1] = {out};
+  KernelContext context;
+  context.inputs = inputs;
+  context.input_count = 3;
+  context.outputs = outputs;
+  context.output_count = 1;
+  context.attrs = &attrs;
+  context.backend = backend;
+  context.batch = 1;
+  context.seq_len = 8;
+
+  status = kernel->Execute(context);
+  Expect(status.ok(), "packed attention full executes", failures);
+  (void)backend->Synchronize(nullptr);
+  const std::vector<float> full =
+      DownloadHalves(backend, out_buffer.get(), 64);
+
+  UploadHalves(backend, out_buffer.get(), zeros);
+  context.token_count = 3;
+  context.packed_tokens = true;
+  status = kernel->Execute(context);
+  Expect(status.ok(), "packed attention truncated executes", failures);
+  (void)backend->Synchronize(nullptr);
+  const std::vector<float> packed =
+      DownloadHalves(backend, out_buffer.get(), 64);
+
+  bool prefix_ok = true;
+  for (int i = 0; i < 24; ++i) {
+    if (packed[i] != full[i]) {
+      prefix_ok = false;
+    }
+  }
+  bool padding_ok = true;
+  for (int i = 24; i < 64; ++i) {
+    if (packed[i] != 0.0f) {
+      padding_ok = false;
+    }
+  }
+  Expect(prefix_ok, "packed attention valid rows", failures);
+  Expect(padding_ok, "packed attention skips padding rows", failures);
+  (void)backend->DestroyKernel(std::move(kernel));
+}
+
 // 首批 Kernel 基础数值测试。
 void TestOclKernels(Backend* backend, int* failures) {
   // Add。
@@ -456,6 +658,35 @@ void TestBackend(int* failures) {
     Expect(std::memcmp(source.data(), destination.data(), source.size()) ==
                0,
            "Upload/Download roundtrip", failures);
+
+    // UploadAt/DownloadAt：在 64 字节偏移处写 16 字节切片，验证句柄
+    // 不被指针加法破坏，且切片外的数据保持不变。
+    const Usize patch_offset = 64;
+    std::vector<U8> patch(16, 0xAB);
+    Expect(backend->UploadAt(buffer->DevicePtr(), patch_offset,
+                             patch.data(), patch.size(), nullptr)
+               .ok(),
+           "UploadAt", failures);
+    std::vector<U8> slice(patch.size(), 0);
+    Expect(backend->DownloadAt(slice.data(), buffer->DevicePtr(),
+                               patch_offset, slice.size(), nullptr)
+               .ok(),
+           "DownloadAt", failures);
+    Expect(std::memcmp(patch.data(), slice.data(), patch.size()) == 0,
+           "UploadAt/DownloadAt slice roundtrip", failures);
+    std::vector<U8> whole(source.size(), 0);
+    Expect(backend->Download(whole.data(), buffer->DevicePtr(),
+                             whole.size(), nullptr)
+               .ok(),
+           "Download after UploadAt", failures);
+    Expect(std::memcmp(whole.data(), source.data(), patch_offset) == 0 &&
+               std::memcmp(whole.data() + patch_offset, patch.data(),
+                           patch.size()) == 0 &&
+               std::memcmp(whole.data() + patch_offset + patch.size(),
+                           source.data() + patch_offset + patch.size(),
+                           source.size() - patch_offset - patch.size()) ==
+                   0,
+           "UploadAt preserves surrounding bytes", failures);
     Expect(backend->DestroyBuffer(std::move(buffer)).ok(),
            "DestroyBuffer", failures);
   }
@@ -502,6 +733,8 @@ void TestBackend(int* failures) {
   Expect(backend->Synchronize(nullptr).ok(), "Synchronize", failures);
 
   TestOclKernels(backend.get(), failures);
+  TestPackedTokens(backend.get(), failures);
+  TestPackedAttention(backend.get(), failures);
 
   Expect(backend->Deinit().ok(), "ocl Deinit", failures);
   Expect(backend->Deinit().ok(), "double Deinit idempotent", failures);

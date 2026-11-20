@@ -109,6 +109,8 @@ Status LinearSwiGluOclKernel::ExecuteImpl(
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "LinearSwiGluOclKernel: shape exceeds int32");
   }
+  // 生产执行时只计算本步有效 token 的行。
+  const I64 valid_rows = EffectiveRows(context, rows);
 
   I32 x_offset = 0;
   I32 gate_offset = 0;
@@ -163,7 +165,7 @@ Status LinearSwiGluOclKernel::ExecuteImpl(
   if (!status.ok()) {
     return status;
   }
-  status = SetIntArg(8, static_cast<I32>(rows));
+  status = SetIntArg(8, static_cast<I32>(valid_rows));
   if (!status.ok()) {
     return status;
   }
@@ -175,7 +177,7 @@ Status LinearSwiGluOclKernel::ExecuteImpl(
   if (!status.ok()) {
     return status;
   }
-  const Usize work = static_cast<Usize>(rows * intermediate);
+  const Usize work = static_cast<Usize>(valid_rows * intermediate);
   return Enqueue1D(RoundUp(work, kSwiGluLocalSize), kSwiGluLocalSize);
 }
 

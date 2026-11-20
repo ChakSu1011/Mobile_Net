@@ -123,12 +123,15 @@ Status IoOpEnv::Forward() {
   Stream* stream =
       step_context_ != nullptr ? step_context_->stream : nullptr;
   Status status = Status::Ok();
+  // storage 可能绑定在 arena 的某个切片上，偏移必须交给后端传输接口；
+  // OpenCL 的 cl_mem 是句柄，不能通过指针加法携带偏移。
   if (is_input_) {
-    status = backend_->Upload(buffer->DevicePtr(), host->data_ptr,
-                              host->byte_size, stream);
+    status = backend_->UploadAt(buffer->DevicePtr(), device_view_.offset,
+                                host->data_ptr, host->byte_size, stream);
   } else {
-    status = backend_->Download(host->data_ptr, buffer->DevicePtr(),
-                                host->byte_size, stream);
+    status = backend_->DownloadAt(host->data_ptr, buffer->DevicePtr(),
+                                  device_view_.offset, host->byte_size,
+                                  stream);
   }
   if (!status.ok()) {
     return PrefixStatus(status, "op=" + op_->Name());

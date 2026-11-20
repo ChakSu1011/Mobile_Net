@@ -206,6 +206,18 @@ if(MOBILENET_BACKEND_BUILD_TESTS)
       add_test(NAME ocl_vs_mock_test COMMAND ocl_vs_mock_test)
       set_tests_properties(ocl_vs_mock_test PROPERTIES
                            SKIP_RETURN_CODE 77)
+
+      # P4.5 真实形状性能基准：只构建、不注册 CTest（数据写入
+      # ocl/tests/test_results.md）；无设备时返回 77。
+      add_executable(ocl_benchmark ocl/tests/ocl_benchmark.cc)
+      target_link_libraries(
+        ocl_benchmark PRIVATE
+        "$<LINK_LIBRARY:WHOLE_ARCHIVE,runtime_backend>")
+      if(MSVC)
+        target_compile_options(ocl_benchmark PRIVATE /W4)
+      else()
+        target_compile_options(ocl_benchmark PRIVATE -Wall -Wextra)
+      endif()
     endif()
   endif()
 endif()

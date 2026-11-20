@@ -2,8 +2,8 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | v0.1 |
-| 文档状态 | 设计完成；P4.1 基础设施、P4.2 Kernel 框架、P4.3 全部 8 个基线 Kernel 与 vs Mock 数值对齐已落地，P4.5/P4.6 待继续 |
+| 文档版本 | v0.2 |
+| 文档状态 | 设计完成；P4.1 基础设施、P4.2 Kernel 框架、P4.3 全部 8 个基线 Kernel 与 vs Mock 数值对齐、P4.6 端到端 Token 一致性（3/3）已落地；P4.5 第一轮优化（有效 token 截断、half8 GEMM、单遍 attention）已完成并与 Mock 对比 |
 | 编写日期 | 2026-11-20 |
 | 模块 | `Runtime/backend/ocl/` |
 | 权威位置 | `Runtime/backend/ocl/.doc/ocl_design.md` |
@@ -21,8 +21,17 @@ FP32/BF16→FP16 转换、vendored Khronos CL 头。P4.2 已落地 `OclKernel` �
 `.cl` 构建期源码嵌入、`OclKernelFactory` 分发；P4.3 已接入全部 8 个融合算子
 基线 Kernel，并在主机 Intel Arc 上通过 `ocl_vs_mock_test` 与 Mock 逐算子
 数值对齐（8/8 通过）。`BackendCapability.supported_ops` 已扩展为 8 个。
-当前主测试环境为本机 Intel Arc；手机 Mali-G925 已断开，历史结果保留。
-性能对比与端到端 Token 一致性仍待 P4.5/P4.6。
+P4.6 已新增 `Runtime/backend/ocl/tests/ocl_e2e_test.cc`：用 Engine 加载
+同一 Qwen3 模型包，分别以 `backend=ocl` 与 `backend=mock` 跑相同 prompt，
+比较生成 Token 与 PyTorch 参考值；3 条 prompt 全部一致
+（`ocl=12095/21806/17`，Mock 同值），详见 `tests/test_results.md` 第 11 节。
+P4.5 已完成第一轮优化：`packed_tokens` 有效 token 截断（8 个 Kernel 接入）、
+attention 单遍 online softmax、linear 的 K 维 `vload_half8` 向量化与单行
+尾部；OCL 单步从约 6.1 s 降到 51.7/161.4/130.2 ms（1/5/4 token），
+linear/lm_head 1.85–2.86x、attention 1.75x（vs 优化前）。
+数值回归由 `ocl_vs_mock_test` 与 `ocl_contract_test` 覆盖（64 条 PASS）。
+当前主测试环境为本机 Intel Arc；手机 Mali-G925 已断开，Mali 性能待重连补测。
+下一轮优化重点：swiglu 与 rope 的标量 Kernel。
 
 ---
 
@@ -285,6 +294,10 @@ class OclBackend final : public Backend {
                 Stream* stream) override;
   Status Download(void* host_ptr, const void* device_ptr, U64 bytes,
                   Stream* stream) override;
+  Status UploadAt(void* device_ptr, U64 offset, const void* host_ptr,
+                  U64 bytes, Stream* stream) override;
+  Status DownloadAt(void* host_ptr, const void* device_ptr, U64 offset,
+                    U64 bytes, Stream* stream) override;
   Status CreateKernel(const KernelDesc& desc,
                       std::unique_ptr<Kernel>* kernel) override;
   Status DestroyKernel(std::unique_ptr<Kernel> kernel) override;
@@ -303,9 +316,13 @@ class OclBackend final : public Backend {
 - `ConvertParam`：FP16 直通；FP32/BF16→FP16 主机转换；按 kernel 需要做私有打包；
   创建 `OclBuffer` 并 `clEnqueueWriteBuffer`。
 - `Upload/Download`：`clEnqueueWriteBuffer/ReadBuffer`，`device_ptr` 为 `OclBuffer::DevicePtr()`
-  （`cl_mem` 的 `void*` 表示），首期偏移 0；I/O 与权重均为独立 Buffer。
+  （`cl_mem` 的 `void*` 表示），偏移 0；等价于 `UploadAt/DownloadAt(offset=0)`。
+- `UploadAt/DownloadAt`：`cl_mem` 是句柄，`offset` 必须作为 `clEnqueueWriteBuffer/
+  ReadBuffer` 的 `buffer_offset` 传入，禁止对 `cl_mem` 做指针加法；用于 arena
+  切片（`sample.out`、Output op 源张量）的读写。此接口是 P4.6 端到端打通时
+  修复 `CL_INVALID_MEM_OBJECT` 的关键。
 - `CreateKernel`：按 `kernel_key` 分发到对应算子模块的 `Create<Op>OclKernel`；
-  P4.2 已接入 gather/add/sample_argmax，其余 5 个 key 暂返回 `kUnsupportedOp`。
+  8 个融合算子 key 全部接入，未知 key 返回 `kUnsupportedOp`。
 - `Synchronize`：`clFinish`；每 Step 一次。
 
 ### 4.2 上下文与设备
@@ -345,7 +362,8 @@ class OclBuffer final : public Buffer {
 ```
 
 - `Storage.data_ptr`（`kDevice`）= `OclBuffer*`；`Storage.offset` = 字节偏移；
-- `TensorView.data` = `OclBuffer*`；`TensorView.offset` 传入 kernel 作为 `int` 字节偏移；
+- `TensorView.data` = `OclBuffer*`；`TensorView.offset` 是字节偏移，由
+  `OclKernel::ElementOffset` 转为元素偏移后传入 kernel（`int`）；
 - Kernel 通过 `static_cast<OclBuffer*>(view.data)->mem()` 取 `cl_mem`；
 - Arena 是一个大 `cl_mem`，激活按其 offset 计算地址；Kernel 参数传 `(cl_mem, offset_bytes)`。
 
@@ -399,6 +417,34 @@ kernels/<op>/
 ├── <op>_kernel.h/.cc         # 宿主包装 + Create<Op>OclKernel
 └── tests/test_plan.md        # 性能/精度测试计划；实测后生成 test_results.md
 ```
+
+#### 4.5.1 有效 token 截断（P4.5）
+
+**问题**：Qwen3 模型包为静态形状（S=256）；实际 prompt 只有 1–N 个 token 时，
+按静态形状全量计算会把 99% 的算力花在 padding 行上。
+
+**契约**：`KernelContext.packed_tokens`（`kernel_context.h`）由 `KernelOpEnv`
+在 Executor 执行时置 true；`token_count` 是本步有效 token 总数。`OclKernel::
+EffectiveRows(context, static_rows)` 在 `packed_tokens && batch==1 &&
+token_count>0` 时返回 `min(token_count, static_rows)`，否则返回静态行数。
+直接调用 Kernel 的测试/基准（`packed_tokens=false`）保持全量计算，保证
+单元测试与性能基准语义不变。
+
+**逐算子映射**：
+
+| Kernel | 截断维度 | 说明 |
+| --- | --- | --- |
+| gather | tokens | 只查有效 token 的 embedding |
+| add | elements | 按最后一维把行数换算成元素数 |
+| rms_norm | rows | 只归一化有效行 |
+| linear | m | 只计算有效行；C 的行跨度仍为 N |
+| linear_swi_glu | rows | 只计算有效行的 gate/up/SiLU |
+| per_head_rmsnorm_rope | rows | positions 按有效行读取 |
+| mega_attention | seq | 新增 `seq_stride` 参数：`seq` 为有效长度，`seq_stride` 为静态行跨度；q/k/v/out 的地址必须用 `seq_stride` |
+| sample | rows | 只对有效行 argmax；Executor 的 `output_slot` 落在有效行内 |
+
+**边界**：仅在 `batch==1` 启用；多 batch 的 packed 布局与静态 `[B,S]` 行跨度
+不同，沿用静态全量计算，待多 batch 布局契约明确后再优化。
 
 ### 4.6 8 个算子的优化策略摘要
 
@@ -527,9 +573,9 @@ gather/add 的标量与 half8 路径、sample argmax、Program 编译/二进制�
 | P4.1 ✅ | 上下文/设备/Buffer/传输/Program 缓存 | OclBackend + 契约测试（已落地） |
 | P4.2 ✅ | 通用 OclKernel 基类 + kernel 分发 + 源码嵌入 | 已落地；首批 gather/add/sample_argmax 3 个 key |
 | P4.3 ✅ | 8 个算子基线 Kernel + 与 Mock 数值对齐 | 全部 8 个 Kernel 已接入；`ocl_vs_mock_test` 8/8 通过 |
-| P4.4 | 逐算子性能优化（寄存器分块/向量化/softmax 等） | 每算子优化记录与 `.skill` |
-| P4.5 | 真机性能测试（vs Mock）与回归 | 每算子 `tests/test_results.md` |
-| P4.6 | 全算子端到端 Token 一致性（OCL vs Mock） | 同一输入 Token 的生成序列对比报告 |
+| P4.4 | 逐算子性能优化（寄存器分块/向量化/softmax 等） | 第一轮：linear half8/单行尾部、attention 单遍 online softmax |
+| P4.5 | 真机性能测试（vs Mock）与回归 | 主机 Intel Arc 已记录（`test_results.md` 11.5）；Mali 待重连 |
+| P4.6 ✅ | 全算子端到端 Token 一致性（OCL vs Mock） | 3 条 prompt 的 OCL/Mock/PyTorch token 全部一致（`test_results.md` 11.3–11.4） |
 | P4.7 | OCL 后端四件套收口与审计 | 完整四件套 |
 
 ### 5.2 任务拆解
@@ -543,9 +589,9 @@ gather/add 的标量与 half8 路径、sample argmax、Program 编译/二进制�
 | OCL-T05 ✅ | gather / add / sample 基线 | OCL-T04 |
 | OCL-T06 ✅ | rms_norm / linear / linear_swi_glu 基线 | OCL-T04 |
 | OCL-T07 ✅ | per_head_rmsnorm_rope / mega_attention 基线 | OCL-T04 |
-| OCL-T08 | 逐算子优化 + 与 Mock 性能对比 | OCL-T05/06/07 |
-| OCL-T09 | 真机测试脚本/结果/skill 收口 | OCL-T08 |
-| OCL-T10 | 全算子端到端 Token 一致性（同一输入 Token，OCL vs Mock） | OCL-T08、P3 Loader/op_runner |
+| OCL-T08 | 逐算子优化 + 与 Mock 性能对比（第一轮：linear/attention 已优化并记录） | OCL-T05/06/07 |
+| OCL-T09 | 真机测试脚本/结果/skill 收口（主机完成；Mali 待重连） | OCL-T08 |
+| OCL-T10 ✅ | 全算子端到端 Token 一致性（同一输入 Token，OCL vs Mock） | OCL-T08、P3 Loader/op_runner |
 
 ### 5.3 里程碑与风险
 
@@ -643,6 +689,22 @@ gather/add 的标量与 half8 路径、sample argmax、Program 编译/二进制�
 - Token 一致率 ≥95%（与设计文档 6.4 的整体验收一致）；**目标 100%**；
 - 若出现分歧，必须定位到算子/层（逐层 logits 对比）并记录原因；不得用放宽阈值掩盖；
 - 同一输入重复运行结果确定（argmax 无随机性；若未来引入采样，固定 seed 并记录）。
+
+**实现映射（P4.6）**：
+
+- driver：`Runtime/backend/ocl/tests/ocl_e2e_test.cc`，在 `Runtime/CMakeLists.txt`
+  中构建为 `ocl_e2e_test`，并注册 CTest `ocl_e2e_qwen3`（无设备返回 77）；
+- 同一进程内先跑 `backend=ocl`、再跑 `backend=mock`：`RunBackend` 各自
+  `Engine::Load` → 逐用例 `AddRequest`/`RunOnce` → 响应回调取 token →
+  `Engine::Destroy`；两个后端共享同一模型包与 PyTorch golden；
+- 判定：`ocl_token == expected_token` 且 `ocl_token == mock_token`；缺失 token
+  或执行失败即失败，不跳过；
+- CLI：`ocl_e2e_test <package> [only_case] [no-mock]`，`no-mock` 仅用于
+  调试 OCL 路径时省去 Mock 的长时间 CPU 前向；
+- 关键修复：`Storage.offset` 位于 arena 切片时，Executor 原先把 offset 加到
+  `cl_mem` 句柄上，触发 `CL_INVALID_MEM_OBJECT`；新增
+  `Backend::UploadAt/DownloadAt`（见 `backend_design.md` 4.1.1），OCL 映射为
+  `clEnqueue*Buffer` 的 `buffer_offset`。
 
 **与单算子测试的关系**：单算子 vs Mock 保证 kernel 级正确；端到端 Token 保证融合图、I/O、Sample、packing/offset 与多算子累积误差可接受。两者都通过才算 OCL 后端可用。
 

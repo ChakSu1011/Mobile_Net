@@ -247,6 +247,31 @@ void TestBuffers(I32* failures) {
     Expect(std::memcmp(source.data(), destination.data(), source.size()) ==
                0,
            "Upload/Download roundtrip", failures);
+
+    // 默认 UploadAt/DownloadAt：Mock 的设备指针可做主机会址运算，
+    // 验证偏移语义和切片外数据不被改写。
+    const Usize patch_offset = 64;
+    std::vector<U8> patch(16, 0xCD);
+    Expect(backend->UploadAt(buffer->DevicePtr(), patch_offset,
+                             patch.data(), patch.size(), nullptr)
+               .ok(),
+           "UploadAt", failures);
+    std::vector<U8> slice(patch.size(), 0);
+    Expect(backend->DownloadAt(slice.data(), buffer->DevicePtr(),
+                               patch_offset, slice.size(), nullptr)
+               .ok(),
+           "DownloadAt", failures);
+    Expect(std::memcmp(patch.data(), slice.data(), patch.size()) == 0,
+           "UploadAt/DownloadAt slice roundtrip", failures);
+    std::vector<U8> whole(source.size(), 0);
+    Expect(backend->Download(whole.data(), buffer->DevicePtr(),
+                             whole.size(), nullptr)
+               .ok(),
+           "Download after UploadAt", failures);
+    Expect(std::memcmp(whole.data(), source.data(), patch_offset) == 0 &&
+               std::memcmp(whole.data() + patch_offset, patch.data(),
+                           patch.size()) == 0,
+           "UploadAt preserves prefix", failures);
     Expect(backend->DestroyBuffer(std::move(buffer)).ok(),
            "DestroyBuffer", failures);
   }

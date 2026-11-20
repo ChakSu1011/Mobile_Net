@@ -163,4 +163,5 @@ int rows, int hidden, float eps
 
 - 已实现 `rms_norm` OCL 基线 Kernel：`.cl` + 宿主包装 + `Create<Op>OclKernel`；
 - 主机 Intel Arc 上经 `ocl_vs_mock_test` 与 Mock 数值对齐通过；
-- 当前为基线实现；性能优化与真实形状误差/端到端 Token 待 P4.5/P4.6。
+- 真实形状性能与端到端 Token 结果见 `ocl/tests/test_results.md` 11.3–11.5；
+- P4.5：接入 `packed_tokens` 有效 token 截断，只归一化有效行。

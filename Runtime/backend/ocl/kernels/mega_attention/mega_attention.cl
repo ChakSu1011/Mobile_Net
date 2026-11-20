@@ -17,6 +17,7 @@ __kernel void mega_attention_causal(
     const int out_offset,
     const int batch,
     const int seq,
+    const int seq_stride,
     const int heads,
     const int kv_heads,
     const int head_dim,
@@ -32,10 +33,13 @@ __kernel void mega_attention_causal(
 
   const int group = heads / kv_heads;
   const int kv_head = head / group;
+  // seq 是有效长度，seq_stride 是静态图的行跨度（含 padding）。
   const int q_base =
-      q_offset + ((batch_index * seq + query) * heads + head) * head_dim;
+      q_offset + ((batch_index * seq_stride + query) * heads + head) *
+                     head_dim;
   const int out_base =
-      out_offset + ((batch_index * seq + query) * heads + head) * head_dim;
+      out_offset + ((batch_index * seq_stride + query) * heads + head) *
+                       head_dim;
 
   float accumulator[128];
   for (int d = 0; d < head_dim; ++d) {
@@ -43,37 +47,39 @@ __kernel void mega_attention_causal(
   }
 
   const int last_key = causal ? query : seq - 1;
+  // 单遍 online softmax：新最大值出现时按 alpha 缩放历史累加，避免像
+  // 两遍实现那样重复计算 score（P4.5）。
   float max_score = -INFINITY;
+  float sum = 0.0f;
   for (int key = 0; key <= last_key; ++key) {
     const int k_base =
-        k_offset + ((batch_index * seq + key) * kv_heads + kv_head) *
+        k_offset + ((batch_index * seq_stride + key) * kv_heads + kv_head) *
                        head_dim;
     float dot = 0.0f;
     for (int d = 0; d < head_dim; ++d) {
       dot += (float)q[q_base + d] * (float)k[k_base + d];
     }
     const float score = dot * scale;
-    if (score > max_score) {
-      max_score = score;
-    }
-  }
-
-  float sum = 0.0f;
-  for (int key = 0; key <= last_key; ++key) {
-    const int k_base =
-        k_offset + ((batch_index * seq + key) * kv_heads + kv_head) *
-                       head_dim;
-    float dot = 0.0f;
-    for (int d = 0; d < head_dim; ++d) {
-      dot += (float)q[q_base + d] * (float)k[k_base + d];
-    }
-    const float probability = exp(dot * scale - max_score);
-    sum += probability;
     const int v_base =
-        v_offset + ((batch_index * seq + key) * kv_heads + kv_head) *
+        v_offset + ((batch_index * seq_stride + key) * kv_heads + kv_head) *
                        head_dim;
-    for (int d = 0; d < head_dim; ++d) {
-      accumulator[d] += probability * (float)v[v_base + d];
+    if (score > max_score) {
+      const float alpha = exp(max_score - score);
+      sum *= alpha;
+      for (int d = 0; d < head_dim; ++d) {
+        accumulator[d] *= alpha;
+      }
+      max_score = score;
+      sum += 1.0f;
+      for (int d = 0; d < head_dim; ++d) {
+        accumulator[d] += (float)v[v_base + d];
+      }
+    } else {
+      const float probability = exp(score - max_score);
+      sum += probability;
+      for (int d = 0; d < head_dim; ++d) {
+        accumulator[d] += probability * (float)v[v_base + d];
+      }
     }
   }
 

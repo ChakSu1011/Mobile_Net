@@ -42,12 +42,31 @@
 8. lm_head 输出 77.8 MB；不要额外复制或转置。
 9. 小 M/N 时 launch 开销主导；性能结论以真实形状为准。
 
-## 性能数据
+## 性能数据（Intel Arc 130T，2026-11-20）
 
-待 P4 真机实测后填写：BM/BN/TM/TN、WG、kernel 时间、Mock 时间、加速比、FLOPs。
+warmup 1 + 3 次 `Execute+Synchronize` 平均，3 次进程运行取中位数（ms）：
+
+| 形状 | 优化前（4×4 标量） | P4.5（half8） | Mock | P4.5 vs Mock |
+| --- | --- | --- | --- | --- |
+| 256×1024×1024 | 2.237 | 1.211 | 821.015 | 678x |
+| 256×1024×3072 | 10.129 | 3.543 | 2510.330 | 708x |
+| 256×1024×151936 (lm_head) | 843.809 | 337.469 | 未测（过慢） | — |
+
+Mali-G925 已断开，真机数据待重连后补测。
 
 ## P4.3 实现状态
 
 - `linear` OCL 基线 Kernel 已实现，并在主机 Intel Arc 上通过 `ocl_vs_mock_test` 与 Mock 数值对齐；
-- 当前为基线；真实形状/多 seed 误差与性能优化待 P4.5；
+- 真实形状性能见 `ocl/tests/test_results.md` 11.5；多 seed 误差待补。
 - 手机 Mali-G925 已断开，历史结果保留。
+
+## P4.5 优化状态（2026-11-20）
+
+- K 维改为 `vload_half8` + FP32 累加；`vload_half8` 返回 **float8**，
+  不要声明成 `half8`，否则编译报 incompatible type；
+- `row0 + 1 >= m` 时走单行尾部路径，M=1 decode 不再计算 4 行 padding；
+- 越界行/列回落到第 0 行/列读取，写回时仍按 `row<m/col<n` 丢弃；
+- K 非 8 倍数保留标量尾部；`ocl_vs_mock_test` 增加 K=16 向量路径用例；
+- 有效 token 截断（`packed_tokens`）减少 padding 行计算；基准不设该标志，
+  仍按静态 M 测量；
+- 真实形状性能数据待补入 `ocl/tests/test_results.md`。

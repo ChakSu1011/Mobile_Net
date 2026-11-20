@@ -71,7 +71,15 @@ class OclBackend final : public Backend {
   Status Download(void* host_ptr, const void* device_ptr, U64 bytes,
                   Stream* stream) override;
 
-  // P4.1 暂无 Kernel；返回 kUnsupportedOp。P4.2 接入 8 个算子。
+  // 主机到设备（cl_mem + 缓冲内字节偏移）。
+  Status UploadAt(void* device_ptr, U64 offset, const void* host_ptr,
+                  U64 bytes, Stream* stream) override;
+
+  // 设备到主机（cl_mem + 缓冲内字节偏移）。
+  Status DownloadAt(void* host_ptr, const void* device_ptr, U64 offset,
+                    U64 bytes, Stream* stream) override;
+
+  // P4.2/P4.3 接入 8 个融合算子；未知 kernel_key 返回 kUnsupportedOp。
   Status CreateKernel(const KernelDesc& desc,
                       std::unique_ptr<Kernel>* kernel) override;
 

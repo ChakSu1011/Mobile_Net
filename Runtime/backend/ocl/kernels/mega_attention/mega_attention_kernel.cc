@@ -217,35 +217,43 @@ Status MegaAttentionOclKernel::ExecuteImpl(
   if (!status.ok()) {
     return status;
   }
+  // 生产执行时只处理有效 token：seq 为有效长度，seq_stride 保持静态行
+  // 跨度，二者分开避免把 packed 行距当作物理行距。
+  const I64 valid_seq = EffectiveRows(context, seq);
   status = SetIntArg(8, static_cast<I32>(batch));
   if (!status.ok()) {
     return status;
   }
-  status = SetIntArg(9, static_cast<I32>(seq));
+  status = SetIntArg(9, static_cast<I32>(valid_seq));
   if (!status.ok()) {
     return status;
   }
-  status = SetIntArg(10, static_cast<I32>(num_heads));
+  status = SetIntArg(10, static_cast<I32>(seq));
   if (!status.ok()) {
     return status;
   }
-  status = SetIntArg(11, static_cast<I32>(num_kv_heads));
+  status = SetIntArg(11, static_cast<I32>(num_heads));
   if (!status.ok()) {
     return status;
   }
-  status = SetIntArg(12, static_cast<I32>(head_dim));
+  status = SetIntArg(12, static_cast<I32>(num_kv_heads));
   if (!status.ok()) {
     return status;
   }
-  status = SetFloatArg(13, static_cast<float>(softmax_scale));
+  status = SetIntArg(13, static_cast<I32>(head_dim));
   if (!status.ok()) {
     return status;
   }
-  status = SetIntArg(14, causal ? 1 : 0);
+  status = SetFloatArg(14, static_cast<float>(softmax_scale));
   if (!status.ok()) {
     return status;
   }
-  const Usize work = static_cast<Usize>(batch * num_heads * seq);
+  status = SetIntArg(15, causal ? 1 : 0);
+  if (!status.ok()) {
+    return status;
+  }
+  const Usize work =
+      static_cast<Usize>(batch * num_heads * valid_seq);
   return Enqueue1D(work, 1);
 }
 

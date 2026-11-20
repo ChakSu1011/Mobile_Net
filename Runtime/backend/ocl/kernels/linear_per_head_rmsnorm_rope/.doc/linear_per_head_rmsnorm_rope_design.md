@@ -200,4 +200,7 @@ int rows, int heads, int head_dim, float eps
 
 - 已实现 `linear_per_head_rmsnorm_rope` OCL 基线 Kernel：`.cl` + 宿主包装 + `Create<Op>OclKernel`；
 - 主机 Intel Arc 上经 `ocl_vs_mock_test` 与 Mock 数值对齐通过；
-- 当前为基线实现；性能优化与真实形状误差/端到端 Token 待 P4.5/P4.6。
+- 真实形状性能与端到端 Token 结果见 `ocl/tests/test_results.md` 11.3–11.5；
+- P4.5：接入 `packed_tokens` 有效 token 截断，positions 只读有效行；
+- P4.5：per-head GEMM 的 K 维改为 `vload_half8` + FP32 累加，K 非 8 倍数
+  保留标量尾部；真实形状性能数据待补入 `ocl/tests/test_results.md`。

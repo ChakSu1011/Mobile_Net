@@ -180,8 +180,16 @@ int m, int n, int k
 
 数值阈值、真实形状性能数据、文档/skill/结果齐全。
 
-## 7. 实现状态（P4.3）
+## 7. 实现状态（P4.3 / P4.5）
 
-- 已实现 `linear` OCL 基线 Kernel：`.cl` + 宿主包装 + `Create<Op>OclKernel`；
-- 主机 Intel Arc 上经 `ocl_vs_mock_test` 与 Mock 数值对齐通过；
-- 当前为基线实现；性能优化与真实形状误差/端到端 Token 待 P4.5/P4.6。
+- 已实现 `linear` OCL Kernel：`.cl` + 宿主包装 + `Create<Op>OclKernel`；
+- 主机 Intel Arc 上经 `ocl_vs_mock_test` 与 Mock 数值对齐通过（含 K<8
+  标量尾部与 K=16 的 half8 向量路径）；
+- P4.5 优化：K 维 `vload_half8` 向量化 + FP32 累加；有效 token 截断
+  （`EffectiveRows`）只计算本步有效行；`row0 + 1 >= m` 时走单行尾部路径，
+  M=1 decode 不再计算 4 行 padding；`packed_tokens=false` 的基准仍按
+  静态 M 全量计算；
+- 实测（Intel Arc 130T，3 次中位数，ms）：256×1024×1024
+  2.237→1.211（Mock 821.0）；256×1024×3072 10.129→3.543（Mock 2510.3）；
+  lm_head 256×1024×151936 843.809→337.469（Mock 过慢未测）；
+- Mali-G925 真机数据待重连后补测。

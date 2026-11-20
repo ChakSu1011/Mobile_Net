@@ -42,13 +42,23 @@
 8. Mali local 是 CL_GLOBAL；不要用大 local 存 K/V tile。
 9. 不要 fast-relaxed-math；softmax/acc FP32。
 10. 首期无 KV cache；`use_kv_cache=true` 应被 OpSpec 拒绝。
+11. P4.5 起 `seq` 是有效长度、`seq_stride` 是静态行跨度；q/k/v/out 地址必须用
+    `seq_stride`。把 `seq` 同时当 stride 会在 packed 布局下读错 K/V 行。
 
-## 性能数据
+## 性能数据（Intel Arc 130T，2026-11-20）
 
-待 P4 实测后填写：QT/KT、heads_per_wg、kernel 时间、Mock 时间、加速比、FLOPs。
+S=256、H=16、KV=8、D=128；warmup 1 + 3 次 `Execute+Synchronize`
+平均，3 次进程运行取中位数：
+
+| 实现 | kernel+同步时间 | Mock | vs Mock |
+| --- | --- | --- | --- |
+| P4.3 两遍 softmax | 38.867 ms | 563.534 ms | 14.5x |
+| P4.5 单遍 online softmax | 22.190 ms | 563.534 ms | 25.4x |
+
+Mali-G925 已断开，真机数据待重连后补测。
 
 ## P4.3 实现状态
 
 - `mega_attention` OCL 基线 Kernel 已实现，并在主机 Intel Arc 上通过 `ocl_vs_mock_test` 与 Mock 数值对齐；
-- 当前为基线；真实形状/多 seed 误差与性能优化待 P4.5；
+- 真实形状性能见 `ocl/tests/test_results.md` 11.5；多 seed 误差待补。
 - 手机 Mali-G925 已断开，历史结果保留。

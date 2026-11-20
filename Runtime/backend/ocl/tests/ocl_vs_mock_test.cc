@@ -217,9 +217,12 @@ bool RunOp(Backend* backend, const char* key, OpType op_type,
   status = kernel->Execute(context);
   (void)backend->DestroyKernel(std::move(kernel));
   if (!status.ok()) {
+    std::cout << "  execute error: " << status.message() << "\n";
     return false;
   }
-  if (!backend->Synchronize(nullptr).ok()) {
+  const Status sync = backend->Synchronize(nullptr);
+  if (!sync.ok()) {
+    std::cout << "  synchronize error: " << sync.message() << "\n";
     return false;
   }
   *actual = output;
@@ -271,6 +274,10 @@ void CheckOp(Backend* mock, Backend* ocl, const char* key, OpType op_type,
                              &mock_output);
   const bool ocl_ok =
       RunOp(ocl, key, op_type, inputs, output, attrs, &ocl_output);
+  if (!mock_ok || !ocl_ok) {
+    std::cout << "  run detail: mock_ok=" << mock_ok
+              << " ocl_ok=" << ocl_ok << "\n";
+  }
   Expect(mock_ok && ocl_ok, std::string("run ") + key, failures);
   if (!mock_ok || !ocl_ok) {
     return;
@@ -359,6 +366,28 @@ int main() {
             {HalfTensor({1, 2, 4}, 6), HalfTensor({3, 4}, 7)},
             HalfTensor({1, 2, 3}, 0), attrs, 2e-2f, &failures);
   }
+  // Linear：K=16 覆盖 half8 向量路径 + 一次完整 k8 循环。
+  {
+    AttrMap attrs;
+    attrs["in_features"] = static_cast<I64>(16);
+    attrs["out_features"] = static_cast<I64>(3);
+    attrs["transpose_weight"] = true;
+    attrs["bias"] = false;
+    CheckOp(mock.get(), ocl.get(), "linear", OpType::kLinear,
+            {HalfTensor({1, 2, 16}, 22), HalfTensor({3, 16}, 23)},
+            HalfTensor({1, 2, 3}, 0), attrs, 2e-2f, &failures);
+  }
+  // Linear：M=1 覆盖单行尾部路径。
+  {
+    AttrMap attrs;
+    attrs["in_features"] = static_cast<I64>(16);
+    attrs["out_features"] = static_cast<I64>(3);
+    attrs["transpose_weight"] = true;
+    attrs["bias"] = false;
+    CheckOp(mock.get(), ocl.get(), "linear", OpType::kLinear,
+            {HalfTensor({1, 1, 16}, 24), HalfTensor({3, 16}, 25)},
+            HalfTensor({1, 1, 3}, 0), attrs, 2e-2f, &failures);
+  }
 
   // LinearSwiGlu。
   {
@@ -370,6 +399,18 @@ int main() {
     CheckOp(mock.get(), ocl.get(), "linear_swi_glu", OpType::kLinearSwiGlu,
             {HalfTensor({1, 2, 4}, 8), HalfTensor({3, 4}, 9),
              HalfTensor({3, 4}, 10)},
+            HalfTensor({1, 2, 3}, 0), attrs, 2e-2f, &failures);
+  }
+  // LinearSwiGlu：K=16 覆盖 half8 向量路径。
+  {
+    AttrMap attrs;
+    attrs["intermediate_size"] = static_cast<I64>(3);
+    attrs["activation"] = std::string("silu");
+    attrs["transpose_weight"] = true;
+    attrs["bias"] = false;
+    CheckOp(mock.get(), ocl.get(), "linear_swi_glu", OpType::kLinearSwiGlu,
+            {HalfTensor({1, 2, 16}, 26), HalfTensor({3, 16}, 27),
+             HalfTensor({3, 16}, 28)},
             HalfTensor({1, 2, 3}, 0), attrs, 2e-2f, &failures);
   }
 
@@ -393,6 +434,28 @@ int main() {
             OpType::kLinearPerHeadRMSNormRope,
             {HalfTensor({1, 2, 4}, 11), HalfTensor({4, 4}, 12),
              HalfTensor({2}, 13), positions},
+            HalfTensor({1, 2, 4}, 0), attrs, 2e-2f, &failures);
+  }
+  // PerHeadRMSNormRope：K=16 覆盖 half8 向量路径。
+  {
+    HostTensor positions;
+    positions.dims = {1, 2};
+    positions.dtype = DataType::kInt64;
+    positions.int_values = {0, 1};
+    AttrMap attrs;
+    attrs["in_features"] = static_cast<I64>(16);
+    attrs["out_features"] = static_cast<I64>(4);
+    attrs["num_heads"] = static_cast<I64>(2);
+    attrs["head_dim"] = static_cast<I64>(2);
+    attrs["norm_eps"] = 1e-6;
+    attrs["rope_theta"] = 10000.0;
+    attrs["rope_layout"] = std::string("neox");
+    attrs["transpose_weight"] = true;
+    attrs["bias"] = false;
+    CheckOp(mock.get(), ocl.get(), "per_head_rmsnorm_rope",
+            OpType::kLinearPerHeadRMSNormRope,
+            {HalfTensor({1, 2, 16}, 29), HalfTensor({4, 16}, 30),
+             HalfTensor({2}, 31), positions},
             HalfTensor({1, 2, 4}, 0), attrs, 2e-2f, &failures);
   }
 

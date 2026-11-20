@@ -131,7 +131,9 @@ Status GatherOclKernel::ExecuteImpl(
   if (!status.ok()) {
     return status;
   }
-  status = SetIntArg(6, static_cast<I32>(tokens));
+  // 生产执行时只处理本步有效 token，padding 行不参与 embedding 查表。
+  const I64 valid_tokens = EffectiveRows(context, tokens);
+  status = SetIntArg(6, static_cast<I32>(valid_tokens));
   if (!status.ok()) {
     return status;
   }
@@ -143,7 +145,7 @@ Status GatherOclKernel::ExecuteImpl(
   if (!status.ok()) {
     return status;
   }
-  return Enqueue1D(static_cast<Usize>(tokens) * kGatherLocalSize,
+  return Enqueue1D(static_cast<Usize>(valid_tokens) * kGatherLocalSize,
                    kGatherLocalSize);
 }
 

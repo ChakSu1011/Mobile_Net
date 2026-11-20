@@ -185,4 +185,5 @@ OCL vs Mock 逐 Step Token 一致率 ≥95%（目标 100%）。
 - 已实现 `gather` OCL Kernel：`.cl` + 宿主包装 + `Create<Op>OclKernel`；
 - 主机 Intel Arc 与手机 Mali-G925 的基础数值测试通过（`ocl_contract_test` 48 条 PASS）；
 - 半精度向量路径（如适用）与标量路径均已测试；
-- 性能调优与 vs Mock 性能、端到端 Token 一致性待 P4.5/P4.6。
+- vs Mock 性能见 `ocl/tests/test_results.md` 11.5；端到端 Token 见 11.3–11.4；
+- P4.5：接入 `packed_tokens` 有效 token 截断，只对有效 token 查表。

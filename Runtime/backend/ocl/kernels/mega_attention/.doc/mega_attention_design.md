@@ -117,9 +117,12 @@ __global const half* q, int q_offset,   // [B,S,H*D]
 __global const half* k, int k_offset,   // [B,S,KV*D]
 __global const half* v, int v_offset,   // [B,S,KV*D]
 __global half* out, int out_offset,     // [B,S,H*D]
-int batch, int seq, int heads, int kv_heads, int head_dim,
+int batch, int seq, int seq_stride, int heads, int kv_heads, int head_dim,
 float softmax_scale, int causal
 ```
+
+`seq` 是有效长度（causal 上界与 grid 使用），`seq_stride` 是静态图的行跨度
+（q/k/v/out 地址计算使用）；二者在 P4.5 有效 token 截断后不再相等。
 
 ### 4.3 Kernel 文档
 
@@ -189,8 +192,14 @@ float softmax_scale, int causal
 
 数值、性能、文档/skill/结果齐全。
 
-## 7. 实现状态（P4.3）
+## 7. 实现状态（P4.3 / P4.5）
 
 - 已实现 `mega_attention` OCL 基线 Kernel：`.cl` + 宿主包装 + `Create<Op>OclKernel`；
 - 主机 Intel Arc 上经 `ocl_vs_mock_test` 与 Mock 数值对齐通过；
-- 当前为基线实现；性能优化与真实形状误差/端到端 Token 待 P4.5/P4.6。
+- P4.5 优化：单遍 online softmax（历史累加按 alpha 缩放，score 只算一次）；
+  有效 token 截断把 `seq`（有效长度）与 `seq_stride`（静态行跨度）分离，
+  `ocl_contract_test` 覆盖 S=8/有效 S=3 的前缀一致性与 padding 不写；
+- 实测（Intel Arc 130T，S=256/H=16/KV=8/D=128，3 次中位数）：
+  两遍实现 38.867 ms → 单遍 22.190 ms（1.75x）；Mock 563.534 ms，
+  当前实现约为 Mock 的 25.4x；
+- 当前仍为一 query 一 work-item 的基线；寄存器分块/GQA 复用待下一轮 P4.5。

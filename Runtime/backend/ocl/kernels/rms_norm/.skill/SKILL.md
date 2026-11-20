@@ -47,5 +47,6 @@
 ## P4.3 实现状态
 
 - `rms_norm` OCL 基线 Kernel 已实现，并在主机 Intel Arc 上通过 `ocl_vs_mock_test` 与 Mock 数值对齐；
-- 当前为基线；真实形状/多 seed 误差与性能优化待 P4.5；
-- 手机 Mali-G925 已断开，历史结果保留。
+- 真实形状性能见 `ocl/tests/test_results.md` 11.5；多 seed 误差待补。
+- 手机 Mali-G925 已断开，历史结果保留；
+- P4.5：接入 `packed_tokens` 有效 token 截断。

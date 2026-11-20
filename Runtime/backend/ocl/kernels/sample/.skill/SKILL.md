@@ -49,4 +49,5 @@
 
 - `sample` OCL Kernel 已实现并通过主机 Intel Arc 与手机 Mali-G925 基础数值测试；
 - 当前主测试环境为本机 Intel Arc；手机已断开，性能/P4.6 待重连后补测；
-- 下一步：与 Mock/torch 的完整精度对比（P4.3）、性能调优（P4.5）。
+- 下一步：与 Mock/torch 的完整精度对比（P4.3）、性能调优（P4.5）；
+- P4.5：接入 `packed_tokens` 有效 token 截断。

@@ -79,7 +79,7 @@
 
 | 编号 | 需求 | 验收要点 | 追溯 |
 | --- | --- | --- | --- |
-| FR-BE-01 | Backend 实现 `Init/Deinit/Capability/CreateBuffer/DestroyBuffer/ConvertParam/Upload/Download/CreateKernel/DestroyKernel/Synchronize` 全部接口 | 签名与 `backend.h` 完全一致；`Init` 全有或全无；`Deinit` 幂等 | TC-BE-01 |
+| FR-BE-01 | Backend 实现 `Init/Deinit/Capability/CreateBuffer/DestroyBuffer/ConvertParam/Upload/Download/UploadAt/DownloadAt/CreateKernel/DestroyKernel/Synchronize` 全部接口 | 签名与 `backend.h` 完全一致；`Init` 全有或全无；`Deinit` 幂等 | TC-BE-01、TC-BE-03 |
 | FR-BE-02 | 提供 Backend 注册表；后端以目录级插件接入，名称 `"ocl"`、`"mock"` | 未知后端返回 `kUnsupportedBackend`；新增后端只加目录 | TC-BE-02 |
 | FR-BE-03 | 定义 `KernelContext`/`TensorView`，由 OpEnv 组装、Kernel 消费 | Kernel 只从 `KernelContext` 取指针/形状；不保存其指针到下一次调用 | TC-BE-03 |
 | FR-BE-04 | 提供通用 `KernelOpEnv` 与 `IoOpEnv`，由 `OpEnvFactory` 统一创建 | Input/Output 走 `IoOpEnv`；计算 op 走 `KernelOpEnv`；缺失 op 返回 `kUnsupportedOp` | TC-BE-03 |
@@ -364,6 +364,14 @@ class Backend {
                         uint64_t bytes, Stream* stream) = 0;
   virtual Status Download(void* host_ptr, const void* device_ptr,
                           uint64_t bytes, Stream* stream) = 0;
+  // 带缓冲内字节偏移；默认实现把 offset 加到 device_ptr 上（Mock），
+  // 句柄型设备指针（OpenCL cl_mem）必须覆盖。
+  virtual Status UploadAt(void* device_ptr, uint64_t offset,
+                          const void* host_ptr, uint64_t bytes,
+                          Stream* stream);
+  virtual Status DownloadAt(void* host_ptr, const void* device_ptr,
+                            uint64_t offset, uint64_t bytes,
+                            Stream* stream);
   virtual Status CreateKernel(const KernelDesc& desc,
                               std::unique_ptr<Kernel>* kernel) = 0;
   virtual Status DestroyKernel(std::unique_ptr<Kernel> kernel) = 0;
@@ -381,7 +389,8 @@ class Backend {
 | `CreateBuffer` | `desc.bytes > max_buffer_bytes` 返回 `kBufferError`（或 `kDeviceOom`）；对齐不满足返回 `kBufferError`；不初始化内容 |
 | `DestroyBuffer` | 允许空指针；重复释放由 `unique_ptr` 语义保证不会发生 |
 | `ConvertParam` | 源主机内存只在调用期间有效；成功后 Buffer 常驻；不支持 dtype 返回 `kUnsupportedDtype` |
-| `Upload/Download` | `device_ptr` 必须是 `Buffer::DevicePtr()` 返回值（或空流默认）；`bytes` 不得超过 Buffer 剩余空间；首期只支持 Buffer 内偏移 0 |
+| `Upload/Download` | `device_ptr` 必须是 `Buffer::DevicePtr()` 返回值；`bytes` 不得超过 Buffer 剩余空间；等价于 `UploadAt/DownloadAt(offset=0)` |
+| `UploadAt/DownloadAt` | `device_ptr` 必须是 `Buffer::DevicePtr()` 返回值，`offset` 为 Buffer 内字节偏移且 `offset+bytes` 不得超过 Buffer 大小；arena 切片传输必须使用本接口；OCL 把 offset 映射为 `clEnqueue*Buffer` 的 `buffer_offset`，禁止对 `cl_mem` 做指针加法 |
 | `CreateKernel` | 按 `kernel_key` 选择实现；`op_type` 用于能力校验；失败不泄漏 Program/Kernel |
 | `DestroyKernel` | 允许空指针；内部释放 `cl_kernel` 等句柄 |
 | `Synchronize` | 等待该流全部任务完成；`stream=nullptr` 表示默认流 |
@@ -411,7 +420,7 @@ class Buffer {
 
 1. 上层（Loader/Executor/OpEnv）只把 `Storage.data_ptr` 当作不透明 `Buffer*`，不得解引用。
 2. Kernel 通过 `static_cast<const <Backend>Buffer*>(view.data)` 取原生句柄；`view.offset` 为字节偏移。
-3. `Backend::Upload/Download` 的 `device_ptr` 取 `buffer->DevicePtr()`，首期只支持偏移 0；I/O 缓冲与权重缓冲都是独立 Buffer，满足该限制。调试导出 `lm_head.out` 的非零偏移下载不在 v1 支持范围（见 4.12）。
+3. `Backend::Upload/Download` 的 `device_ptr` 取 `buffer->DevicePtr()`，偏移为 0；arena 内切片（如 `sample.out`、Output op 的源张量）必须走 `UploadAt/DownloadAt` 携带 `Storage.offset`。`cl_mem` 是句柄，不能通过指针加法表达偏移；Mock 的主机指针可以，默认实现因此把 offset 加到指针上，OCL 覆盖为 `clEnqueue*Buffer` 的 `buffer_offset`。调试导出 `lm_head.out` 的末行 logits 可复用 `DownloadAt`。
 4. Buffer 生命周期由 Engine 的 `ResourceStack` 管理；Kernel/OpEnv 只持有非拥有 `Buffer*`；销毁顺序保证 Buffer 晚于 OpEnv。
 5. `BufferDesc.alignment` 由 Loader 取 MemoryPlan 对齐与 Capability.min_alignment 的校验结果；不满足时加载失败，不做静默重排。
 
@@ -561,6 +570,7 @@ struct KernelContext {
   int32_t batch = 1;
   int32_t token_count = 0;                 // 本步有效 token 数
   int32_t seq_len = 0;                     // 逻辑序列长度（含 padding）
+  bool packed_tokens = false;              // 行按 packed token 紧凑排布
 };
 
 }  // namespace runtime_graph
@@ -577,6 +587,9 @@ struct KernelContext {
 4. `attrs` 指向 `Op::Attrs()`，只读；Kernel 不得修改。
 5. `attention`/`sampling` 只在对应 op 需要时非空；其余 op 为 `nullptr`。
 6. `batch/token_count/seq_len` 由 StepContext 填充；单算子测试直接用测试值。
+7. `packed_tokens=true` 表示本步张量行按 packed token 紧凑排布（KernelOpEnv 在生产执行时设置）；
+   Kernel 可在 `batch==1` 时据此把有效行数截断到 `token_count`；直接调用 Kernel 的测试/基准保持
+   `false`，按静态 shape 全量计算。
 
 #### 4.2.3 StepContext 与动态数据注入
 
@@ -686,9 +699,11 @@ class KernelOpEnv final : public ExecOpEnv {
 `IoOpEnv`：
 
 - Input：主机 Storage 来自 `attr["storage"]`（Engine 经 `IoBinder` 写入）；设备 Storage 来自输入 Tensor
-  的 Storage（Loader 绑定）。调用 `Backend::Upload(buffer->DevicePtr(), host_ptr, bytes, stream)`。
+  的 Storage（Loader 绑定）。调用 `Backend::UploadAt(buffer->DevicePtr(), device_view_.offset,
+  host_ptr, bytes, stream)`。
 - Output：设备 Storage 来自源 Tensor；主机 Storage 来自 `attr["storage"]`。调用
-  `Backend::Download(host_ptr, buffer->DevicePtr(), bytes, stream)`。
+  `Backend::DownloadAt(host_ptr, buffer->DevicePtr(), device_view_.offset, bytes, stream)`。
+- 两者都使用 `Storage.offset`：输出张量可能位于 arena 的非零偏移切片。
 - 校验名称、字节数、dtype、shape；失败返回 `kInvalidArgument` 并带 op 名。
 
 ### 4.3 算子模块规范
@@ -795,8 +810,10 @@ OCL 后端设计已完成，见 [`Runtime/backend/ocl/.doc/ocl_design.md`](../oc
 每目录同时包含 `.skill/SKILL.md` 与 `tests/test_plan.md`。P4.1 已落地 OclApi/OclContext/
 OclBuffer/OclProgramCache/OclBackend；P4.2 已落地 OclKernel 框架、`.cl` 源码嵌入与 kernel_key 分发；P4.3 已接入
 全部 8 个 OCL 基线 Kernel，并在主环境 Intel Arc 上通过 `ocl_vs_mock_test`
-与 Mock 逐算子数值对齐（8/8）。手机 Mali-G925 已断开，历史结果保留。
-真实形状性能与端到端 Token 一致性待 P4.5–P4.6。本文件冻结以下原则：
+与 Mock 逐算子数值对齐（8/8）。P4.6 端到端 3 条 prompt 的 OCL/Mock/PyTorch
+token 完全一致；P4.5 第一轮已优化有效 token 截断、half8 GEMM 与单遍
+attention，性能数据见 `ocl/tests/test_results.md` 第 11 节。手机 Mali-G925
+已断开，历史结果保留；Mali 真机性能待重连补测。本文件冻结以下原则：
 
 1. **动态加载**：`OpenCL.dll`/`libOpenCL.so` 通过 `LoadLibrary/dlopen` 加载，函数指针表由本后端维护；
    公共头不出现 `cl_*`。构建期可切换为直接链接（`MOBILENET_OCL_STATIC`）。
@@ -889,7 +906,7 @@ OclBuffer/OclProgramCache/OclBackend；P4.2 已落地 OclKernel 框架、`.cl` �
 
 | 编号 | 限制/待确认 | 影响 | 计划 |
 | --- | --- | --- | --- |
-| L-BE-01 | `Backend::Upload/Download` 无 offset 参数 | 调试导出 arena 中 `lm_head.out` 的末行 logits 暂不可用 | v1 只导出 Sample 输出；调试导出另立契约 |
+| L-BE-01 | ~~`Backend::Upload/Download` 无 offset 参数~~ | 已解决：新增 `UploadAt/DownloadAt`，Executor 回读 `sample.out` 与 IoOpEnv 输出走带偏移接口 | OCL e2e 已验证；调试导出可直接复用 |
 | L-BE-02 | OCL 主机编译需要 Khronos `CL/cl.h` | 本机只有 `OpenCL.dll`，无头文件 | P0 决策：vendor 头或仅 Android 构建 |
 | L-BE-03 | 无参考机 | OCL 数值只能在有设备时验收 | mock 先覆盖全部算子；OCL 用例标注 skip |
 | L-BE-04 | `KernelContext` 命名空间被冻结在 `runtime_graph` | 语义上属于 runtime，但类型名固定 | 保持不动；在文档中说明 |
@@ -980,7 +997,7 @@ ToolChain testing API / 权重读写 ──────────────�
 | --- | --- | --- |
 | TC-BE-01 | `Init` 正常/重复/失败；`Deinit` 重复 | 错误码正确；无句柄泄漏；重复 Deinit 安全 |
 | TC-BE-02 | 注册表：已注册/未知名称/重复注册 | `Create` 正确；未知返回 `kUnsupportedBackend` |
-| TC-BE-03 | Buffer：正常、超 `max_buffer_bytes`、对齐不满足、上传/下载往返（含 1 B、奇数长度、随机数据） | 数据逐字节一致；错误码正确 |
+| TC-BE-03 | Buffer：正常、超 `max_buffer_bytes`、对齐不满足、上传/下载往返（含 1 B、奇数长度、随机数据）、`UploadAt/DownloadAt` 非零偏移切片 | 数据逐字节一致；切片外数据不变；错误码正确 |
 | TC-BE-04 | ConvertParam：FP16 直通、FP32→FP16、未知 dtype、空指针 | 数据/精度正确；错误码正确 |
 | TC-BE-05 | CreateKernel：8 个 kernel_key、未知 key、空 desc | 成功/`kUnsupportedOp` 正确；无泄漏 |
 | TC-BE-06 | Capability：未 Init、字段完整、op/dtype 覆盖 | 返回 `kStateError` 或完整能力 |

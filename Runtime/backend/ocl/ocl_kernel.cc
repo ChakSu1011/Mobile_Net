@@ -197,6 +197,16 @@ I64 OclKernel::ElementCount(const runtime_graph::TensorView& view) {
   return view.shape.GetShapeSize();
 }
 
+I64 OclKernel::EffectiveRows(const runtime_graph::KernelContext& context,
+                             I64 static_rows) const {
+  if (static_rows <= 0 || !context.packed_tokens || context.batch != 1 ||
+      context.token_count <= 0) {
+    return static_rows;
+  }
+  const I64 tokens = static_cast<I64>(context.token_count);
+  return tokens < static_rows ? tokens : static_rows;
+}
+
 void OclKernel::ReleaseKernel() {
   if (kernel_ != nullptr && context_ != nullptr &&
       context_->functions() != nullptr &&

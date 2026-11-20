@@ -220,14 +220,53 @@ Runtime 全部 .cc 单文件编译          -> failed=0
 
 细节见各模块 `tests/test_results.md`。
 
+### 5.9 Mock 端到端 Qwen3-0.6B
+
+测试程序：`Runtime/tests/mock_e2e_test.cc`；模型包：
+`Models/Qwen3/artifacts/qwen3_0_6b`；模式：
+`recompute_attention=true`（Mock attention 不支持 KV），单步完整序列前向，
+比较 `sample.out` 的 argmax token 与 PyTorch 参考。
+
+命令：
+
+```bash
+./Runtime/build/mock_e2e_test.exe \
+  Models/Qwen3/artifacts/qwen3_0_6b 0
+./Runtime/build/mock_e2e_test.exe \
+  Models/Qwen3/artifacts/qwen3_0_6b 1
+./Runtime/build/mock_e2e_test.exe \
+  Models/Qwen3/artifacts/qwen3_0_6b 2
+```
+
+实际输出：
+
+```text
+Hello                    expected=21806 actual=21806
+all mock e2e checks passed
+real 7m58.325s
+
+The capital of France is expected=12095 actual=12095
+all mock e2e checks passed
+CASE1_EXIT=0
+
+1+1=                     expected=17 actual=17
+all mock e2e checks passed
+CASE2_EXIT=0
+```
+
+参考值由 [generate_qwen3_golden.py](../../Tests/golden/generate_qwen3_golden.py)
+使用 Transformers `Qwen3ForCausalLM`（float32 CPU）生成，见
+[Tests/golden/qwen3_0_6b.json](../../Tests/golden/qwen3_0_6b.json)。
+
 ## 6. 结论
 
-- 全部 Runtime 公共头文件（common、loader、scheduler、kvcache、engine、
-  engine_modules、destroy、executor、backend/kernel）编译通过，
-  `-Wall -Wextra` 无警告。
-- 接口声明与 `Runtime/.doc/Runtime_design.md` 的接口清单一致。
-- 未覆盖项：链接、实现逻辑、运行时行为、设备后端、数值正确性。这些在
-  后续阶段按模块补充测试结果。
+- Runtime 全部模块已实现并通过链接：Loader/Scheduler/KVCache/Executor/
+  Engine/Destroy/Common；
+- 全部公共头文件与实现 `-Wall -Wextra` 编译无警告；
+- Mock 后端加载 Qwen3-0.6B 全量包成功，IR/C++ DumpIr 与 manifest 哈希一致；
+- 三条 prompt 的单步前向 argmax token 与 PyTorch 参考一致；
+- 未覆盖项：真实 OCL/Adreno 设备、logits 数值误差、chunked prefill 端到端、
+  KV 共享/COW、抢占、性能与 1 小时稳定性。这些在后续阶段补充。
 
 ## 7. 复现说明
 

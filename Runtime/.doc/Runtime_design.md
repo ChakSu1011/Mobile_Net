@@ -1246,6 +1246,10 @@ cmake --build Runtime/build
 
 环境：Windows 11 / Linux 主机，C++17，CMake 3.20+，MockBackend；真机 Android + OCL 用于 R4/R5。测试结果写入各模块 `tests/test_results.md` 与 `Runtime/tests/test_results.md`。
 
+当前实现验证：Mock 后端已加载 Qwen3-0.6B 全量包，并通过 3 条 prompt 的
+单步前向 token 与 PyTorch 金标准对齐（21806 / 12095 / 17）；详见
+`Runtime/tests/test_results.md` 5.9。
+
 ---
 
 ## 附录 A：接口索引

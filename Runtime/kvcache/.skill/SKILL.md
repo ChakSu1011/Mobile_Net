@@ -101,3 +101,14 @@ python -m ziglang c++ -std=c++17 -Wall -Wextra -I "d:/Mobile_Net" \
     `ResourceStack::Clear` 在 Backend 释放之前执行。正常 Destroy 满足；
     `Executor::Init` 失败回滚会先释放 Backend，存在契约缺口（见 Destroy
     模块文档），集成时需先修复 Engine/Executor 所有权时序。
+
+## Paged Attention 视图契约（2026-11-21）
+
+- `KvLayerView.k_buffer/v_buffer` 必须是 `Buffer*`，不是 `DevicePtr()`；
+  Kernel 按后端类型转换。
+- 字段：`block_stride/num_blocks/num_kv_heads/head_dim/dtype`；阶段一固定
+  NHD，`block_stride = block_size × kv_heads × head_dim × dtype_size`。
+- `Init` 校验 `BackendCapability.kv_layout == kNhd` 与 KV dtype 在
+  `supported_dtypes` 中。
+- `slot = block_id × block_size + offset`，直接作为扁平 token 下标。
+- 视图在 `ResourceStack::Clear` 前有效；不要在 Destroy 后复用。

@@ -41,7 +41,8 @@
 7. D=128 时每 lane 分 8 维（TPQ=16）；half8 读。
 8. Mali local 是 CL_GLOBAL；不要用大 local 存 K/V tile。
 9. 不要 fast-relaxed-math；softmax/acc FP32。
-10. 首期无 KV cache；`use_kv_cache=true` 应被 OpSpec 拒绝。
+10. `use_kv_cache=false` 走全量 q/k/v；`true` 走 paged 两段式 kernel
+    （见下方 Paged Attention 章节）。
 11. P4.5 起 `seq` 是有效长度、`seq_stride` 是静态行跨度；q/k/v/out 地址必须用
     `seq_stride`。把 `seq` 同时当 stride 会在 packed 布局下读错 K/V 行。
 
@@ -63,3 +64,35 @@ S=256、H=16、KV=8、D=128；warmup 1 + 3 次 `Execute+Synchronize`
 - `mega_attention` OCL 基线 Kernel 已实现，并在主机 Intel Arc 上通过 `ocl_vs_mock_test` 与 Mock 数值对齐；
 - 真实形状性能见 `ocl/tests/test_results.md` 11.5；多 seed 误差待补。
 - 手机 Mali-G925 已断开，历史结果保留。
+
+## Paged Attention（2026-11-21）
+
+**适用场景**：阶段一 KV 推理，`use_kv_cache=true`，需要 chunked prefill、
+decode 或混合 batch。
+
+**输入**：
+- `AttentionContext`：batch、token_count、kv_block_size、layer_index、KvCacheView；
+- `AttentionMetadataView`：seq_lens/query_lens/context_lens/request_indices/
+  positions/slots/block_table；
+- q/k/v：本步 token，形状仍为静态 `[1,S,...]`。
+
+**步骤**：
+1. 宿主 `Prepare` 编译 `paged_kv_store` 与 `mega_attention_paged` 两个 entry；
+2. `Execute` 先下发 `paged_kv_store`（token × kv_head），按 slot 写 NHD 池；
+3. 再下发 `mega_attention_paged`（token × q_head），按块表读历史 KV；
+4. causal 用绝对位置 `kv_pos <= q_pos`，chunked prefill 与 decode 同一公式；
+5. GQA 用 `kv_head = q_head / (heads/kv_heads)`；
+6. 元数据数组 offset 必须显式传参；KV 池偏移用 `long`。
+
+**输出**：`out[token, head, d]`，只写有效 token 行。
+
+**常见陷阱**：
+1. `FP16` 在 Mock/主机侧是 16 位存储位型，必须用 `HalfToFloat` 转换；
+   直接 `static_cast<float>(uint16_t)` 会把位型当整数，得到巨大错误值。
+2. `slots` 是扁平 token 下标（`block*block_size+offset`），不是块号。
+3. 块表尾部补 0，但只读到 `ceil(seq_lens/block_size)`，不要多读。
+4. `paged_kv_store` 与 attention 必须在同一 in-order 队列顺序入队；
+   跨队列需 event。
+5. 不要用全局 `is_prefill` 判断；混合 batch 由每请求的
+   `query_lens/context_lens` 表达。
+6. 静态 `S` 仍是行跨度上限；`token_count` 才是有效行数。

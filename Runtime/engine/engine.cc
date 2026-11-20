@@ -174,6 +174,59 @@ Status BuildSchedulerConfig(const RuntimeConfig& runtime,
   config->context_length = model.context_length;
   config->stop_ids = model.stop_token_ids;
   config->recompute_attention = runtime.recompute_attention;
+  config->max_preemptions_per_step = 4;
+  return Status::Ok();
+}
+
+// 校验图 attention 语义与 Runtime 的 recompute 配置一致。
+//
+// 功能：
+//   扫描图中全部 kMegaAttention op，读取 use_kv_cache。KV 图必须配
+//   recompute_attention=false；全量 prefill 图必须配 true。
+//
+// 参数：
+//   graph：已加载的图，非空；
+//   recompute_attention：RuntimeConfig 的模式开关。
+// 返回：
+//   成功返回 kOk；不一致返回 kInvalidArgument。
+Status CheckAttentionMode(runtime_graph::Graph* graph,
+                          Bool recompute_attention) {
+  if (graph == nullptr) {
+    return MakeStatus(ErrorCode::kInvalidArgument,
+                      "Engine::Load: graph must not be null");
+  }
+  Bool has_kv = false;
+  Bool has_full = false;
+  for (runtime_graph::Op* op : graph->GetOrderlyOPList()) {
+    if (op == nullptr ||
+        op->Type() != runtime_graph::OpType::kMegaAttention) {
+      continue;
+    }
+    Bool use_kv_cache = false;
+    const auto iterator = op->Attrs().find("use_kv_cache");
+    if (iterator != op->Attrs().end()) {
+      const auto* value = std::get_if<Bool>(&iterator->second);
+      if (value != nullptr) {
+        use_kv_cache = *value;
+      }
+    }
+    if (use_kv_cache) {
+      has_kv = true;
+    } else {
+      has_full = true;
+    }
+  }
+  if (has_kv && recompute_attention) {
+    return MakeStatus(
+        ErrorCode::kInvalidArgument,
+        "Engine::Load: graph uses KV cache but recompute_attention=true");
+  }
+  if (has_full && !recompute_attention) {
+    return MakeStatus(
+        ErrorCode::kInvalidArgument,
+        "Engine::Load: graph uses full attention but "
+        "recompute_attention=false");
+  }
   return Status::Ok();
 }
 
@@ -193,6 +246,13 @@ Status BuildKvCacheSpec(const RuntimeConfig& runtime,
   if (spec == nullptr) {
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "kv cache spec output must not be null");
+  }
+  if (runtime.kv_block_size > 0 &&
+      capability.attention_block_size > 0 &&
+      runtime.kv_block_size != capability.attention_block_size) {
+    return MakeStatus(
+        ErrorCode::kInvalidArgument,
+        "runtime KV block size does not match backend attention tile");
   }
   I32 block_size = runtime.kv_block_size > 0
                            ? runtime.kv_block_size
@@ -425,6 +485,12 @@ Status Engine::Load(const EngineConfig& config) {
 
   graph_ = std::move(result.graph);
   backend_initialized = true;
+
+  status = CheckAttentionMode(graph_.get(), config.runtime.recompute_attention);
+  if (!status.ok()) {
+    return rollback(result.backend.get(), backend_initialized,
+                    executor_initialized, status);
+  }
 
   SchedulerConfig scheduler_config;
   status = BuildSchedulerConfig(config.runtime, result.model,

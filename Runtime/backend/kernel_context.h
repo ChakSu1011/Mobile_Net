@@ -69,16 +69,54 @@ struct TensorView {
   DeviceType device = DeviceType::kUnknown;
 };
 
-// Attention 本步元数据。
+// Attention 本步元数据视图。
 //
 // 功能：
-//   为 Attention Kernel 提供 batch、有效 token 数、逐行序列长度以及阶段二
-//   的 KV 块表/slot 信息；首期仅使用 batch/token_count/seq_lens/is_prefill。
+//   为 Paged Attention Kernel 提供逐请求与逐 token 的执行元数据。所有数组
+//   由 Executor 每步装配，通常位于同一设备缓冲的不同字节偏移；每个
+//   TensorView 的 data 为 Buffer*（kDevice）或主机地址（kHost），offset
+//   为元数据缓冲内字节偏移。
 //
 // 边界：
-//   - 所有指针均为非拥有，生命周期由 Executor/StepContext 保证；
+//   - 所有视图均为非拥有，生命周期由 Executor/StepContext 保证；
 //   - 不包含块分配或块表修改接口；
-//   - 不表示 Prefill/Decode 的调度决策，只传递执行所需信息。
+//   - 不表示 Prefill/Decode 的调度决策，只传递执行所需信息；
+//   - Kernel 必须显式接收每个视图的 offset，不得假设数组连续。
+struct AttentionMetadataView {
+  // 每请求本步结束后的总 KV 长度，I32[batch]。
+  TensorView seq_lens;
+
+  // 每请求本步 query token 数，I32[batch]。
+  TensorView query_lens;
+
+  // 每请求本步前已有 KV 长度，I32[batch]。
+  TensorView context_lens;
+
+  // 每 token 所属 batch 行，I32[token_count]。
+  TensorView request_indices;
+
+  // 每 token 的绝对位置，I32[token_count]。
+  TensorView positions;
+
+  // 每 token 的 KV 写入 slot，I64[token_count]。
+  TensorView slots;
+
+  // 每请求物理块表，I32[batch * block_table_stride]，尾部补 0。
+  TensorView block_table;
+
+  // block_table 每请求的元素数。
+  I32 block_table_stride = 0;
+};
+
+// Attention 本步上下文。
+//
+// 功能：
+//   把 batch/token 规模、KV 层视图与元数据视图组合后交给 Attention Kernel。
+//
+// 边界：
+//   - 所有指针/视图均为非拥有；
+//   - kv 在 `use_kv_cache=false` 时可为空；
+//   - layer_index 只在 paged 路径使用，必须由 op attr 显式提供。
 struct AttentionContext {
   // batch 行数。
   I32 batch = 0;
@@ -86,29 +124,17 @@ struct AttentionContext {
   // 本步有效 token 总数。
   I32 token_count = 0;
 
-  // 每 batch 行的有效序列长度，长度至少为 batch。
-  const I32* seq_lens = nullptr;
-
-  // 每请求物理块表；首期可为空。
-  const I32* block_table = nullptr;
-
-  // block_table 每行的元素数。
-  I32 block_table_stride = 0;
-
-  // KV 写入 slot；首期可为空。
-  const I64* slots = nullptr;
-
-  // slot 数量。
-  I32 slot_count = 0;
-
   // 每个 KV 块的 token 数；0 表示未启用 KV。
   I32 kv_block_size = 0;
 
-  // KV 只读视图；首期可为空。
+  // 当前 attention op 对应的 KV 层下标；-1 表示未提供。
+  I32 layer_index = -1;
+
+  // KV 只读视图；可为空。
   const runtime::KvCacheView* kv = nullptr;
 
-  // 是否处于 Prefill 阶段。
-  Bool is_prefill = true;
+  // 逐请求/逐 token 元数据。
+  AttentionMetadataView meta;
 };
 
 // 单节点执行上下文。

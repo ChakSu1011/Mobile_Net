@@ -69,7 +69,7 @@ Runtime 以 Continuous Batching 方式执行推理：Engine 每个 Step 调用
 | FR-SCH-14 | Reserve 失败时选择 victim：优先 `priority` 数值大，其次 `context_length` 大，最后 `request_id` 大；不抢占当前请求 | TC-SCH-03 |
 | FR-SCH-15 | 抢占动作：`KvAllocator::Release`、`computed_tokens=0`、`kv_reserved=false`、状态 `kRecompute`；不得删除已生成 token | TC-SCH-03 |
 | FR-SCH-16 | `kRecompute` 请求按完整 history 重算；完成后置 `kRunning`，下一步正常 decode | TC-SCH-03 |
-| FR-SCH-17 | 单步最多抢占 `max_preemptions_per_step` 个；无可抢占对象且 Reserve 仍失败返回 `kDeviceOom`；`StepStats.preempted_requests` 记录本步次数 | TC-SCH-03 |
+| FR-SCH-17 | 单步最多抢占 `max_preemptions_per_step` 个；无可抢占对象且 Reserve 仍失败返回 `kDeviceOom`；`StepStats.preempted_requests` 复制累计抢占次数 | TC-SCH-03 |
 
 ### 2.2 非功能需求
 

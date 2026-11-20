@@ -38,6 +38,9 @@ const FP16* HalfData(const runtime_graph::TensorView& view);
 // 返回可写 half 数据起始指针；buffer 为空时返回 nullptr。
 FP16* MutableHalfData(const runtime_graph::TensorView& view);
 
+// 返回 int32 数据起始指针；buffer 为空时返回 nullptr。
+const I32* Int32Data(const runtime_graph::TensorView& view);
+
 // 返回 int64 数据起始指针；buffer 为空时返回 nullptr。
 const I64* Int64Data(const runtime_graph::TensorView& view);
 

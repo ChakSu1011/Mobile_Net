@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 文档版本 | v0.3 |
-| 文档状态 | 设计完成；P4.1 基础设施、P4.2 Kernel 框架、P4.3 全部 8 个基线 Kernel 与 vs Mock 数值对齐、P4.6 端到端 Token 一致性（3/3）已落地；P4.5 第一轮优化已完成；v0.3 将 Paged Attention 纳入阶段一（P4.8），P4.7 待实现 |
+| 文档状态 | 设计完成；P4.1 基础设施、P4.2 Kernel 框架、P4.3 全部 8 个基线 Kernel 与 vs Mock 数值对齐、P4.6 端到端 Token 一致性（3/3）已落地；P4.5 第一轮优化已完成；v0.3 将 Paged Attention 纳入阶段一（P4.8），已实现并通过 4 用例 × 8 token 自回归 e2e |
 | 编写日期 | 2026-11-21 |
 | 模块 | `Runtime/backend/ocl/` |
 | 权威位置 | `Runtime/backend/ocl/.doc/ocl_design.md` |
@@ -32,8 +32,9 @@ attention 单遍 online softmax、linear 的 K 维 `vload_half8` 向量化与单
 1.66–2.56x、swiglu 2.50x、rope 2.22x、attention 1.22x（vs 优化前）。
 数值回归由 `ocl_vs_mock_test` 与 `ocl_contract_test` 覆盖（64 条 PASS）。
 当前主测试环境为本机 Intel Arc；手机 Mali-G925 已断开，Mali 性能待重连补测。
-下一轮重点：P4.8 Paged Attention（KV store + 块表 attention）的正确性
-baseline 与调度 e2e；之后再做 attention 寄存器分块/GQA K/V 复用与多 batch 截断。
+P4.8 Paged Attention（KV store + 块表 attention）已实现：4 个 prompt 单请求与
+4 并发生成 8 token 均与 PyTorch 金标准一致；性能 baseline 已记录。
+下一轮重点：attention 寄存器分块/GQA K/V 复用与多 batch 截断。
 
 ---
 

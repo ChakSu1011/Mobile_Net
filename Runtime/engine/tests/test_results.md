@@ -103,3 +103,22 @@ all engine checks passed
   时必须保持 `IScheduler/KvAllocator/IExecutor/IDestroyer` 契约。
 - 真实模块落地后，应将本文件的 Fake 替换为模块实现的集成测试，并补充
   多请求、取消/超时、抢占与真实数值对齐测试。
+
+## 8. KV 图模式一致性（2026-11-21）
+
+新增 `CheckAttentionMode`：KV 图必须配 `recompute_attention=false`，
+全量 prefill 图必须配 `true`。单元测试仍为 `all engine checks passed`；
+真实 KV 包的错配路径由 OCL 测试覆盖：
+
+```bash
+./Runtime/build/ocl_kv_e2e_test.exe \
+  "d:/Mobile_Net/Models/Qwen3/artifacts/qwen3_0_6b_kv" mismatch
+```
+
+实际输出：
+
+```text
+mismatch rejected: Engine::Load rollback: Engine::Load: graph uses KV cache but recompute_attention=true
+```
+
+结论：加载期拒绝错配，状态回滚到 CREATED，不进入推理。

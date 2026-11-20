@@ -15,11 +15,12 @@ from typing import Any
 
 from ToolChain.common.errors import BuildError
 from ToolChain.common.jsonio import write_json
-from ToolChain.converter.qwen3_adapter import Qwen3Adapter
+from ToolChain.converter.qwen3_adapter import Qwen3Adapter, Qwen3KvAdapter
 from ToolChain.converter.result import ConversionResult
 
 _ADAPTERS = {
     Qwen3Adapter.name: Qwen3Adapter,
+    Qwen3KvAdapter.name: Qwen3KvAdapter,
 }
 
 

@@ -140,3 +140,16 @@ python -m ziglang c++ -std=c++17 -Wall -Wextra -I "d:/Mobile_Net" \
 - [ ] 缺失 OpEnv、尺寸越界、total 不一致返回明确错误码；
 - [ ] Deinit 两次均成功且释放 Backend；
 - [ ] 设计文档、测试结果、skill 三份文档与代码同步。
+
+## Attention 元数据装配（2026-11-21）
+
+- KV 模式由 `PlanEntry.slots` 非空识别；recompute 模式不装配元数据。
+- 数组顺序：seq_lens/query_lens/context_lens/request_indices/positions/
+  slots/block_table；每段 16 字节对齐。
+- `seq_lens = context_length + token_count`；`positions[i]` 必须等于
+  `context_length+i`。
+- 元数据缓冲由 Executor 私有、高水位增长；每步一次 `UploadAt`。
+- `TensorView.data = Buffer*`、`offset` 为字节偏移、`device=kDevice`；
+  Mock 与 OCL 共用同一契约。
+- 常见陷阱：`slots.size()` 必须等于 `token_count`；块表必须覆盖
+  `ceil(seq_lens/block_size)`；packed 区间不得重叠。

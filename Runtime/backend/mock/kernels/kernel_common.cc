@@ -43,6 +43,15 @@ FP16* MutableHalfData(const runtime_graph::TensorView& view) {
   return reinterpret_cast<FP16*>(base + view.offset);
 }
 
+const I32* Int32Data(const runtime_graph::TensorView& view) {
+  const MockBuffer* buffer = GetBuffer(view);
+  if (buffer == nullptr) {
+    return nullptr;
+  }
+  const auto* base = static_cast<const U8*>(buffer->Data());
+  return reinterpret_cast<const I32*>(base + view.offset);
+}
+
 const I64* Int64Data(const runtime_graph::TensorView& view) {
   const MockBuffer* buffer = GetBuffer(view);
   if (buffer == nullptr) {

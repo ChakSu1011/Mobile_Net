@@ -203,7 +203,7 @@ Bool ExecuteGraph(Graph* graph, Backend* backend, I32* failures) {
   step.backend = backend;
   step.batch = 1;
   step.packed_tokens = 4;
-  step.is_prefill = true;
+  // 全量 attention 单算子测试不需要 KV 元数据。
 
   Bool ok = true;
   for (Op* op : graph->GetOrderlyOPList()) {

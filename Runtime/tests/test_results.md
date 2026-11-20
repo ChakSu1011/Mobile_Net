@@ -272,3 +272,53 @@ CASE2_EXIT=0
 
 `interface_check.cc` 只包含头文件并返回 0，不依赖任何实现符号；删除
 `TempSpace/` 下的对象文件后可用上述命令重新生成。
+
+## 8. 阶段一 Paged Attention 端到端（2026-11-21）
+
+### 8.1 测试范围
+
+验证 OCL 后端在 **KV 模式**（`recompute_attention=false`）下完成
+prefill + 多步 decode 自回归生成，覆盖 Paged Attention、Continuous
+Batching、chunked prefill 与混合 batch。
+
+### 8.2 测试环境
+
+| 项目 | 内容 |
+| --- | --- |
+| 日期 | 2026-11-21 |
+| 主机 | Windows 11，Intel Arc 130T（OpenCL 3.0 NEO） |
+| 编译器 | zig clang wrapper，C++17 |
+| 模型包 | `Models/Qwen3/artifacts/qwen3_0_6b_kv`（`use_kv_cache=true`） |
+| 金标准 | PyTorch `Qwen3ForCausalLM` 贪心生成 8 token |
+
+### 8.3 命令与输出
+
+```bash
+./Runtime/build/ocl_kv_e2e_test.exe \
+  "d:/Mobile_Net/Models/Qwen3/artifacts/qwen3_0_6b_kv"
+```
+
+```text
+[ocl] loading KV model package...
+[ocl] loading KV package for concurrent test...
+Hello                    expected=21806,0,358,2776,264,2699,21815,911, ocl=21806,0,358,2776,264,2699,21815,911, concurrent=21806,0,358,2776,264,2699,21815,911, PASS
+The capital of France is expected=12095,13,576,6722,315,15344,374,21718, ocl=12095,13,576,6722,315,15344,374,21718, concurrent=12095,13,576,6722,315,15344,374,21718, PASS
+1+1=                     expected=17,11,220,16,10,16,28,17, ocl=17,11,220,16,10,16,28,17, concurrent=17,11,220,16,10,16,28,17, PASS
+The weather is nice today expected=11,323,279,9315,374,220,17,15, ocl=11,323,279,9315,374,220,17,15, concurrent=11,323,279,9315,374,220,17,15, PASS
+Hello (20)                   expected=21806,0,358,2776,264,2699,21815,911,279,3491,13,6771,752,1430,311,3535,432,1156,13,576, ocl=21806,0,358,2776,264,2699,21815,911,279,3491,13,6771,752,1430,311,3535,432,1156,13,576, PASS
+The capital of France is (20) expected=12095,13,576,6722,315,15344,374,21718,13,576,6722,315,17689,374,24081,13,576,6722,315,5616, ocl=12095,13,576,6722,315,15344,374,21718,13,576,6722,315,17689,374,24081,13,576,6722,315,5616, PASS
+all ocl KV e2e checks passed
+```
+
+退出码 `0`；耗时约 111 s。测试还覆盖：2 条 20-token 序列跨 2 个 KV 块
+（非连续物理块表）、以及已有请求 decode 时错峰提交新请求的混合 batch。
+
+### 8.4 结论
+
+- OCL 在本地 GPU 上完成 prefill/decode 区分、Paged Attention 与
+  自回归 token 生成；
+- 单请求、4 并发（`max_num_tokens=8`，chunked prefill）、2 条 20-token
+  多块序列、以及错峰提交的混合 prefill/decode 均与 PyTorch 金标准
+  逐 token 一致；
+- 调度抢占路径由 `Runtime/scheduler/tests/scheduler_test.cc` 的
+  `TestKvPreemption` 覆盖（95 checks / 0 failures）。

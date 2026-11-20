@@ -113,19 +113,23 @@ class FakeKvAllocator final : public KvAllocator {
     const auto iterator = capacities_.find(request_id);
     const I64 capacity =
         iterator == capacities_.end() ? 0 : iterator->second;
-    if (capacity > MaxTotalTokens() ||
-        new_tokens > MaxTotalTokens() - capacity) {
+    if (new_tokens > MaxTotalTokens() - used_tokens_) {
       return MakeStatus(ErrorCode::kDeviceOom,
-                        "FakeKvAllocator: capacity exceeded");
+                        "FakeKvAllocator: global capacity exceeded");
     }
     capacities_[request_id] = capacity + new_tokens;
+    used_tokens_ += new_tokens;
     return Status::Ok();
   }
 
   // 释放请求容量。
   void Release(U64 request_id) override {
     ++release_calls;
-    capacities_.erase(request_id);
+    const auto iterator = capacities_.find(request_id);
+    if (iterator != capacities_.end()) {
+      used_tokens_ -= iterator->second;
+      capacities_.erase(iterator);
+    }
   }
 
   // 返回空闲块数。
@@ -216,6 +220,9 @@ class FakeKvAllocator final : public KvAllocator {
 
   // 总块数。
   I64 total_blocks_ = 0;
+
+  // 已使用的 token 容量（全局）。
+  I64 used_tokens_ = 0;
 
   // 请求 → 已预留 token 容量。
   std::map<U64, I64> capacities_;
@@ -582,6 +589,69 @@ void TestRecomputeBudget() {
         "budget Stop both requests");
 }
 
+// 测试 KV 不足时的 recompute 抢占。
+//
+// 覆盖：
+//   victim 选择、Release、kRecompute 状态、完整历史重算、preempted 统计。
+void TestKvPreemption() {
+  // 总容量只有 4 token（1 个块），两个 4-token prompt 无法同时驻留。
+  FakeKvAllocator kv(4, 1);
+  std::unique_ptr<IScheduler> scheduler = CreateDefaultScheduler();
+  SchedulerConfig config = MakeConfig(false, 4);
+  config.context_length = 16;
+  config.max_preemptions_per_step = 2;
+  Check(scheduler->Init(config, &kv, MakeModel()).ok(),
+        "preempt Init succeeds");
+
+  Request first;
+  first.prompt_token_ids = {1, 2, 3, 4};
+  Request second;
+  second.prompt_token_ids = {5, 6, 7, 8};
+  U64 first_id = 0;
+  U64 second_id = 0;
+  Check(scheduler->Merge(first, &first_id).ok() &&
+            scheduler->Merge(second, &second_id).ok(),
+        "preempt Merge accepts two prompts");
+
+  ExecutionPlan plan;
+  Check(scheduler->Schedule(&plan).ok() && plan.entries.size() == 1 &&
+            plan.entries[0].request_id == first_id,
+        "preempt first Schedule runs first request");
+  Check(scheduler->Stats().preempted_requests == 0,
+        "preempt no preemption before OOM");
+
+  Check(scheduler->Schedule(&plan).ok() && plan.entries.size() == 1 &&
+            plan.entries[0].request_id == second_id,
+        "preempt second Schedule reclaims first request's KV");
+  Check(scheduler->Stats().preempted_requests == 1 && kv.release_calls == 1,
+        "preempt releases one victim and counts it");
+
+  std::vector<RequestSnapshot> snapshots = scheduler->Snapshot();
+  Check(snapshots.size() == 2, "preempt snapshot has two requests");
+  for (const RequestSnapshot& snapshot : snapshots) {
+    if (snapshot.request_id == first_id) {
+      Check(snapshot.status == RequestStatus::kRecompute &&
+                snapshot.computed_tokens == 0,
+            "preempt victim becomes kRecompute with computed=0");
+    }
+  }
+
+  Check(scheduler->Schedule(&plan).ok() && plan.entries.size() == 1 &&
+            plan.entries[0].request_id == first_id &&
+            plan.entries[0].token_ids ==
+                std::vector<I64>({1, 2, 3, 4}),
+        "preempt victim is re-prefilled from full history");
+  Check(scheduler->Stats().preempted_requests == 2,
+        "preempt second victim counted");
+
+  Response response;
+  Check(scheduler->Update(first_id, {MakeToken(9)}, &response).ok(),
+        "preempt Update victim after recompute");
+  Check(scheduler->Stop(first_id, &response).ok() &&
+            scheduler->Stop(second_id, &response).ok(),
+        "preempt Stop both requests");
+}
+
 // 测试 min_tokens 与 ignore_eos。
 void TestMinTokensAndIgnoreEos() {
   FakeKvAllocator kv(4, 32);
@@ -637,6 +707,7 @@ int main() {
   TestKvChunkedPrefill();
   TestStopFailAndInvalidArguments();
   TestRecomputeBudget();
+  TestKvPreemption();
   TestMinTokensAndIgnoreEos();
   std::cout << "checks=" << g_checks << " failures=" << g_failures << "\n";
   return g_failures == 0 ? 0 : 1;

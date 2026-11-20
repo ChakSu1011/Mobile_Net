@@ -66,6 +66,10 @@ Status CreateOclKernel(const KernelDesc& desc, OclContext* context,
     return CreateMegaAttentionOclKernel(context, programs, desc.kernel_key,
                                         kernel);
   }
+  if (desc.kernel_key == "mega_attention_paged") {
+    return CreateMegaAttentionPagedOclKernel(
+        context, programs, desc.kernel_key, kernel);
+  }
   return MakeStatus(ErrorCode::kUnsupportedOp,
                     "[backend=ocl][stage=CreateKernel] kernel_key=" +
                         desc.kernel_key +

@@ -73,17 +73,47 @@ class OclKernel : public Kernel {
   Status Compile(const char* source, const char* entry,
                  const std::string& options);
 
-  // 绑定 cl_mem 参数。
+  // 按 kernel_key 的源码创建额外 cl_kernel（用于一个算子多个入口）。
+  //
+  // 参数：
+  //   entry：入口函数名；
+  //   options：编译选项；
+  //   kernel：输出参数，成功时写入非空句柄。
+  // 返回：
+  //   成功返回 kOk；源码缺失/编译失败返回对应错误。
+  Status CompileExtra(const char* entry, const std::string& options,
+                      cl_kernel* kernel);
+
+  // 绑定 cl_mem 参数（指定 kernel）。
+  Status SetMemArg(cl_kernel kernel, U32 index,
+                   const runtime_graph::TensorView& view);
+
+  // 绑定 cl_mem 参数（使用主 kernel）。
   Status SetMemArg(U32 index, const runtime_graph::TensorView& view);
 
-  // 绑定 int 参数。
+  // 绑定 int 参数（指定 kernel）。
+  Status SetIntArg(cl_kernel kernel, U32 index, I32 value);
+
+  // 绑定 int 参数（使用主 kernel）。
   Status SetIntArg(U32 index, I32 value);
 
-  // 绑定 float 参数。
+  // 绑定 64 位整数参数（指定 kernel）。
+  Status SetLongArg(cl_kernel kernel, U32 index, I64 value);
+
+  // 绑定 float 参数（指定 kernel）。
+  Status SetFloatArg(cl_kernel kernel, U32 index, float value);
+
+  // 绑定 float 参数（使用主 kernel）。
   Status SetFloatArg(U32 index, float value);
 
-  // 下发一维 NDRange 并 flush。
+  // 下发一维 NDRange 并 flush（指定 kernel）。
+  Status Enqueue1D(cl_kernel kernel, Usize global, Usize local);
+
+  // 下发一维 NDRange 并 flush（使用主 kernel）。
   Status Enqueue1D(Usize global, Usize local);
+
+  // 释放额外 kernel；幂等。
+  void ReleaseExtraKernel(cl_kernel* kernel);
 
   // 校验 TensorView 的设备/精度/布局/字节数。
   Status ValidateView(const runtime_graph::TensorView& view, DataType dtype,

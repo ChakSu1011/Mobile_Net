@@ -92,10 +92,14 @@ class Qwen3Adapter:
       safetensors 权重目录登记权重可用性。
 
     边界：
-      只支持 Dense Qwen3 prefill 图；不支持 MoE、VL 与 KV Cache。
+      只支持 Dense Qwen3 图；不支持 MoE 与 VL。``use_kv_cache`` 为 true
+      时生成 Paged Attention 图（K/V 只含本步 token）。
     """
 
     name = "qwen3"
+
+    # 是否生成 Paged Attention 图；子类 qwen3_kv 置 true。
+    use_kv_cache = False
 
     def __init__(
         self,
@@ -156,7 +160,8 @@ class Qwen3Adapter:
             return recording
 
         builder = Qwen3GraphBuilder(
-            config, graph_factory=graph_factory)
+            config, graph_factory=graph_factory,
+            use_kv_cache=self.use_kv_cache)
         builder.build()
         model_graph = recording.finish()
         weight_index = self._read_weight_index()
@@ -258,3 +263,18 @@ class Qwen3Adapter:
                 else inference_config.to_dict()
             ),
         })
+
+
+class Qwen3KvAdapter(Qwen3Adapter):
+    """Qwen3 Paged Attention Adapter。
+
+    功能：
+      复用 Qwen3Adapter 的配置、权重映射与元数据，只把 attention op 切换为
+      ``use_kv_cache=true`` 并写入 ``kv_layer_index``。
+
+    边界：
+      图结构、权重名与运行参数与 qwen3 适配器一致；不实现 KV 分配或调度。
+    """
+
+    name = "qwen3_kv"
+    use_kv_cache = True

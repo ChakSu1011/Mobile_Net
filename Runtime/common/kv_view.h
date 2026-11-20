@@ -71,20 +71,36 @@ struct KvCacheSpec {
 // 单层 KV 视图。
 //
 // 功能：
-//   给出该层 K/V 基址和块步长，Attention Kernel 用 slot 计算实际地址。
+//   给出该层 K/V 缓冲句柄、块步长与形状信息，Attention Kernel 用 slot
+//   计算实际地址。
 //
 // 边界：
 //   - 不拥有内存；生命周期由 IKVCache 保证；
-//   - block_stride 为单个物理块的字节数（K 或 V 单边）。
+//   - k_buffer/v_buffer 与 TensorView.data 同约定：设备侧为 Buffer*，
+//     不是 Buffer::DevicePtr()；Kernel 按后端类型转换；
+//   - block_stride 为单个物理块的字节数（K 或 V 单边）；
+//   - 阶段一固定 NHD、块主序布局。
 struct KvLayerView {
-  // K 缓冲区基址。
-  void* k_base = nullptr;
+  // K 缓冲句柄（Buffer*）。
+  void* k_buffer = nullptr;
 
-  // V 缓冲区基址。
-  void* v_base = nullptr;
+  // V 缓冲句柄（Buffer*）。
+  void* v_buffer = nullptr;
 
   // 单个物理块的字节步长。
   I64 block_stride = 0;
+
+  // 物理块总数。
+  I64 num_blocks = 0;
+
+  // KV 头数。
+  I32 num_kv_heads = 0;
+
+  // 每头维度。
+  I32 head_dim = 0;
+
+  // KV 精度。
+  DataType dtype = DataType::kUnknown;
 };
 
 // KV 只读视图。

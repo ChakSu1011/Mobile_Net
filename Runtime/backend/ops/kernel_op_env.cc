@@ -20,6 +20,7 @@
 #include "Runtime/backend/backend.h"
 #include "Runtime/backend/kernel.h"
 #include "Runtime/backend/kernel_types.h"
+#include "Runtime/backend/ops/attr_utils.h"
 #include "Utils/cpp/types.h"
 
 namespace mobilenet {
@@ -134,15 +135,45 @@ Status KernelOpEnv::Forward() {
 
   runtime_graph::AttentionContext attention;
   if (op_->Type() == runtime_graph::OpType::kMegaAttention) {
+    Bool use_kv_cache = false;
+    if (HasAttr(op_->Attrs(), "use_kv_cache")) {
+      const Status attr_status =
+          GetBoolAttr(op_->Attrs(), "use_kv_cache", &use_kv_cache);
+      if (!attr_status.ok()) {
+        return PrefixStatus(attr_status, "op=" + op_->Name());
+      }
+    }
     attention.batch = step_context_->batch;
     attention.token_count = step_context_->packed_tokens;
-    attention.seq_lens = step_context_->seq_lens;
-    attention.kv = step_context_->kv_view;
     attention.kv_block_size =
         step_context_->kv_view != nullptr
             ? step_context_->kv_view->block_size
             : 0;
-    attention.is_prefill = step_context_->is_prefill;
+    attention.kv = step_context_->kv_view;
+    if (use_kv_cache) {
+      if (step_context_->kv_view == nullptr) {
+        return MakeStatus(
+            ErrorCode::kStateError,
+            "op=" + op_->Name() +
+                ": use_kv_cache=true requires KvCacheView");
+      }
+      I64 layer_index = -1;
+      const Status layer_status =
+          GetIntAttr(op_->Attrs(), "kv_layer_index", &layer_index);
+      if (!layer_status.ok()) {
+        return PrefixStatus(layer_status, "op=" + op_->Name());
+      }
+      if (layer_index < 0 ||
+          static_cast<Usize>(layer_index) >=
+              step_context_->kv_view->layers.size()) {
+        return MakeStatus(
+            ErrorCode::kInvalidArgument,
+            "op=" + op_->Name() +
+                ": kv_layer_index out of range");
+      }
+      attention.layer_index = static_cast<I32>(layer_index);
+      attention.meta = step_context_->attention_meta;
+    }
     context.attention = &attention;
   }
 

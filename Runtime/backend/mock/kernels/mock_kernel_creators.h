@@ -40,6 +40,9 @@ Status CreatePerHeadRmsNormRopeKernel(std::unique_ptr<Kernel>* kernel);
 // 创建 MegaAttention CPU Kernel；kernel 为空返回 kInvalidArgument。
 Status CreateMegaAttentionKernel(std::unique_ptr<Kernel>* kernel);
 
+// 创建 Paged MegaAttention CPU Kernel；kernel 为空返回 kInvalidArgument。
+Status CreateMegaAttentionPagedKernel(std::unique_ptr<Kernel>* kernel);
+
 // 创建 Add CPU Kernel；kernel 为空返回 kInvalidArgument。
 Status CreateAddKernel(std::unique_ptr<Kernel>* kernel);
 

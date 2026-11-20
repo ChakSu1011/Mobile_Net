@@ -79,9 +79,37 @@ Status OclKernel::Compile(const char* source, const char* entry,
   return Status::Ok();
 }
 
-Status OclKernel::SetMemArg(U32 index,
+Status OclKernel::CompileExtra(const char* entry,
+                               const std::string& options,
+                               cl_kernel* kernel) {
+  if (kernel == nullptr) {
+    return MakeStatus(ErrorCode::kInvalidArgument,
+                      "OclKernel::CompileExtra: kernel output is null");
+  }
+  const char* source = GetOclSource(kernel_key_.c_str());
+  if (source == nullptr) {
+    return MakeStatus(ErrorCode::kUnsupportedOp,
+                      "OclKernel::CompileExtra: no source for kernel_key=" +
+                          kernel_key_);
+  }
+  cl_program program = nullptr;
+  Status status = programs_->GetOrBuild(kernel_key_, source, options,
+                                        &program);
+  if (!status.ok()) {
+    return status;
+  }
+  cl_int error = CL_SUCCESS;
+  *kernel = context_->functions()->clCreateKernel(program, entry, &error);
+  if (error != CL_SUCCESS || *kernel == nullptr) {
+    *kernel = nullptr;
+    return CheckCl(error, "CreateKernel", entry);
+  }
+  return Status::Ok();
+}
+
+Status OclKernel::SetMemArg(cl_kernel kernel, U32 index,
                             const runtime_graph::TensorView& view) {
-  if (kernel_ == nullptr) {
+  if (kernel == nullptr) {
     return MakeStatus(ErrorCode::kStateError,
                       "OclKernel::SetMemArg: kernel is not compiled");
   }
@@ -92,32 +120,55 @@ Status OclKernel::SetMemArg(U32 index,
   }
   cl_mem mem = buffer->mem();
   const cl_int error = context_->functions()->clSetKernelArg(
-      kernel_, index, sizeof(cl_mem), &mem);
+      kernel, index, sizeof(cl_mem), &mem);
   return CheckCl(error, "SetKernelArg", "mem arg");
 }
 
-Status OclKernel::SetIntArg(U32 index, I32 value) {
-  if (kernel_ == nullptr) {
+Status OclKernel::SetMemArg(U32 index,
+                            const runtime_graph::TensorView& view) {
+  return SetMemArg(kernel_, index, view);
+}
+
+Status OclKernel::SetIntArg(cl_kernel kernel, U32 index, I32 value) {
+  if (kernel == nullptr) {
     return MakeStatus(ErrorCode::kStateError,
                       "OclKernel::SetIntArg: kernel is not compiled");
   }
   const cl_int error = context_->functions()->clSetKernelArg(
-      kernel_, index, sizeof(I32), &value);
+      kernel, index, sizeof(I32), &value);
   return CheckCl(error, "SetKernelArg", "int arg");
 }
 
-Status OclKernel::SetFloatArg(U32 index, float value) {
-  if (kernel_ == nullptr) {
+Status OclKernel::SetIntArg(U32 index, I32 value) {
+  return SetIntArg(kernel_, index, value);
+}
+
+Status OclKernel::SetLongArg(cl_kernel kernel, U32 index, I64 value) {
+  if (kernel == nullptr) {
+    return MakeStatus(ErrorCode::kStateError,
+                      "OclKernel::SetLongArg: kernel is not compiled");
+  }
+  const cl_int error = context_->functions()->clSetKernelArg(
+      kernel, index, sizeof(I64), &value);
+  return CheckCl(error, "SetKernelArg", "long arg");
+}
+
+Status OclKernel::SetFloatArg(cl_kernel kernel, U32 index, float value) {
+  if (kernel == nullptr) {
     return MakeStatus(ErrorCode::kStateError,
                       "OclKernel::SetFloatArg: kernel is not compiled");
   }
   const cl_int error = context_->functions()->clSetKernelArg(
-      kernel_, index, sizeof(float), &value);
+      kernel, index, sizeof(float), &value);
   return CheckCl(error, "SetKernelArg", "float arg");
 }
 
-Status OclKernel::Enqueue1D(Usize global, Usize local) {
-  if (kernel_ == nullptr) {
+Status OclKernel::SetFloatArg(U32 index, float value) {
+  return SetFloatArg(kernel_, index, value);
+}
+
+Status OclKernel::Enqueue1D(cl_kernel kernel, Usize global, Usize local) {
+  if (kernel == nullptr) {
     return MakeStatus(ErrorCode::kStateError,
                       "OclKernel::Enqueue1D: kernel is not compiled");
   }
@@ -128,13 +179,26 @@ Status OclKernel::Enqueue1D(Usize global, Usize local) {
   const size_t global_size[1] = {global};
   const size_t local_size[1] = {local};
   cl_int error = context_->functions()->clEnqueueNDRangeKernel(
-      context_->queue(), kernel_, 1, nullptr, global_size, local_size, 0,
+      context_->queue(), kernel, 1, nullptr, global_size, local_size, 0,
       nullptr, nullptr);
   if (error != CL_SUCCESS) {
     return CheckCl(error, "EnqueueNDRangeKernel", kernel_key_);
   }
   error = context_->functions()->clFlush(context_->queue());
   return CheckCl(error, "Flush", kernel_key_);
+}
+
+Status OclKernel::Enqueue1D(Usize global, Usize local) {
+  return Enqueue1D(kernel_, global, local);
+}
+
+void OclKernel::ReleaseExtraKernel(cl_kernel* kernel) {
+  if (kernel != nullptr && *kernel != nullptr && context_ != nullptr &&
+      context_->functions() != nullptr &&
+      context_->functions()->clReleaseKernel != nullptr) {
+    (void)context_->functions()->clReleaseKernel(*kernel);
+    *kernel = nullptr;
+  }
 }
 
 Status OclKernel::ValidateView(const runtime_graph::TensorView& view,

@@ -120,3 +120,14 @@ description: 把模型配置（首期 Qwen3-0.6B）转换为 Graph 可执行静�
     `context_length - prompt_length` 推导，模型输入配置不接受该字段。
 11. **把 `max_num_tokens` 当单请求长度**：它是单 Step 所有请求累加的
     token 预算，不是单个请求的 prompt 或生成长度。
+
+## Qwen3 KV 图（2026-11-21）
+
+- 新增 adapter `qwen3_kv`：复用 `Qwen3Adapter`，只把 `use_kv_cache=True`
+  传给 `Qwen3GraphBuilder`。
+- 每个 attention op 写入 `kv_layer_index=layer_index`；
+  `use_kv_cache=false` 的旧 adapter 保持原样。
+- 构建命令：
+  `python -m ToolChain.pipeline --adapter qwen3_kv --output ...`
+- 常见陷阱：KV 包必须配 `recompute_attention=false`；旧包必须配 `true`，
+  否则 Engine 加载期拒绝。

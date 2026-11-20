@@ -310,3 +310,17 @@ P4.6 关键陷阱：
 - **当前主测试环境：本机 Intel Arc GPU**；手机 Mali-G925 已断开，历史结果保留；
 - 待继续：attention 分块/GQA 复用、多 batch 截断、Mali 真机性能与端到端；
 - 本 skill 不得在未实测时声称算子性能达标。
+
+## Paged Attention 后端接入（2026-11-21）
+
+- `kernel_key="mega_attention_paged"`；源码注册表与 `mega_attention` 共用
+  `mega_attention.cl`。
+- 一个 `OclKernel` 实例持有两个 `cl_kernel`：`paged_kv_store` 与
+  `mega_attention_paged`；用 `CompileExtra` 创建第二个 entry。
+- 宿主把 `KvLayerView.k_buffer/v_buffer`（`Buffer*`）包装成 `TensorView`
+  后 `SetMemArg`；元数据数组的 `TensorView.offset` 必须作为 `int` 参数
+  显式传入。
+- KV 池内地址用 `long` 计算；单层池可能超过 2^31 字节。
+- 两段 kernel 在同一 in-order 队列顺序入队；不要在中间 `clFinish`。
+- 调试数值时先检查 `KvLayerView.dtype` 与布局，再用小形状对比 Mock；
+  FP16 位型不能用 `static_cast<float>`。

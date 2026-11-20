@@ -6,9 +6,10 @@
 //   形状一致性，组装 KernelDesc。
 //
 // 边界：
-//   - 只支持 merge_heads=true、has_output_projection=false、
-//     use_kv_cache=false；
-//   - 不支持非 half 精度、KV cache 或输出投影。
+//   - 只支持 merge_heads=true、has_output_projection=false；
+//   - use_kv_cache=false 走全量 attention；true 走 Paged Attention，
+//     并要求 kv_layer_index；
+//   - 不支持非 half 精度或输出投影。
 //
 // 依赖：
 //   Runtime/backend/ops/op_specs.h、attr_utils.h、op_validation.h。
@@ -85,17 +86,29 @@ Status ValidateMegaAttention(const runtime_graph::Op& op) {
               ": mega_attention output projection is unsupported");
     }
   }
+  Bool use_kv_cache = false;
   if (HasAttr(op.Attrs(), "use_kv_cache")) {
-    Bool use_kv_cache = false;
     status = GetBoolAttr(op, "use_kv_cache", &use_kv_cache);
     if (!status.ok()) {
       return status;
     }
-    if (use_kv_cache) {
+  }
+  if (use_kv_cache) {
+    if (!HasAttr(op.Attrs(), "kv_layer_index")) {
       return MakeStatus(
-          ErrorCode::kUnsupportedOp,
+          ErrorCode::kInvalidArgument,
           "op=" + op.Name() +
-              ": mega_attention KV cache is not supported in v1");
+              ": kv_layer_index is required when use_kv_cache=true");
+    }
+    I64 kv_layer_index = -1;
+    status = GetIntAttr(op, "kv_layer_index", &kv_layer_index);
+    if (!status.ok()) {
+      return status;
+    }
+    if (kv_layer_index < 0) {
+      return MakeStatus(
+          ErrorCode::kInvalidArgument,
+          "op=" + op.Name() + ": kv_layer_index must be non-negative");
     }
   }
   if (HasAttr(op.Attrs(), "sliding_window")) {
@@ -189,7 +202,18 @@ Status ValidateMegaAttention(const runtime_graph::Op& op) {
 // 组装 MegaAttention 的 KernelDesc。
 Status BuildMegaAttentionDesc(const runtime_graph::Op& op,
                               KernelDesc* desc) {
-  return BuildKernelDesc(op, "mega_attention", *op.DstTensors()[0], desc);
+  Bool use_kv_cache = false;
+  if (HasAttr(op.Attrs(), "use_kv_cache")) {
+    const Status status =
+        GetBoolAttr(op, "use_kv_cache", &use_kv_cache);
+    if (!status.ok()) {
+      return status;
+    }
+  }
+  return BuildKernelDesc(op,
+                         use_kv_cache ? "mega_attention_paged"
+                                      : "mega_attention",
+                         *op.DstTensors()[0], desc);
 }
 
 }  // namespace

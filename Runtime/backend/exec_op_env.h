@@ -34,13 +34,15 @@ class Stream;
 // 单步执行上下文。
 //
 // 功能：
-//   携带 Executor 当前 Step 的 plan、KV 视图、序列长度与 workspace，
+//   携带 Executor 当前 Step 的 plan、KV 视图、Attention 元数据与 workspace，
 //   供 OpEnv 组装 KernelContext。
 //
 // 边界：
-//   - 所有指针均为非拥有；plan/kv_view/seq_lens 必须在整步内有效；
+//   - 所有指针/视图均为非拥有；plan/kv_view/attention_meta 必须在整步内
+//     有效；
 //   - 不拥有 Buffer 或工作区内存；
-//   - 单算子测试可只填 backend/batch/packed_tokens/seq_lens，其余为空。
+//   - 单算子测试可只填 backend/batch/packed_tokens/attention_meta，其余为空；
+//   - recompute 模式下 attention_meta 为空。
 struct StepContext {
   // 后端实例；非拥有。
   Backend* backend = nullptr;
@@ -51,11 +53,11 @@ struct StepContext {
   // 本步执行计划；单算子测试可为空。
   const runtime::ExecutionPlan* plan = nullptr;
 
-  // KV 只读视图；首期可为空。
+  // KV 只读视图；可为空。
   const runtime::KvCacheView* kv_view = nullptr;
 
-  // 每 batch 行有效序列长度；长度至少为 batch，可为空。
-  const I32* seq_lens = nullptr;
+  // 逐请求/逐 token Attention 元数据；KV 模式必填。
+  runtime_graph::AttentionMetadataView attention_meta;
 
   // batch 行数。
   I32 batch = 1;
@@ -65,9 +67,6 @@ struct StepContext {
 
   // 图级临时工作区；无 workspace 时 data 为空。
   runtime_graph::TensorView workspace;
-
-  // 是否处于 Prefill 阶段。
-  Bool is_prefill = true;
 };
 
 // 执行型 OpEnv。

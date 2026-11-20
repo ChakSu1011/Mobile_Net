@@ -59,6 +59,9 @@ struct SchedulerConfig {
 
   // 是否每步重算完整序列（无 KV 的后端/调试用）。
   Bool recompute_attention = false;
+
+  // KV 模式单步最多抢占的请求数；0 表示不抢占。
+  I32 max_preemptions_per_step = 4;
 };
 
 // 调度统计。
@@ -72,7 +75,7 @@ struct SchedulerStats {
   // 运行队列长度。
   I32 running_requests = 0;
 
-  // 累计/当前被抢占请求数（由实现定义口径并注释）。
+  // 累计抢占请求次数；StepStats 直接复制该值。
   I32 preempted_requests = 0;
 
   // 空闲 KV 块数。

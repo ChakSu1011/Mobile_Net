@@ -241,3 +241,13 @@ PYTHONUTF8=1 python -m unittest discover -s Models/Qwen3 -p 'test_*.py' -v
     使用 UTF-8 canonical JSON。
 11. **把产物写进 `ToolChain/artifacts`**：模型包与 work 目录属于对应模型目录，
     应写入 `Models/<模型目录>/artifacts/`；`ToolChain/` 只保留工具链代码与文档。
+
+## KV 模型包（2026-11-21）
+
+- 使用 `--adapter qwen3_kv` 生成 `use_kv_cache=true` 的包；
+  建议输出目录 `Models/Qwen3/artifacts/qwen3_0_6b_kv`。
+- 权重与旧包相同，IR 哈希变化；保留旧包用于 prefill 回归。
+- 运行：
+  `python -m ToolChain.pipeline --adapter qwen3_kv --config <config> --output <dir> --weights <safetensors>`
+- 常见陷阱：`--inference-config` 传相对路径会被拼到模型目录下，建议用
+  绝对路径或省略（自动发现）。

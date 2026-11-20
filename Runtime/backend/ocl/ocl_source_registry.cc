@@ -52,7 +52,7 @@ const C8* GetOclSource(const C8* key) {
   if (name == "per_head_rmsnorm_rope") {
     return kPerHeadRmsNormRopeSource;
   }
-  if (name == "mega_attention") {
+  if (name == "mega_attention" || name == "mega_attention_paged") {
     return kMegaAttentionSource;
   }
   return nullptr;

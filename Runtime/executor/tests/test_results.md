@@ -199,3 +199,16 @@ ALL TESTS PASSED
 - 结论：Executor 默认实现达到本阶段验收标准，可作为 Engine 默认
   `CreateDefaultExecutor()` 实现使用；端到端集成需待 Loader 模型包与
   Engine/Scheduler 的“无 token 步”支持。
+
+## 9. KV 元数据覆盖（2026-11-21）
+
+本模块新增 `AttentionMetadataView` 装配与一次 H2D 上传。单元测试仍以
+recompute 小图为主；KV 路径由 OCL KV 端到端测试覆盖：
+
+- `Runtime/backend/ocl/tests/ocl_kv_e2e_test.cc` 在 `max_num_tokens=8` 下
+  让 4 个请求同时运行，覆盖 `seq_lens/query_lens/context_lens/
+  request_indices/positions/slots/block_table` 的逐 token 装配；
+- 4 个请求 × 8 token 与 PyTorch 金标准逐 token 一致；
+- 单元测试 `executor_test.exe` 仍为 54 PASS / 0 FAIL。
+
+未覆盖：元数据缓冲扩容的独立单测；由 e2e 的实际块表增长间接覆盖。

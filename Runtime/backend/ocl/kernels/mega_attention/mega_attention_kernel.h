@@ -45,6 +45,37 @@ Status CreateMegaAttentionOclKernel(OclContext* context,
                                     const std::string& kernel_key,
                                     std::unique_ptr<Kernel>* kernel);
 
+// Paged MegaAttention OCL Kernel。
+//
+// 功能：
+//   一次 Execute 内顺序下发 paged_kv_store 与 mega_attention_paged；
+//   KV 池与元数据由 AttentionContext 提供。
+class MegaAttentionPagedOclKernel final : public OclKernel {
+ public:
+  MegaAttentionPagedOclKernel(OclContext* context,
+                              OclProgramCache* programs,
+                              std::string kernel_key);
+
+  ~MegaAttentionPagedOclKernel() override;
+
+  MegaAttentionPagedOclKernel(const MegaAttentionPagedOclKernel&) = delete;
+  MegaAttentionPagedOclKernel& operator=(
+      const MegaAttentionPagedOclKernel&) = delete;
+
+ private:
+  Status Prepare(const runtime_graph::KernelContext& context) override;
+  Status ExecuteImpl(const runtime_graph::KernelContext& context) override;
+
+  cl_kernel store_kernel_ = nullptr;
+  cl_kernel attention_kernel_ = nullptr;
+};
+
+// 创建 Paged MegaAttention OCL Kernel。
+Status CreateMegaAttentionPagedOclKernel(OclContext* context,
+                                         OclProgramCache* programs,
+                                         const std::string& kernel_key,
+                                         std::unique_ptr<Kernel>* kernel);
+
 }  // namespace ocl
 }  // namespace mobilenet
 

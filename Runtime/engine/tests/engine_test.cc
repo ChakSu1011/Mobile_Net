@@ -329,8 +329,7 @@ class FakeScheduler final : public IScheduler {
       plan_entry.token_count = 1;
       plan_entry.token_ids = {1};
       plan_entry.positions = {data.computed_tokens};
-      plan_entry.slots = {0};
-      plan_entry.block_table = {0};
+      // 本测试只验证 Engine 编排；不提供 KV 元数据，走 recompute 路径。
       plan_entry.context_length = data.computed_tokens;
       plan_entry.output_slot = 0;
       plan_entry.is_chunk = false;

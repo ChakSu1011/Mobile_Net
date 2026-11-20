@@ -45,6 +45,9 @@ Status CreateMockKernel(const KernelDesc& desc,
   if (desc.kernel_key == "mega_attention") {
     return CreateMegaAttentionKernel(kernel);
   }
+  if (desc.kernel_key == "mega_attention_paged") {
+    return CreateMegaAttentionPagedKernel(kernel);
+  }
   if (desc.kernel_key == "add") {
     return CreateAddKernel(kernel);
   }

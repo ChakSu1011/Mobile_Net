@@ -150,6 +150,13 @@ class DefaultKVCache final : public IKVCache {
   // 每块 token 数。
   I32 block_size_ = 0;
 
+  // KV 头数与每头维度。
+  I32 num_kv_heads_ = 0;
+  I32 head_dim_ = 0;
+
+  // KV 精度。
+  DataType dtype_ = DataType::kUnknown;
+
   // 单个物理块单边（K 或 V）的字节数。
   I64 block_bytes_ = 0;
 
@@ -162,11 +169,11 @@ class DefaultKVCache final : public IKVCache {
   // 空闲物理块池。
   std::vector<I32> free_blocks_;
 
-  // 每层 K 缓冲基址；指针在 ResourceStack 清理前有效。
-  std::vector<void*> k_bases_;
+  // 每层 K 缓冲句柄（Buffer*）；指针在 ResourceStack 清理前有效。
+  std::vector<void*> k_buffers_;
 
-  // 每层 V 缓冲基址；指针在 ResourceStack 清理前有效。
-  std::vector<void*> v_bases_;
+  // 每层 V 缓冲句柄（Buffer*）；指针在 ResourceStack 清理前有效。
+  std::vector<void*> v_buffers_;
 
   // 请求块表。
   std::map<U64, RequestEntry> tables_;
@@ -207,6 +214,19 @@ Status DefaultKVCache::Init(Backend* backend, const KvCacheSpec& spec,
   Status status = backend->Capability(&capability);
   if (!status.ok()) {
     return PrefixStatus(status, "KVCache::Init");
+  }
+  if (capability.kv_layout != KvLayout::kNhd) {
+    return MakeStatus(
+        ErrorCode::kUnsupportedOp,
+        "KVCache::Init: only NHD KV layout is supported");
+  }
+  if (!capability.supported_dtypes.empty() &&
+      std::find(capability.supported_dtypes.begin(),
+                capability.supported_dtypes.end(),
+                spec.dtype) == capability.supported_dtypes.end()) {
+    return MakeStatus(
+        ErrorCode::kUnsupportedDtype,
+        "KVCache::Init: KV dtype is not supported by backend");
   }
 
   U64 elements = 0;
@@ -289,15 +309,15 @@ Status DefaultKVCache::Init(Backend* backend, const KvCacheSpec& spec,
     v_buffers.push_back(std::move(v_buffer));
   }
 
-  k_bases_.clear();
-  v_bases_.clear();
-  k_bases_.reserve(k_buffers.size());
-  v_bases_.reserve(v_buffers.size());
+  k_buffers_.clear();
+  v_buffers_.clear();
+  k_buffers_.reserve(k_buffers.size());
+  v_buffers_.reserve(v_buffers.size());
   for (const std::unique_ptr<Buffer>& buffer : k_buffers) {
-    k_bases_.push_back(buffer->DevicePtr());
+    k_buffers_.push_back(buffer.get());
   }
   for (const std::unique_ptr<Buffer>& buffer : v_buffers) {
-    v_bases_.push_back(buffer->DevicePtr());
+    v_buffers_.push_back(buffer.get());
   }
 
   // ResourceStack 的闭包要求可拷贝，而 Buffer 是独占所有权；用 shared_ptr
@@ -328,6 +348,9 @@ Status DefaultKVCache::Init(Backend* backend, const KvCacheSpec& spec,
   }
 
   block_size_ = spec.block_size;
+  num_kv_heads_ = spec.num_kv_heads;
+  head_dim_ = spec.head_dim;
+  dtype_ = spec.dtype;
   block_bytes_ = static_cast<I64>(block_bytes);
   total_blocks_ = static_cast<I64>(blocks);
   max_total_tokens_ = total_blocks_ * static_cast<I64>(block_size_);
@@ -351,11 +374,15 @@ Status DefaultKVCache::BuildView(KvCacheView* view) const {
                       "KVCache::BuildView: cache is not initialized");
   }
   view->layers.clear();
-  view->layers.resize(k_bases_.size());
-  for (Usize layer = 0; layer < k_bases_.size(); ++layer) {
-    view->layers[layer].k_base = k_bases_[layer];
-    view->layers[layer].v_base = v_bases_[layer];
+  view->layers.resize(k_buffers_.size());
+  for (Usize layer = 0; layer < k_buffers_.size(); ++layer) {
+    view->layers[layer].k_buffer = k_buffers_[layer];
+    view->layers[layer].v_buffer = v_buffers_[layer];
     view->layers[layer].block_stride = block_bytes_;
+    view->layers[layer].num_blocks = total_blocks_;
+    view->layers[layer].num_kv_heads = num_kv_heads_;
+    view->layers[layer].head_dim = head_dim_;
+    view->layers[layer].dtype = dtype_;
   }
   view->block_size = block_size_;
   view->max_total_tokens = max_total_tokens_;

@@ -329,5 +329,6 @@ out[t,h] = acc / l
   两遍实现 39.855 ms → 单遍 32.687 ms（1.22x）；Mock 587.705 ms，
   当前实现约为 Mock 的 18x；早期非交替单次曾测得 22.19 ms，不作为结论；
 - 当前仍为一 query 一 work-item 的基线；寄存器分块/GQA 复用待下一轮 P4.5。
-- P4.8（Paged）设计完成，待实现：`paged_kv_store` +
-  `mega_attention_paged`；实现后更新本节的实际命令、数值与性能。
+- P4.8（Paged）已实现：`paged_kv_store` + `mega_attention_paged`；
+  4 个 prompt 单请求/4 并发生成 8 token 与 PyTorch 金标准一致，详见
+  `Runtime/backend/ocl/tests/test_results.md` 第 12 节；性能 baseline 待补。

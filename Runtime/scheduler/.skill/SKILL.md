@@ -99,3 +99,16 @@ python -m ziglang c++ -std=c++17 -Wall -Wextra -I "d:/Mobile_Net" \
     RequestStepResult”当成 `kInternal` 并 Fail。集成长 prompt 前需确认
     Engine 已跳过 `output_slot<0` 的条目，或 Executor 返回 `token_id=-1`
     的空结果（Update 在 `kChunkedPrefill` 下会忽略它）。
+
+## KV 抢占（2026-11-21）
+
+- Reserve 失败时调用 `PreemptOne`：候选为非终态、非当前请求、非本步已调度、
+  `kv_reserved=true`；顺序为 `priority` 大 → `computed_tokens` 大 →
+  `request_id` 大。
+- 抢占动作：`Release`、`computed_tokens=0`、`kv_reserved=false`、
+  `status=kRecompute`；不得删除已生成 token。
+- `kRecompute` 与 Waiting 一样进入 waiting 队列，target 用
+  `history.size()`（含已生成 token），完成后回 `kRunning`。
+- 单步抢占数受 `max_preemptions_per_step` 限制；无可抢占且仍 OOM 时
+  计划为空返回 `kDeviceOom`。
+- 常见陷阱：不要抢占本步已加入 plan 的请求；否则会释放正在执行的 KV。

@@ -21,6 +21,7 @@
 
 #include "Runtime/executor/executor.h"
 
+#include <algorithm>
 #include <cstring>
 #include <limits>
 #include <memory>
@@ -65,6 +66,223 @@ struct HostIoSlot {
   // 预分配的主机字节缓冲，大小等于 storage.byte_size。
   std::vector<U8> buffer;
 };
+
+// Attention 元数据各数组在元数据缓冲中的字节偏移。
+//
+// 说明：
+//   所有数组顺序存放，每段按 16 字节对齐；Kernel 通过显式偏移参数读取，
+//   不假设数组连续或固定相对位置。
+struct MetadataLayout {
+  U64 seq_lens_offset = 0;
+  U64 query_lens_offset = 0;
+  U64 context_lens_offset = 0;
+  U64 request_indices_offset = 0;
+  U64 positions_offset = 0;
+  U64 slots_offset = 0;
+  U64 block_table_offset = 0;
+  U64 total_bytes = 0;
+  I32 block_table_stride = 0;
+};
+
+// 把值向上对齐到 16 字节。
+U64 AlignMetadata(U64 value) {
+  constexpr U64 kAlign = 16;
+  return (value + kAlign - 1) / kAlign * kAlign;
+}
+
+// 判断本步计划是否使用 KV 元数据。
+//
+// 规则：
+//   KV 模式下每个 entry 都必须有 slots；recompute 模式下 slots 为空。
+Bool PlanUsesKv(const ExecutionPlan& plan) {
+  for (const PlanEntry& entry : plan.entries) {
+    if (!entry.slots.empty()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// 校验 KV 模式 PlanEntry 的元数据完整性。
+//
+// 参数：
+//   plan：本步执行计划；
+//   kv_view：KV 只读视图。
+// 返回：
+//   成功返回 kOk；slots/块表/positions 不满足契约返回 kInvalidArgument。
+Status ValidateKvPlan(const ExecutionPlan& plan,
+                      const KvCacheView& kv_view) {
+  if (kv_view.block_size <= 0) {
+    return MakeStatus(ErrorCode::kInvalidArgument,
+                      "Executor::Execute: KV mode requires positive block size");
+  }
+  const I32 block_size = kv_view.block_size;
+  std::vector<std::pair<I32, I32>> ranges;
+  ranges.reserve(plan.entries.size());
+  for (const PlanEntry& entry : plan.entries) {
+    const I32 count = entry.token_count;
+    if (entry.slots.size() != static_cast<Usize>(count)) {
+      return MakeStatus(
+          ErrorCode::kInvalidArgument,
+          "Executor::Execute: request " +
+              std::to_string(entry.request_id) +
+              " slots size does not match token_count");
+    }
+    const I64 total_tokens =
+        static_cast<I64>(entry.context_length) + count;
+    const I64 required_blocks =
+        (total_tokens + block_size - 1) / block_size;
+    if (required_blocks > std::numeric_limits<I32>::max() ||
+        entry.block_table.size() <
+            static_cast<Usize>(required_blocks)) {
+      return MakeStatus(
+          ErrorCode::kInvalidArgument,
+          "Executor::Execute: request " +
+              std::to_string(entry.request_id) +
+              " block table does not cover context_length+token_count");
+    }
+    if (total_tokens > std::numeric_limits<I32>::max()) {
+      return MakeStatus(ErrorCode::kInvalidArgument,
+                        "Executor::Execute: sequence length exceeds int32");
+    }
+    for (I32 i = 0; i < count; ++i) {
+      const I64 expected = static_cast<I64>(entry.context_length) + i;
+      if (entry.positions[static_cast<Usize>(i)] != expected) {
+        return MakeStatus(
+            ErrorCode::kInvalidArgument,
+            "Executor::Execute: request " +
+                std::to_string(entry.request_id) +
+                " position does not equal context_length+i");
+      }
+    }
+    ranges.emplace_back(entry.packed_offset,
+                        entry.packed_offset + count);
+  }
+  std::sort(ranges.begin(), ranges.end());
+  for (Usize i = 1; i < ranges.size(); ++i) {
+    if (ranges[i].first < ranges[i - 1].second) {
+      return MakeStatus(ErrorCode::kInvalidArgument,
+                        "Executor::Execute: packed token ranges overlap");
+    }
+  }
+  return Status::Ok();
+}
+
+// 生成 Attention 元数据的主机暂存区与布局。
+//
+// 参数：
+//   plan：本步计划；
+//   kv_view：KV 视图；
+//   layout：输出参数，写入各数组偏移与总字节数；
+//   staging：输出参数，写入连续元数据字节。
+// 返回：
+//   成功返回 kOk；尺寸/位置越界返回 kInvalidArgument。
+Status BuildMetadataStaging(const ExecutionPlan& plan,
+                            const KvCacheView& kv_view,
+                            MetadataLayout* layout,
+                            std::vector<U8>* staging) {
+  if (layout == nullptr || staging == nullptr) {
+    return MakeStatus(ErrorCode::kInvalidArgument,
+                      "Executor: metadata output must not be null");
+  }
+  const Usize batch = plan.entries.size();
+  const Usize token_count = static_cast<Usize>(plan.total_tokens);
+  I32 stride = 0;
+  for (const PlanEntry& entry : plan.entries) {
+    const I64 total_tokens =
+        static_cast<I64>(entry.context_length) + entry.token_count;
+    const I64 blocks = (total_tokens + kv_view.block_size - 1) /
+                       kv_view.block_size;
+    if (blocks > std::numeric_limits<I32>::max()) {
+      return MakeStatus(ErrorCode::kInvalidArgument,
+                        "Executor: block table stride exceeds int32");
+    }
+    stride = std::max(stride, static_cast<I32>(blocks));
+  }
+
+  MetadataLayout result;
+  U64 offset = 0;
+  result.seq_lens_offset = offset;
+  offset += static_cast<U64>(batch) * sizeof(I32);
+  offset = AlignMetadata(offset);
+  result.query_lens_offset = offset;
+  offset += static_cast<U64>(batch) * sizeof(I32);
+  offset = AlignMetadata(offset);
+  result.context_lens_offset = offset;
+  offset += static_cast<U64>(batch) * sizeof(I32);
+  offset = AlignMetadata(offset);
+  result.request_indices_offset = offset;
+  offset += static_cast<U64>(token_count) * sizeof(I32);
+  offset = AlignMetadata(offset);
+  result.positions_offset = offset;
+  offset += static_cast<U64>(token_count) * sizeof(I32);
+  offset = AlignMetadata(offset);
+  result.slots_offset = offset;
+  offset += static_cast<U64>(token_count) * sizeof(I64);
+  offset = AlignMetadata(offset);
+  result.block_table_offset = offset;
+  offset += static_cast<U64>(batch) * static_cast<U64>(stride) *
+            sizeof(I32);
+  result.total_bytes = offset;
+  result.block_table_stride = stride;
+
+  staging->assign(result.total_bytes, 0);
+  auto* seq_lens = reinterpret_cast<I32*>(
+      staging->data() + result.seq_lens_offset);
+  auto* query_lens = reinterpret_cast<I32*>(
+      staging->data() + result.query_lens_offset);
+  auto* context_lens = reinterpret_cast<I32*>(
+      staging->data() + result.context_lens_offset);
+  auto* request_indices = reinterpret_cast<I32*>(
+      staging->data() + result.request_indices_offset);
+  auto* positions = reinterpret_cast<I32*>(
+      staging->data() + result.positions_offset);
+  auto* slots = reinterpret_cast<I64*>(
+      staging->data() + result.slots_offset);
+  auto* block_table = reinterpret_cast<I32*>(
+      staging->data() + result.block_table_offset);
+
+  for (Usize row = 0; row < batch; ++row) {
+    const PlanEntry& entry = plan.entries[row];
+    seq_lens[row] = static_cast<I32>(entry.context_length) +
+                    entry.token_count;
+    query_lens[row] = entry.token_count;
+    context_lens[row] = entry.context_length;
+    for (I32 i = 0; i < entry.token_count; ++i) {
+      const Usize index =
+          static_cast<Usize>(entry.packed_offset) +
+          static_cast<Usize>(i);
+      request_indices[index] = static_cast<I32>(row);
+      positions[index] = static_cast<I32>(
+          entry.positions[static_cast<Usize>(i)]);
+      slots[index] = entry.slots[static_cast<Usize>(i)];
+    }
+    const Usize blocks_to_copy = std::min(
+        entry.block_table.size(), static_cast<Usize>(stride));
+    for (Usize block = 0; block < blocks_to_copy; ++block) {
+      block_table[row * static_cast<Usize>(stride) + block] =
+          entry.block_table[block];
+    }
+  }
+  *layout = result;
+  return Status::Ok();
+}
+
+// 由元数据缓冲与偏移构造一维 TensorView。
+runtime_graph::TensorView MakeMetadataView(
+    Buffer* buffer, U64 offset, U64 bytes, I64 elements, DataType dtype) {
+  runtime_graph::TensorView view;
+  view.data = buffer;
+  view.offset = offset;
+  view.bytes = bytes;
+  view.shape.dims[0] = elements;
+  view.shape.pitch[0] = elements;
+  view.shape.max_dim = 1;
+  view.dtype = dtype;
+  view.layout = runtime_graph::Layout::kRowMajor;
+  view.device = runtime_graph::DeviceType::kDevice;
+  return view;
+}
 
 // 解析 Storage 的有效字节数。
 //
@@ -384,8 +602,22 @@ class ExecBackend final : public IExecutor {
   Status Deinit() override;
 
  private:
+  // 确保元数据缓冲容量不小于 bytes；必要时重建。
+  //
+  // 参数：
+  //   bytes：本步需要的元数据字节数。
+  // 返回：
+  //   成功返回 kOk；CreateBuffer 失败透传 kBufferError/kDeviceOom。
+  Status EnsureMetadataCapacity(U64 bytes);
+
   // 拥有的后端；非空表示已 Init。
   std::unique_ptr<Backend> backend_;
+
+  // Attention 元数据设备缓冲；高水位复用。
+  std::unique_ptr<Buffer> metadata_buffer_;
+
+  // 元数据缓冲当前容量（字节）。
+  U64 metadata_capacity_ = 0;
 
   // 图借用指针；Init 成功后非空。
   runtime_graph::Graph* graph_ = nullptr;
@@ -474,6 +706,47 @@ Status ExecBackend::Init(std::unique_ptr<Backend> backend,
 
 Backend* ExecBackend::backend() { return backend_.get(); }
 
+Status ExecBackend::EnsureMetadataCapacity(U64 bytes) {
+  if (bytes == 0) {
+    return Status::Ok();
+  }
+  if (metadata_buffer_ != nullptr && metadata_capacity_ >= bytes) {
+    return Status::Ok();
+  }
+  U64 capacity = bytes;
+  if (metadata_capacity_ > 0 &&
+      metadata_capacity_ <= std::numeric_limits<U64>::max() / 2) {
+    capacity = std::max(capacity, metadata_capacity_ * 2);
+  }
+  constexpr U64 kMinCapacity = 64ull * 1024;
+  capacity = std::max(capacity, kMinCapacity);
+
+  BufferDesc desc;
+  desc.bytes = capacity;
+  desc.alignment = 16;
+  desc.usage = BufferUsage::kIo;
+  std::unique_ptr<Buffer> buffer;
+  Status status = backend_->CreateBuffer(desc, &buffer);
+  if (!status.ok()) {
+    return PrefixStatus(status, "Executor::EnsureMetadataCapacity");
+  }
+  if (buffer == nullptr) {
+    return MakeStatus(ErrorCode::kInternal,
+                      "Executor: backend returned null metadata buffer");
+  }
+  if (metadata_buffer_ != nullptr) {
+    const Status destroy_status =
+        backend_->DestroyBuffer(std::move(metadata_buffer_));
+    if (!destroy_status.ok()) {
+      return PrefixStatus(destroy_status,
+                          "Executor::EnsureMetadataCapacity(destroy)");
+    }
+  }
+  metadata_buffer_ = std::move(buffer);
+  metadata_capacity_ = capacity;
+  return Status::Ok();
+}
+
 Status ExecBackend::Execute(const ExecutionPlan& plan,
                             const KvCacheView& kv_view,
                             StepResult* result) {
@@ -540,24 +813,72 @@ Status ExecBackend::Execute(const ExecutionPlan& plan,
     }
   }
 
-  // 构造本步上下文：seq_lens 与 plan 的 entry 一一对应，生命周期覆盖整个
-  // op 遍历过程。
-  std::vector<I32> seq_lens;
-  seq_lens.reserve(plan.entries.size());
-  for (const PlanEntry& entry : plan.entries) {
-    seq_lens.push_back(entry.token_count);
+  // KV 模式：装配逐请求/逐 token 元数据，一次上传到 Executor 私有缓冲。
+  const Bool kv_mode = PlanUsesKv(plan);
+  MetadataLayout metadata_layout;
+  std::vector<U8> metadata_staging;
+  if (kv_mode) {
+    status = ValidateKvPlan(plan, kv_view);
+    if (!status.ok()) {
+      return status;
+    }
+    status = BuildMetadataStaging(plan, kv_view, &metadata_layout,
+                                  &metadata_staging);
+    if (!status.ok()) {
+      return status;
+    }
+    status = EnsureMetadataCapacity(metadata_layout.total_bytes);
+    if (!status.ok()) {
+      return status;
+    }
+    status = backend_->UploadAt(
+        metadata_buffer_->DevicePtr(), 0, metadata_staging.data(),
+        metadata_staging.size(), nullptr);
+    if (!status.ok()) {
+      return PrefixStatus(status, "Executor::Upload(metadata)");
+    }
   }
 
+  // 构造本步上下文；plan/kv_view/attention_meta 的生命周期覆盖整个 op
+  // 遍历过程。
   StepContext context;
   context.backend = backend_.get();
   context.stream = nullptr;
   context.plan = &plan;
   context.kv_view = &kv_view;
-  context.seq_lens = seq_lens.data();
   context.batch = static_cast<I32>(plan.entries.size());
   context.packed_tokens = static_cast<I32>(total);
-  context.is_prefill =
-      plan.entries.front().phase == RequestPhase::kPrefill;
+  if (kv_mode) {
+    const Usize batch = plan.entries.size();
+    const I32 stride = metadata_layout.block_table_stride;
+    Buffer* metadata = metadata_buffer_.get();
+    context.attention_meta.seq_lens = MakeMetadataView(
+        metadata, metadata_layout.seq_lens_offset,
+        static_cast<U64>(batch) * sizeof(I32), static_cast<I64>(batch),
+        DataType::kInt32);
+    context.attention_meta.query_lens = MakeMetadataView(
+        metadata, metadata_layout.query_lens_offset,
+        static_cast<U64>(batch) * sizeof(I32), static_cast<I64>(batch),
+        DataType::kInt32);
+    context.attention_meta.context_lens = MakeMetadataView(
+        metadata, metadata_layout.context_lens_offset,
+        static_cast<U64>(batch) * sizeof(I32), static_cast<I64>(batch),
+        DataType::kInt32);
+    context.attention_meta.request_indices = MakeMetadataView(
+        metadata, metadata_layout.request_indices_offset,
+        static_cast<U64>(total) * sizeof(I32), total, DataType::kInt32);
+    context.attention_meta.positions = MakeMetadataView(
+        metadata, metadata_layout.positions_offset,
+        static_cast<U64>(total) * sizeof(I32), total, DataType::kInt32);
+    context.attention_meta.slots = MakeMetadataView(
+        metadata, metadata_layout.slots_offset,
+        static_cast<U64>(total) * sizeof(I64), total, DataType::kInt64);
+    context.attention_meta.block_table = MakeMetadataView(
+        metadata, metadata_layout.block_table_offset,
+        static_cast<U64>(batch) * static_cast<U64>(stride) * sizeof(I32),
+        static_cast<I64>(batch) * stride, DataType::kInt32);
+    context.attention_meta.block_table_stride = stride;
+  }
 
   runtime_graph::Op* sample_op = graph_->GetSampleOp();
   Bool sample_visited = false;
@@ -673,12 +994,21 @@ Status ExecBackend::Execute(const ExecutionPlan& plan,
 Status ExecBackend::Deinit() {
   Status status = Status::Ok();
   if (backend_ != nullptr) {
-    status = backend_->Deinit();
-    if (!status.ok()) {
-      status = PrefixStatus(status, "Backend::Deinit");
+    if (metadata_buffer_ != nullptr) {
+      const Status destroy_status =
+          backend_->DestroyBuffer(std::move(metadata_buffer_));
+      if (!destroy_status.ok()) {
+        status = PrefixStatus(destroy_status,
+                              "Executor::DestroyBuffer(metadata)");
+      }
+      metadata_capacity_ = 0;
     }
-    backend_.reset();
+    const Status deinit_status = backend_->Deinit();
+    if (!deinit_status.ok() && status.ok()) {
+      status = PrefixStatus(deinit_status, "Backend::Deinit");
+    }
   }
+  backend_.reset();
   graph_ = nullptr;
   io_binder_ = nullptr;
   input_slots_.clear();

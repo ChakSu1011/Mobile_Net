@@ -375,6 +375,21 @@ class Qwen3ConversionTest(unittest.TestCase):
         self.assertIn(
             "sample.out", self.model.tensors)
 
+    def test_kv_adapter(self) -> None:
+        """UT-CONV-012：qwen3_kv 为每个 attention 写入 KV 属性。"""
+        conversion = convert("qwen3_kv", _QWEN3_CONFIG)
+        self.assertEqual(conversion.adapter, "qwen3_kv")
+        attention = [
+            op for op in conversion.model_graph.ops
+            if op.op_type == "mega_attention"
+        ]
+        self.assertEqual(len(attention), 28)
+        for layer_index, op in enumerate(attention):
+            self.assertIs(op.attrs["use_kv_cache"], True)
+            self.assertEqual(op.attrs["kv_layer_index"], layer_index)
+        self.assertIn("use_kv_cache=true", conversion.ir_text)
+        self.assertIn("kv_layer_index=0", conversion.ir_text)
+
     def test_weight_mapping(self) -> None:
         """UT-CONV-008：所有常量都有 HF 映射与静态形状。"""
         for name in self.model.constants:

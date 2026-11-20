@@ -25,6 +25,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -52,10 +53,11 @@ Bool IsTerminalStatus(RequestStatus status) {
 // 参数：
 //   status：请求状态。
 // 返回：
-//   kWaiting/kChunkedPrefill/kRunning 返回 true。
+//   kWaiting/kChunkedPrefill/kRecompute/kRunning 返回 true。
 Bool IsActiveStatus(RequestStatus status) {
   return status == RequestStatus::kWaiting ||
          status == RequestStatus::kChunkedPrefill ||
+         status == RequestStatus::kRecompute ||
          status == RequestStatus::kRunning;
 }
 
@@ -114,6 +116,9 @@ struct RequestState {
 
   // 是否已向 KvAllocator 申请过容量。
   Bool kv_reserved = false;
+
+  // 请求优先级；数值越大越先被抢占。
+  I32 priority = 0;
 };
 
 // 用请求状态填充 Response。
@@ -247,6 +252,18 @@ class SchedulerImpl final : public IScheduler {
   //   kOk；计划为空且 KV 分配失败时返回首个 KV 错误。
   Status ScheduleWithKv(ExecutionPlan* plan);
 
+  // 选择一个 victim 释放 KV。
+  //
+  // 参数：
+  //   requester：当前正在申请的请求，不允许被抢占；
+  //   scheduled：本步已加入计划的请求，不允许被抢占；
+  //   preempted：输出参数，true 表示实际抢占了一个请求。
+  // 返回：
+  //   kOk；kv_allocator 为空返回 kStateError。
+  Status PreemptOne(U64 requester,
+                    const std::unordered_set<U64>& scheduled,
+                    Bool* preempted);
+
   // 互斥锁，保护全部请求状态与计数器。
   mutable std::mutex mutex_;
 
@@ -270,6 +287,12 @@ class SchedulerImpl final : public IScheduler {
 
   // 是否启用完整历史重算模式。
   Bool recompute_attention_ = false;
+
+  // 单步抢占上限；0 表示不抢占。
+  I32 max_preemptions_per_step_ = 4;
+
+  // 累计抢占次数。
+  I32 total_preempted_requests_ = 0;
 
   // 模型默认停止 token。
   std::vector<I64> default_stop_ids_;
@@ -333,6 +356,9 @@ Status SchedulerImpl::Init(const SchedulerConfig& config,
   context_length_ = context_length;
   vocab_size_ = static_cast<I32>(model.vocab_size);
   recompute_attention_ = config.recompute_attention;
+  max_preemptions_per_step_ =
+      std::max(0, config.max_preemptions_per_step);
+  total_preempted_requests_ = 0;
   default_stop_ids_ = config.stop_ids.empty() ? model.stop_token_ids
                                               : config.stop_ids;
   kv_allocator_ = kv_allocator;
@@ -435,6 +461,7 @@ Status SchedulerImpl::Merge(const Request& request, U64* request_id) {
   state.status = RequestStatus::kWaiting;
   state.computed_tokens = 0;
   state.kv_reserved = false;
+  state.priority = request.priority;
   requests_.emplace(assigned_id, std::move(state));
   *request_id = assigned_id;
   return Status::Ok();
@@ -520,12 +547,58 @@ Status SchedulerImpl::ScheduleRecompute(ExecutionPlan* plan) {
   return Status::Ok();
 }
 
+Status SchedulerImpl::PreemptOne(
+    U64 requester, const std::unordered_set<U64>& scheduled,
+    Bool* preempted) {
+  if (preempted == nullptr) {
+    return MakeStatus(ErrorCode::kInvalidArgument,
+                      "Scheduler::PreemptOne: output must not be null");
+  }
+  *preempted = false;
+  if (kv_allocator_ == nullptr) {
+    return MakeStatus(ErrorCode::kStateError,
+                      "Scheduler::PreemptOne: KV allocator is null");
+  }
+  RequestState* victim = nullptr;
+  for (auto& entry : requests_) {
+    RequestState& state = entry.second;
+    if (entry.first == requester || scheduled.count(entry.first) != 0 ||
+        !state.kv_reserved || IsTerminalStatus(state.status)) {
+      continue;
+    }
+    if (state.status != RequestStatus::kRunning &&
+        state.status != RequestStatus::kChunkedPrefill &&
+        state.status != RequestStatus::kRecompute) {
+      continue;
+    }
+    if (victim == nullptr || state.priority > victim->priority ||
+        (state.priority == victim->priority &&
+         state.computed_tokens > victim->computed_tokens) ||
+        (state.priority == victim->priority &&
+         state.computed_tokens == victim->computed_tokens &&
+         state.request_id > victim->request_id)) {
+      victim = &state;
+    }
+  }
+  if (victim == nullptr) {
+    return Status::Ok();
+  }
+  kv_allocator_->Release(victim->request_id);
+  victim->computed_tokens = 0;
+  victim->kv_reserved = false;
+  victim->status = RequestStatus::kRecompute;
+  ++total_preempted_requests_;
+  *preempted = true;
+  return Status::Ok();
+}
+
 Status SchedulerImpl::ScheduleWithKv(ExecutionPlan* plan) {
   std::vector<U64> waiting_ids;
   std::vector<U64> running_ids;
   for (const auto& entry : requests_) {
     if (entry.second.status == RequestStatus::kWaiting ||
-        entry.second.status == RequestStatus::kChunkedPrefill) {
+        entry.second.status == RequestStatus::kChunkedPrefill ||
+        entry.second.status == RequestStatus::kRecompute) {
       waiting_ids.push_back(entry.first);
     } else if (entry.second.status == RequestStatus::kRunning) {
       running_ids.push_back(entry.first);
@@ -535,15 +608,23 @@ Status SchedulerImpl::ScheduleWithKv(ExecutionPlan* plan) {
   I32 remaining = max_num_tokens_;
   Bool reserve_failed = false;
   Status first_reserve_error = Status::Ok();
+  I32 preemptions_this_step = 0;
+  std::unordered_set<U64> scheduled;
 
   for (U64 request_id : waiting_ids) {
     if (remaining <= 0) {
       break;
     }
     RequestState& state = requests_.at(request_id);
+    if (state.status != RequestStatus::kWaiting &&
+        state.status != RequestStatus::kChunkedPrefill &&
+        state.status != RequestStatus::kRecompute) {
+      continue;
+    }
+    const I64 target_size =
+        static_cast<I64>(state.sequence.history_token_ids.size());
     const I64 prompt_remaining =
-        static_cast<I64>(state.sequence.prompt_count) -
-        static_cast<I64>(state.computed_tokens);
+        target_size - static_cast<I64>(state.computed_tokens);
     if (prompt_remaining <= 0) {
       state.status = RequestStatus::kRunning;
       continue;
@@ -554,8 +635,21 @@ Status SchedulerImpl::ScheduleWithKv(ExecutionPlan* plan) {
     if (chunk <= 0) {
       continue;
     }
-    const Status reserve_status =
-        kv_allocator_->Reserve(request_id, chunk);
+    Status reserve_status = kv_allocator_->Reserve(request_id, chunk);
+    while (!reserve_status.ok() &&
+           preemptions_this_step < max_preemptions_per_step_) {
+      Bool preempted = false;
+      const Status preempt_status =
+          PreemptOne(request_id, scheduled, &preempted);
+      if (!preempt_status.ok()) {
+        return preempt_status;
+      }
+      if (!preempted) {
+        break;
+      }
+      ++preemptions_this_step;
+      reserve_status = kv_allocator_->Reserve(request_id, chunk);
+    }
     if (!reserve_status.ok()) {
       if (!reserve_failed) {
         reserve_failed = true;
@@ -591,8 +685,7 @@ Status SchedulerImpl::ScheduleWithKv(ExecutionPlan* plan) {
     }
     plan_entry.context_length = first_token;
     const Bool completes_prompt =
-        static_cast<I64>(first_token) + chunk ==
-        static_cast<I64>(state.sequence.prompt_count);
+        static_cast<I64>(first_token) + chunk == target_size;
     plan_entry.is_chunk = !completes_prompt;
     plan_entry.output_slot =
         completes_prompt
@@ -607,6 +700,7 @@ Status SchedulerImpl::ScheduleWithKv(ExecutionPlan* plan) {
     state.kv_reserved = true;
     state.status = completes_prompt ? RequestStatus::kRunning
                                     : RequestStatus::kChunkedPrefill;
+    scheduled.insert(request_id);
   }
 
   for (U64 request_id : running_ids) {
@@ -614,12 +708,29 @@ Status SchedulerImpl::ScheduleWithKv(ExecutionPlan* plan) {
       break;
     }
     RequestState& state = requests_.at(request_id);
+    if (state.status != RequestStatus::kRunning) {
+      continue;
+    }
     const I64 history_size =
         static_cast<I64>(state.sequence.history_token_ids.size());
     if (static_cast<I64>(state.computed_tokens) >= history_size) {
       continue;
     }
-    const Status reserve_status = kv_allocator_->Reserve(request_id, 1);
+    Status reserve_status = kv_allocator_->Reserve(request_id, 1);
+    while (!reserve_status.ok() &&
+           preemptions_this_step < max_preemptions_per_step_) {
+      Bool preempted = false;
+      const Status preempt_status =
+          PreemptOne(request_id, scheduled, &preempted);
+      if (!preempt_status.ok()) {
+        return preempt_status;
+      }
+      if (!preempted) {
+        break;
+      }
+      ++preemptions_this_step;
+      reserve_status = kv_allocator_->Reserve(request_id, 1);
+    }
     if (!reserve_status.ok()) {
       if (!reserve_failed) {
         reserve_failed = true;
@@ -657,6 +768,7 @@ Status SchedulerImpl::ScheduleWithKv(ExecutionPlan* plan) {
     state.computed_tokens += 1;
     state.kv_reserved = true;
     state.status = RequestStatus::kRunning;
+    scheduled.insert(request_id);
   }
 
   if (plan->entries.empty() && reserve_failed) {
@@ -800,12 +912,14 @@ SchedulerStats SchedulerImpl::Stats() const {
   for (const auto& entry : requests_) {
     const RequestStatus status = entry.second.status;
     if (status == RequestStatus::kWaiting ||
-        status == RequestStatus::kChunkedPrefill) {
+        status == RequestStatus::kChunkedPrefill ||
+        status == RequestStatus::kRecompute) {
       ++stats.waiting_requests;
     } else if (status == RequestStatus::kRunning) {
       ++stats.running_requests;
     }
   }
+  stats.preempted_requests = total_preempted_requests_;
   if (kv_allocator_ != nullptr) {
     stats.free_blocks = kv_allocator_->FreeBlocks();
     const I32 block_size = kv_allocator_->BlockSize();

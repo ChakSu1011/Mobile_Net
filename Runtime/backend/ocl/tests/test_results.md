@@ -805,3 +805,138 @@ lm_head_256x1024x151936                 918.614    372.242    2.47        nan   
 - Mali-G925 真机性能/端到端待重连；主机数据不代表手机；
 - attention 仍为一 query 一 work-item，寄存器分块与 GQA K/V 复用待下一轮；
 - `Mock` 在 11.4.1 的时间受并发负载影响，不可用于性能结论。
+# 12. P4.8 Paged Attention 与 KV 自回归生成（2026-11-21）
+
+## 12.1 环境
+
+| 项目 | 内容 |
+| --- | --- |
+| 主机 | Windows 11，Intel Arc 130T（OpenCL 3.0 NEO） |
+| 编译器 | zig clang wrapper（`Graph/tools/zig_cxx.cmd`），C++17 |
+| 模型包 | `Models/Qwen3/artifacts/qwen3_0_6b_kv` |
+| 图属性 | `use_kv_cache=true`、`kv_layer_index=0..27` |
+| 采样 | 贪心（argmax），`max_tokens=8`，`ignore_eos=true` |
+
+## 12.2 模型包构建
+
+```bash
+python -m ToolChain.pipeline --adapter qwen3_kv --config d:/Mobile_Net/Models/Qwen3/config.json --output d:/Mobile_Net/Models/Qwen3/artifacts/qwen3_0_6b_kv --work-dir d:/Mobile_Net/Models/Qwen3/artifacts/qwen3_0_6b_kv_work --weights d:/Mobile_Net/Models/Qwen3/model.safetensors
+```
+
+实际输出（节选）：
+
+```text
+adapter qwen3_kv
+model qwen3_0_6b
+tensors 624
+ops 312
+constants 310
+weights_available 310
+weights_total_bytes 1192099840
+ir_sha256 07f8136982de22293ee07df2c2d40a784586e58a0e7d30429d99c33f557af28c
+manifest_sha256 44f660b20c609c5baeb86cfc3d3931e32067834be9da6856becb5d202ebb9be2
+package d:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_kv
+```
+
+## 12.3 测试命令与结果
+
+```bash
+./Runtime/build/ocl_kv_e2e_test.exe "d:/Mobile_Net/Models/Qwen3/artifacts/qwen3_0_6b_kv"
+```
+
+实际输出：
+
+```text
+[ocl] loading KV model package...
+[ocl] loading KV package for concurrent test...
+Hello                    expected=21806,0,358,2776,264,2699,21815,911, ocl=21806,0,358,2776,264,2699,21815,911, concurrent=21806,0,358,2776,264,2699,21815,911, PASS
+The capital of France is expected=12095,13,576,6722,315,15344,374,21718, ocl=12095,13,576,6722,315,15344,374,21718, concurrent=12095,13,576,6722,315,15344,374,21718, PASS
+1+1=                     expected=17,11,220,16,10,16,28,17, ocl=17,11,220,16,10,16,28,17, concurrent=17,11,220,16,10,16,28,17, PASS
+The weather is nice today expected=11,323,279,9315,374,220,17,15, ocl=11,323,279,9315,374,220,17,15, concurrent=11,323,279,9315,374,220,17,15, PASS
+all ocl KV e2e checks passed
+
+real    1m50.516s
+```
+
+说明：
+
+- 第一组（`ocl=`）单请求执行 prefill + 8 步 decode；
+- 第二组（`concurrent=`）4 请求同时提交，`max_num_tokens=8`，触发
+  chunked prefill、prefill/decode 混排与多个物理块的非连续块表；
+- 8 条生成序列（4 条单请求 + 4 条并发）与 2 条 20-token 多块序列全部与
+  PyTorch 贪心金标准逐 token 一致（6/6 用例）。
+
+### 12.3.1 多块 / 非连续块表用例
+
+同一测试还包含 2 个 20-token 生成用例：每条序列 21/25 token，需要 2 个
+KV 块；两个请求并发时物理块表为 `[0,2]` / `[1,3]` 这类非连续映射。
+
+实际输出（节选）：
+
+```text
+Hello (20)                   expected=21806,0,358,2776,264,2699,21815,911,279,3491,13,6771,752,1430,311,3535,432,1156,13,576, ocl=21806,0,358,2776,264,2699,21815,911,279,3491,13,6771,752,1430,311,3535,432,1156,13,576, PASS
+The capital of France is (20) expected=12095,13,576,6722,315,15344,374,21718,13,576,6722,315,17689,374,24081,13,576,6722,315,5616, ocl=12095,13,576,6722,315,15344,374,21718,13,576,6722,315,17689,374,24081,13,576,6722,315,5616, PASS
+all ocl KV e2e checks passed
+```
+
+### 12.3.2 错峰提交 / 混合 prefill+decode
+
+前两个请求先进入 decode，第 3 个请求在第 3 步后提交；同一步计划中同时
+包含 decode 条目与新请求的 prefill chunk。
+
+实际输出（节选）：
+
+```text
+Hello                    mixed=21806,0,358,2776,264,2699,21815,911, PASS
+The capital of France is mixed=12095,13,576,6722,315,15344,374,21718, PASS
+1+1=                     mixed=17,11,220,16,10,16,28,17, PASS
+all ocl KV e2e checks passed
+```
+
+## 12.4 加载期模式一致性
+
+```bash
+./Runtime/build/ocl_kv_e2e_test.exe "d:/Mobile_Net/Models/Qwen3/artifacts/qwen3_0_6b_kv" mismatch
+```
+
+实际输出：
+
+```text
+mismatch rejected: Engine::Load rollback: Engine::Load: graph uses KV cache but recompute_attention=true
+```
+
+## 12.5 旧 prefill 路径回归
+
+```bash
+./Runtime/build/ocl_e2e_test.exe "d:/Mobile_Net/Models/Qwen3/artifacts/qwen3_0_6b" 0 no-mock
+```
+
+实际输出：
+
+```text
+[ocl] loading model package...
+[ocl] load done in 9252.9 ms
+[ocl] Hello                    token=21806 step=40.8 ms
+Hello                    expected=21806 ocl=21806
+all ocl e2e checks passed
+```
+
+## 12.6 结论与未覆盖项
+
+| 检查项 | 结论 |
+| --- | --- |
+| Paged KV 写入/读取 | 通过；非连续物理块表、chunked prefill、decode 均在 e2e 覆盖 |
+| OCL vs PyTorch 金标准 | 4 用例 × 8 token、2 用例 × 20 token、3 用例错峰混合 batch 全部逐 token 一致 |
+| 模式错配拒绝 | 通过 |
+| 旧 `use_kv_cache=false` 包 | 回归通过 |
+| 单元测试 | `ocl_vs_mock_test` 全 PASS；`ocl_contract_test` 全 PASS |
+
+未覆盖 / 说明：
+
+- 全模型 Mock vs OCL 对比默认跳过：Mock CPU Kernel 不截断静态 256 行，
+  单步耗时约 8 分钟，8 步生成不可接受；OCL 已直接对齐 PyTorch 金标准。
+  需要时以 `ocl_kv_e2e_test.exe <package> mock` 运行；
+- OCL 端到端未触发 KV 抢占；调度器抢占（victim 选择、recompute、统计）由
+  `Runtime/scheduler/tests/scheduler_test.cc` 的 `TestKvPreemption` 覆盖；
+- Paged kernel 为“一 token 一 work-item”baseline，长上下文性能未调优；
+- Mali-G925 真机待重连。

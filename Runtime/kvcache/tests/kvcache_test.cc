@@ -147,7 +147,7 @@ class FakeBackend final : public Backend {
     capability->max_buffer_bytes = max_buffer_bytes;
     capability->min_alignment = min_alignment;
     capability->attention_block_size = attention_block_size;
-    capability->kv_layout = KvLayout::kNhd;
+    capability->kv_layout = kv_layout;
     return Status::Ok();
   }
 
@@ -237,6 +237,9 @@ class FakeBackend final : public Backend {
 
   // 后端声明的 KV 块大小。
   I32 attention_block_size = 16;
+
+  // 后端声明的 KV 布局。
+  KvLayout kv_layout = KvLayout::kNhd;
 
   // 单缓冲最大字节数；0 表示无上限。
   U64 max_buffer_bytes = 0;
@@ -340,14 +343,19 @@ void TestCapacityAndView() {
   Check(view.layers.size() == 2 && view.block_size == 4 &&
             view.max_total_tokens == 8,
         "view reports two layers and capacity");
-  Check(view.layers[0].k_base != nullptr &&
-            view.layers[0].v_base != nullptr &&
-            view.layers[1].k_base != nullptr &&
-            view.layers[1].v_base != nullptr,
+  Check(view.layers[0].k_buffer != nullptr &&
+            view.layers[0].v_buffer != nullptr &&
+            view.layers[1].k_buffer != nullptr &&
+            view.layers[1].v_buffer != nullptr,
         "every layer has K/V base pointers");
   Check(view.layers[0].block_stride == 128 &&
             view.layers[1].block_stride == 128,
         "block_stride equals per-block single-side bytes");
+  Check(view.layers[0].num_blocks == 2 &&
+            view.layers[0].num_kv_heads == 2 &&
+            view.layers[0].head_dim == 8 &&
+            view.layers[0].dtype == DataType::kFloat16,
+        "layer view reports blocks/heads/dim/dtype");
   CheckStatus(cache->Init(&backend, MakeSpec(4, 2), 1024, &stack),
               ErrorCode::kStateError, "repeated Init is rejected");
   CheckStatus(cache->BuildView(nullptr), ErrorCode::kInvalidArgument,
@@ -468,6 +476,18 @@ void TestBudgetAndLimits() {
   CheckStatus(cache->Init(&backend, invalid, 1024, &stack),
               ErrorCode::kUnsupportedOp,
               "Init rejects non-full-attention cache type");
+  invalid = MakeSpec(4, 2);
+  invalid.dtype = DataType::kFloat32;
+  CheckStatus(cache->Init(&backend, invalid, 1024, &stack),
+              ErrorCode::kUnsupportedDtype,
+              "Init rejects dtype not declared by backend");
+
+  backend.kv_layout = KvLayout::kHnd;
+  cache = CreateDefaultKVCache();
+  CheckStatus(cache->Init(&backend, MakeSpec(4, 2), 1024, &stack),
+              ErrorCode::kUnsupportedOp,
+              "Init rejects non-NHD KV layout");
+  backend.kv_layout = KvLayout::kNhd;
 }
 
 // 测试 CreateBuffer 失败回滚。

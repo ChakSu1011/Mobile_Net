@@ -134,5 +134,29 @@ if(MOBILENET_BUILD_E2E_TESTS)
       COMMAND ocl_e2e_test
         "${MOBILENET_ROOT}/Models/Qwen3/artifacts/qwen3_0_6b" 0)
     set_tests_properties(ocl_e2e_qwen3 PROPERTIES SKIP_RETURN_CODE 77)
+
+    # Paged Attention：prefill + 多步 decode 自回归生成。
+    add_executable(ocl_kv_e2e_test
+      backend/ocl/tests/ocl_kv_e2e_test.cc)
+    target_link_libraries(
+      ocl_kv_e2e_test PRIVATE
+      "$<LINK_LIBRARY:WHOLE_ARCHIVE,mobilenet_runtime>"
+      "$<LINK_LIBRARY:WHOLE_ARCHIVE,runtime_backend>"
+      graph Threads::Threads)
+    if(MSVC)
+      target_compile_options(ocl_kv_e2e_test PRIVATE /W4)
+    else()
+      target_compile_options(ocl_kv_e2e_test PRIVATE -Wall -Wextra)
+    endif()
+    add_test(
+      NAME ocl_kv_e2e_qwen3
+      COMMAND ocl_kv_e2e_test
+        "${MOBILENET_ROOT}/Models/Qwen3/artifacts/qwen3_0_6b_kv")
+    set_tests_properties(ocl_kv_e2e_qwen3 PROPERTIES SKIP_RETURN_CODE 77)
+    add_test(
+      NAME ocl_kv_mode_mismatch
+      COMMAND ocl_kv_e2e_test
+        "${MOBILENET_ROOT}/Models/Qwen3/artifacts/qwen3_0_6b_kv" mismatch)
+    set_tests_properties(ocl_kv_mode_mismatch PROPERTIES SKIP_RETURN_CODE 77)
   endif()
 endif()

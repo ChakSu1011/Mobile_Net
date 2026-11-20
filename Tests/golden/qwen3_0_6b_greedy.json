@@ -1,0 +1,63 @@
+{
+  "model": "qwen3_0_6b",
+  "package": "Models/Qwen3/artifacts/qwen3_0_6b_kv",
+  "dtype": "float32_reference",
+  "max_new_tokens": 8,
+  "prompts": [
+    {
+      "text": "Hello",
+      "prompt_token_ids": [
+        9707
+      ],
+      "generated_token_ids": [
+        21806,
+        0,
+        358,
+        2776,
+        264,
+        2699,
+        21815,
+        911
+      ]
+    },
+    {
+      "text": "The capital of France is",
+      "prompt_token_ids": [
+        785,
+        6722,
+        315,
+        9625,
+        374
+      ],
+      "generated_token_ids": [
+        12095,
+        13,
+        576,
+        6722,
+        315,
+        15344,
+        374,
+        21718
+      ]
+    },
+    {
+      "text": "1+1=",
+      "prompt_token_ids": [
+        16,
+        10,
+        16,
+        28
+      ],
+      "generated_token_ids": [
+        17,
+        11,
+        220,
+        16,
+        10,
+        16,
+        28,
+        17
+      ]
+    }
+  ]
+}

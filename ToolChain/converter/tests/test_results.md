@@ -93,3 +93,22 @@ Qwen3 有效运行参数（`ConversionResult.inference_config.to_dict()`）：
 5. **不执行推理**：Converter 只构图与记录元数据，不创建 OpEnv/Kernel。
 6. **输入配置无版本字段**：当前格式固定且拒绝未知字段；未来不兼容变更
    需要新增字段兼容策略或新文件名，不能静默改变语义。
+
+## 5. Qwen3 KV Adapter（2026-11-21）
+
+新增 `qwen3_kv` adapter 与 `UT-CONV-012`：复用 Qwen3 图结构，把 28 个
+attention op 的 `use_kv_cache` 置为 true，并写入 `kv_layer_index=0..27`。
+
+```bash
+python -m pytest -q ToolChain/converter
+```
+
+实际输出：
+
+```text
+.......................                                                  [100%]
+23 passed in 0.20s
+```
+
+结论：KV adapter 已注册，图属性与 IR 输出符合 Paged Attention 契约；
+默认 `qwen3` adapter 继续输出 `use_kv_cache=false`。

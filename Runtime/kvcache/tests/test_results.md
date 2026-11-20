@@ -134,9 +134,9 @@ checks=63 failures=0
 ## 6. 结论
 
 - 编译：退出码 0，`-Wall -Wextra` 无警告。
-- 运行：退出码 0，`checks=63 failures=0`。
+- 运行：退出码 0，`checks=66 failures=0`。
 - 容量公式、视图字段、块池语义与回滚路径符合
-  `Runtime/kvcache/.doc/kvcache_design.md` 的 FR-KV-01~10。
+  `Runtime/kvcache/.doc/kvcache_design.md` 的 FR-KV-01~14。
 
 ## 7. 未覆盖项与风险
 
@@ -149,3 +149,25 @@ checks=63 failures=0
 6. 释放闭包捕获 `Backend*`；若上游在 `Executor::Init` 失败时先释放
    Backend 再 Clear 资源栈，会产生 UAF。该所有权时序问题不在 KVCache
    内部解决（详见 Destroy 模块测试结果与设计文档）。
+
+## 8. Paged Attention 视图补充测试（2026-11-21）
+
+新增断言：
+
+- `KvLayerView` 的 `k_buffer/v_buffer` 为 `Buffer*` 且非空；
+- `block_stride` 等于单块单边字节数；
+- `num_blocks/num_kv_heads/head_dim/dtype` 与 `KvCacheSpec` 一致；
+- `BackendCapability.kv_layout` 非 NHD 时 `Init` 返回 `kUnsupportedOp`；
+- KV dtype 不在 `supported_dtypes` 时返回 `kUnsupportedDtype`。
+
+实际输出（节选）：
+
+```text
+[PASS] layer view reports blocks/heads/dim/dtype
+[PASS] Init rejects dtype not declared by backend
+[PASS] Init rejects non-NHD KV layout
+checks=66 failures=0
+```
+
+结论：KVCache 视图字段与 Paged Attention 契约一致；新增的布局/精度校验
+均有覆盖。

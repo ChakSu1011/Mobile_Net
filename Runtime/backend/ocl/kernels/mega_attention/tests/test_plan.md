@@ -31,3 +31,16 @@ NDK arm64；adb push/run。
 ## 5. 结果记录
 
 实测后生成 `test_results.md`，含命令、实际输出、指标、结论、未覆盖项与风险。
+
+## 6. Paged Attention（2026-11-21）
+
+| 用例 | 形状/元数据 | 内容 | 通过标准 |
+| --- | --- | --- | --- |
+| paged/prefill | S=16, block=4, seq=16 | context=0，单块或多块 | 与全量 attention 阈值内一致 |
+| paged/chunked | context=16, chunk=16 | 历史 KV + 新 chunk | 同上 |
+| paged/decode | context=1..256, token_count=1 | 单 token 解码 | 同上 |
+| paged/mixed | 2 prefill chunk + 2 decode | 混合 batch | 同上 |
+| paged/block-table | 非连续物理块 | block_table=[3,1] 等 | 同上 |
+| paged/e2e | Qwen3 KV 包 | 4 用例 × 8 token；2 × 20 token；错峰提交 | 与 PyTorch 金标准逐 token 一致 |
+
+实际结果见 `Runtime/backend/ocl/tests/test_results.md` 第 12 节。

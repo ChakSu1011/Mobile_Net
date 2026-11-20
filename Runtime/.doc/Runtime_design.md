@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 文档版本 | v0.6 |
-| 文档状态 | 架构设计（阶段一 KV 推理契约已冻结，Paged Attention 待实现） |
+| 文档状态 | 架构设计（阶段一 KV 推理已实现；OCL Paged Attention + 自回归 e2e 通过） |
 | 编写日期 | 2026-11-21 |
 | 变更摘要 | v0.6：阶段一 KV 推理契约：Paged Attention、混合 batch 元数据、recompute 抢占；`KvLayerView` 设备句柄改为 `Buffer*`；新增 `kv_layer_index` 图属性；v0.5：Loader/Scheduler/KVCache/Executor/Destroy 实现完成；Mock 后端 Qwen3-0.6B 单步前向与 PyTorch token 对齐；新增 `recompute_attention` 模式；v0.4：`sequence.h` 请求/响应模型；v0.3：Engine→Executor→Backend 所有权 |
 | 模块 | `Runtime/` |
@@ -73,7 +73,7 @@ Runtime 目前只有 `common/`、`backend/backend.h`（含 `backend/kernel.h`）
 | R-ARCH-16 | Paged Attention：attention op 在 `use_kv_cache=true` 时按块表读取 KV 池，块大小来自 `BackendCapability.attention_block_size`，KV 布局为 NHD | 与全量 attention 数值一致；块表/slot 越界被拒绝 | TC-PA-01、TC-PA-02 |
 | R-ARCH-17 | Attention 元数据：每步由 Executor 装配 `seq_lens/query_lens/context_lens/positions/request_indices/block_table/slots`，一次上传到设备缓冲，经 `AttentionMetadataView` 传给 Kernel | 混合 batch 下元数据逐 token 正确；每步只有一次 H2D | TC-EXEC-01、TC-PA-01 |
 | R-ARCH-18 | 混合 batch：同一 `ExecutionPlan` 可同时包含 prefill chunk 与 decode；Kernel 不依赖全局 `is_prefill` | mixed 计划输出与分开执行一致 | TC-PA-03 |
-| R-ARCH-19 | 抢占：KV Reserve 失败时按确定规则释放 victim 的 KV 并重算其完整历史，`StepStats.preempted_requests` 反映实际次数 | OOM 后请求全部完成；无死锁/重复释放 | TC-SCHED-03 |
+| R-ARCH-19 | 抢占：KV Reserve 失败时按确定规则释放 victim 的 KV 并重算其完整历史，`StepStats.preempted_requests` 反映累计抢占次数 | OOM 后请求全部完成；无死锁/重复释放 | TC-SCHED-03 |
 | R-ARCH-20 | KV 图包：`use_kv_cache=true` 且每个 attention op 带 `kv_layer_index`；保留 `use_kv_cache=false` 的 prefill 包用于回归 | 两套包均可加载；属性缺失被拒绝 | TC-LOAD-02 |
 | R-ARCH-21 | 阶段一验收：4 个不同长度请求并发、chunked prefill、混合 batch、OOM 抢占均与 PyTorch 金标准逐 token 一致 | 见 2.4 AC-07～AC-10 | TC-E2E-02 |
 | R-ARCH-22 | 加载期一致性：`recompute_attention` 与图中 attention op 的 `use_kv_cache` 属性必须匹配，否则 Load 失败 | 两种错配均返回 `kInvalidArgument` | TC-LOAD-02 |

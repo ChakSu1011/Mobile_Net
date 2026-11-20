@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 文档版本 | v0.2 |
-| 文档状态 | 设计完成；P0 契约与骨架、P1 Mock 后端与 8 个 CPU Kernel、P4.1 OCL 基础设施、P4.2 Kernel 框架、P4.3 全部 8 个 OCL 基线 Kernel 与 vs Mock 对齐已落地；v0.2 增加阶段一 Paged Attention ABI 与 Attention 元数据契约，P4.8 待实现 |
+| 文档状态 | 设计完成；P0 契约与骨架、P1 Mock 后端与 8 个 CPU Kernel、P4.1 OCL 基础设施、P4.2 Kernel 框架、P4.3 全部 8 个 OCL 基线 Kernel 与 vs Mock 对齐已落地；v0.2 增加阶段一 Paged Attention ABI 与 Attention 元数据契约，P4.8 已实现并通过 OCL e2e |
 | 编写日期 | 2026-11-21 |
 | 模块 | `Runtime/backend/` |
 | 权威位置 | `Runtime/backend/.doc/backend_design.md` |

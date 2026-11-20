@@ -511,3 +511,16 @@ P1 范围内通过；尚未与 torch 做逐算子精度对比，不能作为算�
 
 > P1 的“完成”指 Mock 后端与 CPU Kernel 链路；完整算子精度验收仍需 P2/P3 的
 > Python 组图 + 模型包 + Loader + torch 对比。
+
+## 15. Paged Attention 分发与 e2e（2026-11-21）
+
+- `mega_attention_spec` 接受 `use_kv_cache=true`，要求 `kv_layer_index`，
+  并选择 `mega_attention_paged`；
+- Mock/OCL 工厂均注册 `mega_attention_paged`；
+- `backend_contract_test`、`op_env_test`、`ocl_contract_test`、
+  `ocl_vs_mock_test` 全部 PASS；
+- Paged kernel 的真实模型路径由 `Runtime/backend/ocl/tests/ocl_kv_e2e_test.cc`
+  覆盖（4 用例 × 8 token，单请求 + 4 并发，全部对齐 PyTorch 金标准）。
+
+未新增独立的小形状 paged 单测；块表/元数据边界由 e2e 与设计文档中的
+测试用例列表覆盖，后续可补 synthetic 用例。

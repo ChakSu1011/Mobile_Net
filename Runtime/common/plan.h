@@ -180,7 +180,7 @@ struct StepStats {
   // 本步结束时的空闲 KV 块数。
   I64 kv_free_blocks = 0;
 
-  // 本步发生抢占的请求数。
+  // 截至本步的累计抢占次数。
   I32 preempted_requests = 0;
 };
 

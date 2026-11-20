@@ -154,18 +154,49 @@ checks=83 failures=0
 ## 6. 结论
 
 - 编译：退出码 0，`-Wall -Wextra` 无警告。
-- 运行：退出码 0，`checks=83 failures=0`。
-- 实现满足 `Runtime/scheduler/.doc/scheduler_design.md` 中 FR-SCH-01~13
-  的可测试部分。
+- 运行：退出码 0，`checks=95 failures=0`。
+- 实现满足 `Runtime/scheduler/.doc/scheduler_design.md` 中 FR-SCH-01~17
+  的可测试部分（含 recompute 抢占）。
 
 ## 7. 未覆盖项与风险
 
 1. 未做多线程并发 Merge/Stop 压力测试；实现使用互斥锁，但未验证高竞争。
-2. 未实现/未测试抢占、阶段三投机解码、Beam、采样参数（temperature 等）。
+2. 未实现/未测试 swap 换出、阶段三投机解码、Beam、采样参数（temperature 等）。
 3. 终态请求保留在请求表中；长时间服务的内存回收不在本模块实现。
-4. KV 不足时 Running 请求保留 `kRunning` 等待下一步，可能出现长时间饥饿。
+4. 抢占策略为优先级 + 最老/最大占用启发式，未做长期公平性与抖动压测；
+   极端小 KV 预算下可能频繁 recompute。
 5. 未测试超长 prompt（接近 INT32 上限）与极端预算的整型边界。
-6. 单测不经过 Engine；当前 `Engine::ExecuteStep` 对 `output_slot<0` 的
-   PlanEntry 若缺少 `RequestStepResult` 会按 `kInternal` Fail。长 prompt
-   chunked prefill 的端到端路径需 Engine/Executor 修复（Scheduler 侧的
-   `Update` 已兼容 `token_id=-1`）。
+6. ~~Engine 对 `output_slot<0` 判失败~~：已修复，Engine 跳过无 token 的
+   entry；长 prompt chunked prefill 端到端已在 OCL KV e2e 覆盖。
+
+## 8. recompute 抢占补充测试（2026-11-21）
+
+### 8.1 用例
+
+`TestKvPreemption`：Fake KV 总容量 4 token（1 个块），两个 4-token prompt
+竞争；第二个请求 Reserve 失败时抢占第一个请求，释放其 KV 并置
+`kRecompute`；下一步按完整历史重算。
+
+### 8.2 实际输出（节选）
+
+```text
+[PASS] preempt Init succeeds
+[PASS] preempt Merge accepts two prompts
+[PASS] preempt first Schedule runs first request
+[PASS] preempt no preemption before OOM
+[PASS] preempt second Schedule reclaims first request's KV
+[PASS] preempt releases one victim and counts it
+[PASS] preempt snapshot has two requests
+[PASS] preempt victim becomes kRecompute with computed=0
+[PASS] preempt victim is re-prefilled from full history
+[PASS] preempt second victim counted
+[PASS] preempt Update victim after recompute
+[PASS] preempt Stop both requests
+checks=95 failures=0
+```
+
+### 8.3 结论
+
+- victim 选择、`Release`、`kRecompute` 状态、完整历史重算与
+  `preempted_requests` 统计均通过；
+- 端到端 OCL 未触发抢占（KV 预算充足），抢占路径由本单测覆盖。

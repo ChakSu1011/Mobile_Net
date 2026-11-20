@@ -1,4 +1,4 @@
-# OCL 后端测试结果（P4 前置设备能力 + P4.1 基础设施）
+# OCL 后端测试结果（P4.1–P4.6）
 
 ## 1. 测试范围
 
@@ -604,7 +604,7 @@ Mali 的 P4.2 48 PASS 结果仍为历史参考。
 - Intel Arc 的主机性能不代表 Mali；Mali 重连后补测；
 - 当前 linear/attention 为 naive 基线，性能优化尚未开始（P4.5）。
 
-## 11. P4.5/P4.6 有效 token 截断与端到端一致性（2026-11-20）
+## 11. P4.5/P4.6 有效 token 截断与端到端一致性（2026-11-20/21）
 
 ### 11.1 本阶段实现
 
@@ -618,7 +618,8 @@ Mali 的 P4.2 48 PASS 结果仍为历史参考。
 | `Runtime/backend/ocl/ocl_kernel.h/.cc` | `OclKernel::EffectiveRows`：`packed_tokens && batch==1` 时返回 `min(token_count, static_rows)` |
 | 8 个 OCL Kernel | gather/add/rms_norm/linear/swi_glu/rope/attention/sample 全部接入有效行截断；attention 分离 `seq`（有效长度）与 `seq_stride`（静态行跨度） |
 | `mega_attention.cl` | 单遍 online softmax（历史累加按 alpha 缩放，score 只算一次） |
-| `linear.cl` | K 维 `vload_half8` 向量化（返回 float8），保留 K 非 8 倍数标量尾部 |
+| `linear.cl` | K 维 `vload_half8` 向量化（返回 float8）、单行尾部路径，保留 K 非 8 倍数标量尾部 |
+| `linear_swi_glu.cl` / `linear_per_head_rmsnorm_rope.cl` | K 维 `vload_half8` 向量化 gate/up 双点积与 per-head GEMM |
 | `Runtime/backend/ocl/tests/ocl_e2e_test.cc` | 同进程 OCL/Mock 端到端 token 对比 driver；`no-mock` 可跳过 Mock 调试 |
 | `Runtime/CMakeLists.txt` | 新增 `ocl_e2e_test` 目标与 CTest `ocl_e2e_qwen3`（无设备 SKIP 77） |
 | `Runtime/backend/CMakeLists.txt` | 新增 `ocl_benchmark` 目标（真实形状 OCL vs Mock，不注册 CTest） |
@@ -652,7 +653,8 @@ ctest --test-dir Runtime/build -E ocl_e2e_qwen3 --output-on-failure
 - `ocl_vs_mock_test`：8/8 算子通过；linear 新增 K=16 向量路径与 M=1 单行
   路径用例，small 形状 `max_abs=0`、`cosine=1`；
 - 在 linear 单行尾部改动后复跑非 e2e 子集（6 个目标）：100% passed，
-  总耗时 0.61 s；`ocl_contract_test` 仍为 64 PASS。
+  总耗时 0.61 s；`ocl_contract_test` 仍为 64 PASS；
+- swiglu/rope half8 向量化后再次复跑同一子集：6/6 passed，总耗时 0.49 s。
 
 ### 11.3 基线端到端（P4.3 Kernel，优化前）
 
@@ -694,14 +696,14 @@ cmake --build Runtime/build --target ocl_e2e_test
 ./Runtime/build/ocl_e2e_test.exe Models/Qwen3/artifacts/qwen3_0_6b -1 no-mock
 ```
 
-实际输出：
+最终源码（含 linear 单行尾部、swiglu/rope half8）实际输出：
 
 ```text
 [ocl] loading model package...
-[ocl] load done in 9247.0 ms
-[ocl] Hello                    token=21806 step=51.7 ms
-[ocl] The capital of France is token=12095 step=161.4 ms
-[ocl] 1+1=                     token=17 step=130.2 ms
+[ocl] load done in 9787.7 ms
+[ocl] Hello                    token=21806 step=52.2 ms
+[ocl] The capital of France is token=12095 step=86.6 ms
+[ocl] 1+1=                     token=17 step=68.4 ms
 Hello                    expected=21806 ocl=21806
 The capital of France is expected=12095 ocl=12095
 1+1=                     expected=17 ocl=17
@@ -709,41 +711,78 @@ all ocl e2e checks passed
 ```
 
 与 11.3 对比：同一模型包、同一 prompt、同一 token 输出；单步时间从
-6216/6111/6152 ms 降到 51.7/161.4/130.2 ms（约 120x/38x/47x）。下降来自
-有效 token 截断（不再计算 S=256 的 padding 行）、linear half8 向量化与
-attention 单遍 online softmax。
+6216/6111/6152 ms 降到 52.2/86.6/68.4 ms（约 119x/71x/90x）。下降来自
+有效 token 截断（不再计算 S=256 的 padding 行）、linear half8 + 单行尾部、
+swiglu/rope half8 向量化与 attention 单遍 online softmax。
+
+#### 11.4.1 优化后 OCL vs Mock 直接复跑
+
+命令：
+
+```bash
+./Runtime/build/ocl_e2e_test.exe Models/Qwen3/artifacts/qwen3_0_6b -1
+```
+
+该次复跑使用加入 swiglu/rope 向量化之前的优化二进制（capping + linear
+half8 + 单遍 attention），用于直接验证优化路径的 OCL/Mock token 一致性。
+复跑期间同时有本地构建/基准运行，Mock 单步时间偏高；**只比较 token，不用该
+段的时间数据**，干净环境耗时见 11.3：
+
+```text
+[ocl] loading model package...
+[ocl] load done in 9402.7 ms
+[ocl] Hello                    token=21806 step=46.9 ms
+[ocl] The capital of France is token=12095 step=157.6 ms
+[ocl] 1+1=                     token=17 step=128.5 ms
+[mock] loading model package...
+[mock] load done in 9245.0 ms
+[mock] Hello                    token=21806 step=522288.6 ms
+[mock] The capital of France is token=12095 step=443112.8 ms
+[mock] 1+1=                     token=17 step=443640.0 ms
+Hello                    expected=21806 ocl=21806 mock=21806
+The capital of France is expected=12095 ocl=12095 mock=12095
+1+1=                     expected=17 ocl=17 mock=17
+all ocl e2e checks passed
+```
+
+结论：优化路径的 OCL 与 Mock 直接对比仍为 3/3 一致。最终源码在此基础上
+只增加了 swiglu/rope 向量化与 linear 单行尾部（数值单测 `max_abs=0`），
+并用上面的最终 OCL-only 复跑确认 token 未变化。
 
 ### 11.5 逐算子性能（真实形状，Intel Arc 130T）
 
 方法：`ocl_benchmark`，每个形状先 warmup 1 次、连续 3 次
-`Execute+Synchronize` 取平均；下表为 3 次进程运行的中位数（ms）。
-基线为 P4.3 Kernel（4×4 标量 GEMM、两遍 attention）；优化后为当前源码
-（half8 GEMM + 单行尾部、单遍 online softmax）。`lm_head` 的 Mock 过慢，
+`Execute+Synchronize` 取平均；基线与优化后 **交替运行 5 组**、取中位数（ms），
+以抵消 GPU 时钟/系统负载波动。基线为 P4.3 Kernel（4×4 标量 GEMM、两遍
+attention、swiglu/rope 标量点积）；优化后为当前源码（half8 GEMM + 单行
+尾部、单遍 online softmax、swiglu/rope half8 点积）。`lm_head` 的 Mock 过慢，
 按设计跳过。
 
 ```text
 bench                                   base_ms     p45_ms    gain    mock_ms    p45_vs_mock
-add_262144                                0.034      0.042    0.81      1.399        33.64
-gather_256x151936x1024                    0.033      0.029    1.12      0.008         0.27
-rms_norm_256x1024                         0.047      0.045    1.03      1.638        36.11
-linear_256x1024x1024                      2.237      1.211    1.85    821.015       677.78
-linear_256x1024x3072                     10.129      3.543    2.86   2510.330       708.48
-swiglu_256x1024x3072                    101.105    106.641    0.95   3638.910        34.12
-rope_q_256x1024x2048                     20.677     23.185    0.89   1646.000        70.99
-attention_256h16kv8d128                  38.867     22.190    1.75    563.534        25.40
-sample_256x151936                         1.391      1.367    1.02     62.888        46.00
-lm_head_256x1024x151936                 843.809    337.469    2.50        nan          nan
+add_262144                                0.063      0.063    0.99      2.160        34.14
+gather_256x151936x1024                    0.037      0.048    0.76      0.015         0.30
+rms_norm_256x1024                         0.046      0.064    0.72      2.919        45.87
+linear_256x1024x1024                      2.689      1.622    1.66    833.313       513.81
+linear_256x1024x3072                     13.583      5.297    2.56   2597.460       490.35
+swiglu_256x1024x3072                    104.773     41.856    2.50   3795.810        90.69
+rope_q_256x1024x2048                     22.668     10.218    2.22   1699.400       166.32
+attention_256h16kv8d128                  39.855     32.687    1.22    587.705        17.98
+sample_256x151936                         1.632      1.644    0.99     63.718        38.75
+lm_head_256x1024x151936                 918.614    372.242    2.47        nan          nan
 ```
 
 说明：
 
-- `linear`（含 lm_head）获得 1.85–2.86x 提升；`attention` 1.75x；
-- `gather` 的 OCL 时间 0.029 ms 小于 Mock 0.008 ms 的对比为 **launch
-  开销主导**：该形状只有 256×1024 元素的查表，OCL kernel 下发/同步成本高于
-  Mock 的主机 memcpy 式实现；不是数值或功能问题；
-- `swiglu`（~101→107 ms）与 `rope`（~21→23 ms）本轮未优化，波动在噪声内；
-  这两个 Kernel 仍是逐输出/逐 (row,head) 的标量实现，是下一轮优化重点；
-- 小算子（add/rms_norm/sample）本身已接近 launch 下限，提升空间有限；
+- `linear`（含 lm_head）提升 1.66–2.56x；`swiglu` 2.50x；`rope` 2.22x；
+  `attention` 1.22x（单遍 softmax 省掉一次 score 计算，但多了累加缩放）；
+- 早期非交替运行曾测得 attention 22.19 ms（1.75x），但交替复测稳定在
+  32.7 ms 附近；本表采用交替中位数，不采用偏乐观的单次结果；
+- `gather`/`rms_norm` 的 OCL 时间为微秒级，**launch 开销主导**：该形状只有
+  256×1024 元素的查表/归一化，OCL kernel 下发+同步成本可高于 Mock 的主机
+  memcpy 式实现；不是数值或功能问题；`add`/`sample` 同样已到 launch 下限；
+- `Mock` 为单线程 CPU 参考实现，时间随主机负载波动；`p45_vs_mock` 仅作
+  数量级参考；
 - 性能数据来自主机 Intel Arc；Mali-G925 已断开，真机数据待重连后补测。
 
 ### 11.6 结论与未覆盖项
@@ -751,11 +790,12 @@ lm_head_256x1024x151936                 843.809    337.469    2.50        nan   
 | 检查项 | 结论 |
 | --- | --- |
 | OCL 端到端 token（优化前） | 3/3 与 Mock、PyTorch 一致 |
-| OCL 端到端 token（优化后） | 3/3 与 PyTorch golden 一致；Mock 在 11.3 已对齐同一 golden |
+| OCL 端到端 token（优化后） | 3/3 直接 OCL vs Mock 一致（11.4.1）；最终源码 OCL-only 3/3 与 golden 一致（11.4） |
 | cl_mem 偏移缺陷 | 已修复（`UploadAt/DownloadAt`） |
 | packed token 截断 | 8 个 Kernel 接入；unit + e2e 覆盖 |
 | attention 有效长度/行跨度 | 已分离并通过 S=8/有效 S=3 单测 |
-| 真实形状性能 | 已记录；linear/attention 有提升，swiglu/rope 待续 |
+| 真实形状性能 | 交替 5 组中位数：linear/lm_head 1.66–2.56x、swiglu 2.50x、rope 2.22x、attention 1.22x |
+| 单步耗时 | 6.1–6.2 s → 52.2/86.6/68.4 ms（1/5/4 token） |
 
 未覆盖：
 
@@ -763,4 +803,5 @@ lm_head_256x1024x151936                 843.809    337.469    2.50        nan   
 - 未做多 token 自回归生成（每用例 max_tokens=1）与 KV cache 路径；
 - 未做多 seed/随机形状误差分布；未做 torch 直接对比（用 PyTorch golden token）；
 - Mali-G925 真机性能/端到端待重连；主机数据不代表手机；
-- `swiglu`/`rope` 的 Kernel 仍为标量实现，下一轮 P4.5 优化目标。
+- attention 仍为一 query 一 work-item，寄存器分块与 GQA K/V 复用待下一轮；
+- `Mock` 在 11.4.1 的时间受并发负载影响，不可用于性能结论。

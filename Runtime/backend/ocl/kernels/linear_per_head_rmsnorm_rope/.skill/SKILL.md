@@ -45,9 +45,17 @@
 8. Mali local 是 CL_GLOBAL；不要用大 local。
 9. 不要 fast-relaxed-math；FP32 归约/三角。
 
-## 性能数据
+## 性能数据（Intel Arc 130T，2026-11-20）
 
-待 P4 实测后填写：阶段 1/2 时间、cos/sin 方案、kernel 时间、Mock 时间、加速比。
+q 形状 M=256、K=1024、16 heads×128；warmup 1 + 3 次平均，
+交替 5 组中位数：
+
+| 实现 | kernel+同步时间 | Mock | vs Mock |
+| --- | --- | --- | --- |
+| P4.3 标量点积 | 22.668 ms | 1699.400 ms | 75.0x |
+| P4.5 half8 点积 | 10.218 ms | 1699.400 ms | 166.3x |
+
+Mali-G925 已断开，真机数据待重连后补测。
 
 ## P4.3 实现状态
 

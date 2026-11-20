@@ -199,7 +199,7 @@ float softmax_scale, int causal
 - P4.5 优化：单遍 online softmax（历史累加按 alpha 缩放，score 只算一次）；
   有效 token 截断把 `seq`（有效长度）与 `seq_stride`（静态行跨度）分离，
   `ocl_contract_test` 覆盖 S=8/有效 S=3 的前缀一致性与 padding 不写；
-- 实测（Intel Arc 130T，S=256/H=16/KV=8/D=128，3 次中位数）：
-  两遍实现 38.867 ms → 单遍 22.190 ms（1.75x）；Mock 563.534 ms，
-  当前实现约为 Mock 的 25.4x；
+- 实测（Intel Arc 130T，S=256/H=16/KV=8/D=128，交替 5 组中位数）：
+  两遍实现 39.855 ms → 单遍 32.687 ms（1.22x）；Mock 587.705 ms，
+  当前实现约为 Mock 的 18x；早期非交替单次曾测得 22.19 ms，不作为结论；
 - 当前仍为一 query 一 work-item 的基线；寄存器分块/GQA 复用待下一轮 P4.5。

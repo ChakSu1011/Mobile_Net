@@ -40,9 +40,15 @@
 6. WG 必须整除 global；max WG 1024；不要用非 uniform 假设。
 7. 不要 `clFinish`；每 Step 由 Executor 同步。
 
-## 性能数据
+## 性能数据（Intel Arc 130T，2026-11-20）
 
-待 P4 真机实测后填写：WG、线程/行、归约方式、kernel 时间、Mock 时间、加速比、带宽。
+256 行 × hidden=1024；交替 5 组中位数：
+
+| 实现 | kernel+同步时间 | Mock |
+| --- | --- | --- |
+| rms_norm（一行一 WG） | 0.064 ms | 2.919 ms（约 46x） |
+
+该形状已接近 launch 下限；Mali-G925 已断开，真机数据待重连后补测。
 
 ## P4.3 实现状态
 

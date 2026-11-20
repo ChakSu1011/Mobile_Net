@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 文档版本 | v0.2 |
-| 文档状态 | 设计完成；P4.1 基础设施、P4.2 Kernel 框架、P4.3 全部 8 个基线 Kernel 与 vs Mock 数值对齐、P4.6 端到端 Token 一致性（3/3）已落地；P4.5 第一轮优化（有效 token 截断、half8 GEMM、单遍 attention）已完成并与 Mock 对比 |
+| 文档状态 | 设计完成；P4.1 基础设施、P4.2 Kernel 框架、P4.3 全部 8 个基线 Kernel 与 vs Mock 数值对齐、P4.6 端到端 Token 一致性（3/3）已落地；P4.5 第一轮优化（有效 token 截断、linear/swiglu/rope half8、单遍 attention）已完成并记录性能 |
 | 编写日期 | 2026-11-20 |
 | 模块 | `Runtime/backend/ocl/` |
 | 权威位置 | `Runtime/backend/ocl/.doc/ocl_design.md` |
@@ -27,11 +27,12 @@ P4.6 已新增 `Runtime/backend/ocl/tests/ocl_e2e_test.cc`：用 Engine 加载
 （`ocl=12095/21806/17`，Mock 同值），详见 `tests/test_results.md` 第 11 节。
 P4.5 已完成第一轮优化：`packed_tokens` 有效 token 截断（8 个 Kernel 接入）、
 attention 单遍 online softmax、linear 的 K 维 `vload_half8` 向量化与单行
-尾部；OCL 单步从约 6.1 s 降到 51.7/161.4/130.2 ms（1/5/4 token），
-linear/lm_head 1.85–2.86x、attention 1.75x（vs 优化前）。
+尾部、swiglu/rope 的 K 维 half8 向量化；OCL 单步从约 6.1 s 降到
+52.2/86.6/68.4 ms（1/5/4 token）。交替 5 组基准中位数：linear/lm_head
+1.66–2.56x、swiglu 2.50x、rope 2.22x、attention 1.22x（vs 优化前）。
 数值回归由 `ocl_vs_mock_test` 与 `ocl_contract_test` 覆盖（64 条 PASS）。
 当前主测试环境为本机 Intel Arc；手机 Mali-G925 已断开，Mali 性能待重连补测。
-下一轮优化重点：swiglu 与 rope 的标量 Kernel。
+下一轮优化重点：attention 寄存器分块/GQA K/V 复用与多 batch 截断。
 
 ---
 

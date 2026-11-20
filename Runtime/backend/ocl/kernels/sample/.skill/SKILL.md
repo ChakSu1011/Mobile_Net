@@ -41,9 +41,15 @@
 7. 不要 `clFinish`；每 Step 由 Executor 同步。
 8. 若未来融合 lm_head + argmax，需图/优化器支持，不在本 Kernel 内偷偷改图。
 
-## 性能数据
+## 性能数据（Intel Arc 130T，2026-11-20）
 
-待 P4 实测后填写：WG、一行/多 WG、kernel 时间、Mock 时间、加速比、带宽。
+256 行 × V=151936 argmax；交替 5 组中位数：
+
+| 实现 | kernel+同步时间 | Mock |
+| --- | --- | --- |
+| sample_argmax（一行一 WG） | 1.644 ms | 63.718 ms（约 39x） |
+
+Mali-G925 已断开，真机数据待重连后补测。
 
 ## P4.2 实现状态
 

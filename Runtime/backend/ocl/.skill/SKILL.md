@@ -302,9 +302,11 @@ P4.6 关键陷阱：
   数值对齐、P4.6 端到端 OCL vs Mock Token 一致性（3/3）均已落地；
   实测输出见 `ocl/tests/test_results.md` 第 11 节；
 - P4.5 第一轮优化已落地：`packed_tokens` 有效 token 截断、attention 单遍
-  online softmax、linear 的 K 维 `vload_half8` 向量化与单行尾部；
-  OCL 单步 6.1 s → 51.7/161.4/130.2 ms（1/5/4 token），linear/lm_head
-  1.85–2.86x、attention 1.75x；数值回归通过 `ocl_vs_mock_test` 与 packed 用例；
+  online softmax、linear 的 K 维 `vload_half8` 向量化与单行尾部、
+  swiglu/rope 的 half8 点积；OCL 单步 6.1 s → 52.2/86.6/68.4 ms
+  （1/5/4 token）；交替 5 组中位数 linear/lm_head 1.66–2.56x、swiglu
+  2.50x、rope 2.22x、attention 1.22x；数值回归通过 `ocl_vs_mock_test`
+  与 packed 用例；
 - **当前主测试环境：本机 Intel Arc GPU**；手机 Mali-G925 已断开，历史结果保留；
-- 待继续：swiglu/rope 标量 Kernel 优化、Mali 真机性能与端到端；
+- 待继续：attention 分块/GQA 复用、多 batch 截断、Mali 真机性能与端到端；
 - 本 skill 不得在未实测时声称算子性能达标。

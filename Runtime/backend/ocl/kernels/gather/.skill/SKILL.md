@@ -44,3 +44,9 @@
 ## 性能数据
 
 待 P4 真机实测后填写：WG 大小、token/WG、kernel 时间、Mock 时间、加速比、有效带宽。
+
+## P4.2 实现状态
+
+- `gather` OCL Kernel 已实现并通过主机 Intel Arc 与手机 Mali-G925 基础数值测试；
+- 当前主测试环境为本机 Intel Arc；手机已断开，性能/P4.6 待重连后补测；
+- 下一步：与 Mock/torch 的完整精度对比（P4.3）、性能调优（P4.5）。

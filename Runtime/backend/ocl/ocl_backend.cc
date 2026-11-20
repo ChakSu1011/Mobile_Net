@@ -21,6 +21,7 @@
 #include "Graph/include/op_type.h"
 #include "Runtime/backend/ocl/ocl_buffer.h"
 #include "Runtime/backend/ocl/ocl_convert.h"
+#include "Runtime/backend/ocl/ocl_kernel_factory.h"
 #include "Runtime/backend/ocl/ocl_utils.h"
 #include "Runtime/common/data_types.h"
 
@@ -50,13 +51,10 @@ Status OclBackend::Init(const BackendConfig& config) {
   }
 
   capability_.supported_dtypes = {DataType::kFloat16};
+  // P4.2 只接入 gather/add/sample_argmax；其余算子在 P4.3 加入后
+  // 再扩展 supported_ops，禁止提前声明未实现能力。
   capability_.supported_ops = {
       runtime_graph::OpType::kGather,
-      runtime_graph::OpType::kRmsNorm,
-      runtime_graph::OpType::kLinear,
-      runtime_graph::OpType::kLinearSwiGlu,
-      runtime_graph::OpType::kLinearPerHeadRMSNormRope,
-      runtime_graph::OpType::kMegaAttention,
       runtime_graph::OpType::kAdd,
       runtime_graph::OpType::kSample,
   };
@@ -273,10 +271,7 @@ Status OclBackend::CreateKernel(const KernelDesc& desc,
         ErrorCode::kInvalidArgument,
         "OclBackend::CreateKernel: kernel output must not be null");
   }
-  return MakeStatus(
-      ErrorCode::kUnsupportedOp,
-      "[backend=ocl][stage=CreateKernel] kernel_key=" + desc.kernel_key +
-          ": OCL kernels are implemented in P4.2");
+  return CreateOclKernel(desc, &context_, &programs_, kernel);
 }
 
 Status OclBackend::DestroyKernel(std::unique_ptr<Kernel> kernel) {

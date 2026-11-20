@@ -4,6 +4,9 @@
 
 本文件记录：
 
+> 当前 OCL 开发/测试主环境为**本机 Intel Arc GPU**（第 9 节）；
+> 第 2–8 节为手机 Mali-G925 的历史能力/契约结果，手机已断开。
+
 1. **P4 前置环境验证**：手机型号、SoC、GPU、Android 版本、OpenCL 库与设备能力、
    NDK 工具链（C++17 `std::variant`）；
 2. **P4.1 基础设施验证**：OclApi/OclContext/OclBuffer/OclProgramCache/OclBackend、
@@ -400,3 +403,92 @@ ALL TESTS PASSED
 | OpenCL 头版本 | vendored 2.1；后续可换官方 OpenCL-Headers |
 | 二进制缓存跨驱动 | 哈希含驱动/设备；换驱动会重建，符合预期 |
 | `min_alignment` | 取设备 base alignment（Mali 实测 128 B）；MemoryPlan 256 是其倍数 |
+
+---
+
+# 9. P4.2 结果（OclKernel + 源码嵌入 + gather/add/sample）
+
+**环境变更（2026-11-20）**：后续 OCL 开发/测试主环境改为 **本机 Intel Arc GPU**；
+手机 Mali-G925 已断开，之前的手机结果保留为历史参考，重连后再补测。
+
+## 9.1 本阶段实现
+
+| 文件 | 内容 |
+| --- | --- |
+| `ocl/ocl_kernel.h/.cc` | OclKernel 基类：首次 Execute 前 Prepare、编译/创建 cl_kernel、参数绑定、1D NDRange、视图/offset 校验 |
+| `ocl/ocl_kernel_factory.h/.cc` | kernel_key → Kernel 分发；P4.2 接入 gather/add/sample_argmax |
+| `ocl/ocl_source_registry.h/.cc` | 构建期嵌入的 `.cl` 源码注册表 |
+| `ocl/kernels/gather/` | `gather.cl` + `gather_kernel.h/.cc` |
+| `ocl/kernels/add/` | `add.cl` + `add_kernel.h/.cc` |
+| `ocl/kernels/sample/` | `sample.cl` + `sample_kernel.h/.cc` |
+| `ocl/CMakeLists.txt` | 配置期把 `.cl` 生成 `generated/<Op>_source.h`；加入 3 个 Kernel 源 |
+| `ocl/ocl_backend.cc` | `CreateKernel` 改为调用工厂；Capability 只声明 3 个已实现 op |
+
+## 9.2 主机构建与测试（当前主环境）
+
+```bash
+cd d:/Mobile_Net
+cmake -S Runtime/backend -B Runtime/backend/build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CXX_COMPILER="d:/Mobile_Net/Graph/tools/zig_cxx.cmd" \
+  -DCMAKE_AR="d:/Mobile_Net/Graph/tools/zig_ar.cmd" \
+  -DCMAKE_RANLIB="d:/Mobile_Net/Graph/tools/zig_ranlib.cmd" \
+  -DBACKEND_AR="d:/Mobile_Net/Graph/tools/zig_ar.cmd" \
+  -DBACKEND_RANLIB="d:/Mobile_Net/Graph/tools/zig_ranlib.cmd" \
+  -DGRAPH_AR="d:/Mobile_Net/Graph/tools/zig_ar.cmd" \
+  -DGRAPH_RANLIB="d:/Mobile_Net/Graph/tools/zig_ranlib.cmd"
+cmake --build Runtime/backend/build
+ctest --test-dir Runtime/backend/build --output-on-failure
+./Runtime/backend/build/ocl_contract_test.exe
+```
+
+实际结果：
+
+```text
+设备：Intel(R) Arc(TM) 130T GPU (16GB)
+OpenCL 3.0 NEO，OpenCL C 1.2，112 CU，2200 MHz，local 64 KB，max WG 1024
+
+CTest：5/5 Passed
+ocl_contract_test：48 条 PASS，exit=0
+  PASS ocl add executes / ocl add values
+  PASS ocl add vector executes / ocl add vector values
+  PASS ocl gather executes / ocl gather values
+  PASS ocl gather vector executes / ocl gather vector values
+  PASS ocl sample executes / ocl sample argmax
+  PASS ocl unknown kernel_key rejected
+  ALL TESTS PASSED
+```
+
+说明：
+
+- Add 测试了标量路径（4 元素）与 half8 向量路径（16 元素）；
+- Gather 测试了标量路径（hidden=2）与 half8 向量路径（hidden=8）；
+- Sample 测试 `[1,1,3]` argmax；
+- 所有 Kernel 首次 Execute 时编译 Program，之后复用；Program 二进制缓存命中。
+
+## 9.3 手机 Mali-G925（历史参考，已断开）
+
+在断开前，同一 `ocl_contract_test` 在 Mali-G925 上也得到 **48 条 PASS**，
+包括 add/gather 标量与 half8 路径、sample argmax、Program 编译/二进制重载。
+手机当前断开，后续以 Intel Arc 为主；Mali 重连后补性能与端到端 Token 测试。
+
+## 9.4 结论
+
+| 检查项 | 结论 |
+| --- | --- |
+| OclKernel 首次 Prepare + 后续 Execute | 通过 |
+| `.cl` 构建期源码嵌入 | 通过（无运行时文件读取） |
+| kernel_key 分发 | gather/add/sample_argmax 通过；未知 key 拒绝 |
+| Add 标量/half8 | 通过 |
+| Gather 标量/half8 | 通过 |
+| Sample argmax | 通过 |
+| 主机 Intel Arc | 48 条 PASS（当前主环境） |
+| 手机 Mali-G925 | 48 条 PASS（历史，已断开） |
+
+## 9.5 未覆盖项
+
+- 其余 5 个算子（rms_norm、linear、swi_glu、rope、attention）仍返回
+  `kUnsupportedOp`；Capability 只声明 3 个 op；
+- 逐算子 vs Mock/torch 精度、性能、端到端 Token 一致性未执行；
+- Intel 与 Mali 的性能差异、workgroup 调优、half8 之外优化未做；
+- 手机断开，Mali 真机性能/Token 测试暂不可执行。

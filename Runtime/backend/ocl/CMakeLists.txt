@@ -9,6 +9,29 @@
 #   - 不链接 OpenCL 库（运行时 dlopen/LoadLibrary）；
 #   - 依赖父目录提供的 MOBILENET_ROOT 与 graph 目标。
 
+# 把 kernels/<op>/*.cl 在配置期生成 C++ 原始字符串头，避免运行时读文件，
+# 也避免在 .cc 中手写重复源码。
+function(mobilenet_embed_ocl_source op file)
+  file(READ "${file}" ocl_source_content)
+  set(generated_header "${CMAKE_CURRENT_BINARY_DIR}/generated/${op}_source.h")
+  file(WRITE "${generated_header}"
+    "#pragma once\n"
+    "namespace mobilenet {\n"
+    "namespace ocl {\n"
+    "inline constexpr char k${op}Source[] = R\"OCLSRC(\n"
+    "${ocl_source_content}\n"
+    ")OCLSRC\";\n"
+    "}  // namespace ocl\n"
+    "}  // namespace mobilenet\n")
+endfunction()
+
+mobilenet_embed_ocl_source(
+  Gather "${CMAKE_CURRENT_SOURCE_DIR}/kernels/gather/gather.cl")
+mobilenet_embed_ocl_source(
+  Add "${CMAKE_CURRENT_SOURCE_DIR}/kernels/add/add.cl")
+mobilenet_embed_ocl_source(
+  Sample "${CMAKE_CURRENT_SOURCE_DIR}/kernels/sample/sample.cl")
+
 add_library(
   backend_ocl
   OBJECT
@@ -19,14 +42,21 @@ add_library(
   ocl_buffer.cc
   ocl_program_cache.cc
   ocl_convert.cc
+  ocl_kernel.cc
+  ocl_kernel_factory.cc
+  ocl_source_registry.cc
   ocl_backend.cc
   register_ocl.cc
+  kernels/gather/gather_kernel.cc
+  kernels/add/add_kernel.cc
+  kernels/sample/sample_kernel.cc
 )
 
 target_include_directories(
   backend_ocl PRIVATE
   "${MOBILENET_ROOT}"
   "${CMAKE_CURRENT_SOURCE_DIR}/third_party"
+  "${CMAKE_CURRENT_BINARY_DIR}/generated"
 )
 target_link_libraries(backend_ocl PRIVATE graph)
 

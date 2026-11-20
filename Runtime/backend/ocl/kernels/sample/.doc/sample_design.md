@@ -145,3 +145,10 @@ Sample 是最后一个算子，端到端 Token 直接受其影响。
 ### 6.4 通过标准
 
 Token 100%、性能数据、文档/skill/结果齐全。
+
+## 7. 实现状态（P4.2）
+
+- 已实现 `sample` OCL Kernel：`.cl` + 宿主包装 + `Create<Op>OclKernel`；
+- 主机 Intel Arc 与手机 Mali-G925 的基础数值测试通过（`ocl_contract_test` 48 条 PASS）；
+- 半精度向量路径（如适用）与标量路径均已测试；
+- 性能调优与 vs Mock 性能、端到端 Token 一致性待 P4.5/P4.6。

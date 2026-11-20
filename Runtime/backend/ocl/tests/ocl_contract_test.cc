@@ -1,12 +1,13 @@
-// 模块：OCL 后端契约测试（P4.1）
+// 模块：OCL 后端契约测试（P4.1/P4.2）
 //
 // 职责：
 //   验证 OclContext 设备查询、Backend 生命周期、Buffer 往返、ConvertParam、
-//   Program 缓存（源码编译/二进制复用）与 P4.1 的 CreateKernel 行为。
+//   Program 缓存（源码编译/二进制复用）以及 P4.2 首批 Kernel
+//   （gather/add/sample_argmax）的基础数值行为。
 //
 // 边界：
 //   - 无 OpenCL 设备时返回 77（CTest Skipped），不伪造通过；
-//   - 不测试 8 个算子 Kernel（P4.2 起）；
+//   - 只测试首批 3 个 Kernel；其余算子与 torch/Mock 精度对比在 P4.3–P4.5；
 //   - 不测试性能（P4.5）。
 //
 // 依赖：
@@ -24,6 +25,7 @@
 
 #include "Runtime/backend/backend.h"
 #include "Runtime/backend/backend_registry.h"
+#include "Runtime/backend/kernel_context.h"
 #include "Runtime/backend/ocl/ocl_context.h"
 #include "Runtime/backend/ocl/ocl_convert.h"
 #include "Runtime/backend/ocl/ocl_program_cache.h"
@@ -48,6 +50,13 @@ using mobilenet::ocl::OclContext;
 using mobilenet::ocl::OclDeviceInfo;
 using mobilenet::ocl::OclFunctions;
 using mobilenet::ocl::OclProgramCache;
+using mobilenet::runtime_graph::AttrMap;
+using mobilenet::runtime_graph::KernelContext;
+using mobilenet::runtime_graph::OpType;
+using mobilenet::runtime_graph::Shape;
+using mobilenet::runtime_graph::TensorView;
+using mobilenet::Kernel;
+using mobilenet::KernelDesc;
 
 constexpr int kSkipReturnCode = 77;
 
@@ -105,6 +114,295 @@ void PrintDeviceInfo(const OclDeviceInfo& info) {
             << "\n";
 }
 
+// 构造 Shape。
+Shape MakeShape(const std::vector<I64>& dims) {
+  Shape shape;
+  shape.max_dim = static_cast<I64>(dims.size());
+  for (size_t i = 0; i < dims.size(); ++i) {
+    shape.dims[i] = dims[i];
+    shape.pitch[i] = dims[i];
+  }
+  return shape;
+}
+
+// 计算元素数。
+U64 Elements(const std::vector<I64>& dims) {
+  U64 total = 1;
+  for (const I64 dim : dims) {
+    total *= static_cast<U64>(dim);
+  }
+  return total;
+}
+
+// 创建 OCL 缓冲与视图。
+bool CreateTensor(Backend* backend, const std::vector<I64>& dims,
+                  DataType dtype, std::unique_ptr<Buffer>* buffer,
+                  TensorView* view) {
+  BufferDesc desc;
+  desc.bytes = Elements(dims) * mobilenet::DataTypeSize(dtype);
+  desc.alignment = 64;
+  desc.usage = BufferUsage::kPersistent;
+  if (!backend->CreateBuffer(desc, buffer).ok() || *buffer == nullptr) {
+    return false;
+  }
+  view->data = buffer->get();
+  view->offset = 0;
+  view->bytes = desc.bytes;
+  view->shape = MakeShape(dims);
+  view->dtype = dtype;
+  view->layout = mobilenet::runtime_graph::Layout::kRowMajor;
+  view->device = mobilenet::runtime_graph::DeviceType::kDevice;
+  return true;
+}
+
+// 上传 half 数据。
+void UploadHalves(Backend* backend, Buffer* buffer,
+                  const std::vector<float>& values) {
+  std::vector<U16> host(values.size(), 0);
+  for (size_t i = 0; i < values.size(); ++i) {
+    host[i] = FloatToHalf(values[i]);
+  }
+  (void)backend->Upload(buffer->DevicePtr(), host.data(),
+                        host.size() * sizeof(U16), nullptr);
+}
+
+// 下载 half 数据。
+std::vector<float> DownloadHalves(Backend* backend, Buffer* buffer,
+                                  size_t count) {
+  std::vector<U16> host(count, 0);
+  (void)backend->Download(host.data(), buffer->DevicePtr(),
+                          host.size() * sizeof(U16), nullptr);
+  std::vector<float> values(count, 0.0f);
+  for (size_t i = 0; i < count; ++i) {
+    values[i] = HalfToFloat(host[i]);
+  }
+  return values;
+}
+
+// 上传 int64 数据。
+void UploadInt64(Backend* backend, Buffer* buffer,
+                 const std::vector<I64>& values) {
+  (void)backend->Upload(buffer->DevicePtr(), values.data(),
+                        values.size() * sizeof(I64), nullptr);
+}
+
+// 下载 int64 数据。
+std::vector<I64> DownloadInt64(Backend* backend, Buffer* buffer,
+                               size_t count) {
+  std::vector<I64> values(count, 0);
+  (void)backend->Download(values.data(), buffer->DevicePtr(),
+                          values.size() * sizeof(I64), nullptr);
+  return values;
+}
+
+// 执行一个 OCL Kernel。
+Status RunKernel(Backend* backend, const char* key, OpType op_type,
+                 const std::vector<TensorView>& inputs,
+                 const std::vector<TensorView>& outputs,
+                 const AttrMap& attrs) {
+  KernelDesc desc;
+  desc.op_type = op_type;
+  desc.precision = DataType::kFloat16;
+  desc.kernel_key = key;
+  std::unique_ptr<Kernel> kernel;
+  Status status = backend->CreateKernel(desc, &kernel);
+  if (!status.ok()) {
+    return status;
+  }
+  KernelContext context;
+  context.inputs = inputs.data();
+  context.input_count = static_cast<U32>(inputs.size());
+  context.outputs = const_cast<TensorView*>(outputs.data());
+  context.output_count = static_cast<U32>(outputs.size());
+  context.attrs = &attrs;
+  context.backend = backend;
+  context.batch = 1;
+  context.token_count = 1;
+  context.seq_len = 1;
+  status = kernel->Execute(context);
+  (void)backend->DestroyKernel(std::move(kernel));
+  return status;
+}
+
+// 首批 Kernel 基础数值测试。
+void TestOclKernels(Backend* backend, int* failures) {
+  // Add。
+  {
+    std::unique_ptr<Buffer> a_buffer;
+    std::unique_ptr<Buffer> b_buffer;
+    std::unique_ptr<Buffer> out_buffer;
+    TensorView a;
+    TensorView b;
+    TensorView out;
+    if (CreateTensor(backend, {1, 2, 2}, DataType::kFloat16, &a_buffer,
+                     &a) &&
+        CreateTensor(backend, {1, 2, 2}, DataType::kFloat16, &b_buffer,
+                     &b) &&
+        CreateTensor(backend, {1, 2, 2}, DataType::kFloat16, &out_buffer,
+                     &out)) {
+      UploadHalves(backend, a_buffer.get(), {1.0f, 2.0f, 3.0f, 4.0f});
+      UploadHalves(backend, b_buffer.get(), {10.0f, 20.0f, 30.0f, 40.0f});
+      const Status status =
+          RunKernel(backend, "add", OpType::kAdd, {a, b}, {out}, AttrMap{});
+      Expect(status.ok(), "ocl add executes", failures);
+      (void)backend->Synchronize(nullptr);
+      const std::vector<float> values =
+          DownloadHalves(backend, out_buffer.get(), 4);
+      Expect(values[0] == 11.0f && values[1] == 22.0f &&
+                 values[2] == 33.0f && values[3] == 44.0f,
+             "ocl add values", failures);
+    } else {
+      Expect(false, "ocl add buffers", failures);
+    }
+  }
+
+  // Add（half8 向量路径：16 个元素）。
+  {
+    std::unique_ptr<Buffer> a_buffer;
+    std::unique_ptr<Buffer> b_buffer;
+    std::unique_ptr<Buffer> out_buffer;
+    TensorView a;
+    TensorView b;
+    TensorView out;
+    if (CreateTensor(backend, {1, 1, 16}, DataType::kFloat16, &a_buffer,
+                     &a) &&
+        CreateTensor(backend, {1, 1, 16}, DataType::kFloat16, &b_buffer,
+                     &b) &&
+        CreateTensor(backend, {1, 1, 16}, DataType::kFloat16, &out_buffer,
+                     &out)) {
+      std::vector<float> first(16);
+      std::vector<float> second(16);
+      for (size_t i = 0; i < 16; ++i) {
+        first[i] = static_cast<float>(i + 1);
+        second[i] = static_cast<float>(i + 101);
+      }
+      UploadHalves(backend, a_buffer.get(), first);
+      UploadHalves(backend, b_buffer.get(), second);
+      const Status status =
+          RunKernel(backend, "add", OpType::kAdd, {a, b}, {out}, AttrMap{});
+      Expect(status.ok(), "ocl add vector executes", failures);
+      (void)backend->Synchronize(nullptr);
+      const std::vector<float> values =
+          DownloadHalves(backend, out_buffer.get(), 16);
+      bool ok = true;
+      for (size_t i = 0; i < 16; ++i) {
+        if (values[i] != first[i] + second[i]) {
+          ok = false;
+        }
+      }
+      Expect(ok, "ocl add vector values", failures);
+    } else {
+      Expect(false, "ocl add vector buffers", failures);
+    }
+  }
+
+  // Gather。
+  {
+    std::unique_ptr<Buffer> ids_buffer;
+    std::unique_ptr<Buffer> weight_buffer;
+    std::unique_ptr<Buffer> out_buffer;
+    TensorView ids;
+    TensorView weight;
+    TensorView out;
+    if (CreateTensor(backend, {1, 2}, DataType::kInt64, &ids_buffer,
+                     &ids) &&
+        CreateTensor(backend, {2, 2}, DataType::kFloat16, &weight_buffer,
+                     &weight) &&
+        CreateTensor(backend, {1, 2, 2}, DataType::kFloat16, &out_buffer,
+                     &out)) {
+      UploadInt64(backend, ids_buffer.get(), {0, 1});
+      UploadHalves(backend, weight_buffer.get(), {1.0f, 2.0f, 3.0f, 4.0f});
+      AttrMap attrs;
+      attrs["axis"] = static_cast<I64>(0);
+      const Status status = RunKernel(backend, "gather", OpType::kGather,
+                                      {ids, weight}, {out}, attrs);
+      Expect(status.ok(), "ocl gather executes", failures);
+      (void)backend->Synchronize(nullptr);
+      const std::vector<float> values =
+          DownloadHalves(backend, out_buffer.get(), 4);
+      Expect(values[0] == 1.0f && values[1] == 2.0f &&
+                 values[2] == 3.0f && values[3] == 4.0f,
+             "ocl gather values", failures);
+    } else {
+      Expect(false, "ocl gather buffers", failures);
+    }
+  }
+
+  // Gather（half8 向量路径：hidden=8）。
+  {
+    std::unique_ptr<Buffer> ids_buffer;
+    std::unique_ptr<Buffer> weight_buffer;
+    std::unique_ptr<Buffer> out_buffer;
+    TensorView ids;
+    TensorView weight;
+    TensorView out;
+    if (CreateTensor(backend, {1, 2}, DataType::kInt64, &ids_buffer,
+                     &ids) &&
+        CreateTensor(backend, {2, 8}, DataType::kFloat16, &weight_buffer,
+                     &weight) &&
+        CreateTensor(backend, {1, 2, 8}, DataType::kFloat16, &out_buffer,
+                     &out)) {
+      UploadInt64(backend, ids_buffer.get(), {0, 1});
+      std::vector<float> weights(16);
+      for (size_t i = 0; i < 16; ++i) {
+        weights[i] = static_cast<float>(i + 1);
+      }
+      UploadHalves(backend, weight_buffer.get(), weights);
+      AttrMap attrs;
+      attrs["axis"] = static_cast<I64>(0);
+      const Status status = RunKernel(backend, "gather", OpType::kGather,
+                                      {ids, weight}, {out}, attrs);
+      Expect(status.ok(), "ocl gather vector executes", failures);
+      (void)backend->Synchronize(nullptr);
+      const std::vector<float> values =
+          DownloadHalves(backend, out_buffer.get(), 16);
+      bool ok = true;
+      for (size_t i = 0; i < 16; ++i) {
+        if (values[i] != weights[i]) {
+          ok = false;
+        }
+      }
+      Expect(ok, "ocl gather vector values", failures);
+    } else {
+      Expect(false, "ocl gather vector buffers", failures);
+    }
+  }
+
+  // Sample。
+  {
+    std::unique_ptr<Buffer> logits_buffer;
+    std::unique_ptr<Buffer> out_buffer;
+    TensorView logits;
+    TensorView out;
+    if (CreateTensor(backend, {1, 1, 3}, DataType::kFloat16,
+                     &logits_buffer, &logits) &&
+        CreateTensor(backend, {1, 1}, DataType::kInt64, &out_buffer, &out)) {
+      UploadHalves(backend, logits_buffer.get(), {0.1f, 0.9f, 0.5f});
+      AttrMap attrs;
+      attrs["method"] = std::string("argmax");
+      attrs["axis"] = static_cast<I64>(-1);
+      const Status status = RunKernel(backend, "sample_argmax",
+                                      OpType::kSample, {logits}, {out},
+                                      attrs);
+      Expect(status.ok(), "ocl sample executes", failures);
+      (void)backend->Synchronize(nullptr);
+      const std::vector<I64> values =
+          DownloadInt64(backend, out_buffer.get(), 1);
+      Expect(values[0] == 1, "ocl sample argmax", failures);
+    } else {
+      Expect(false, "ocl sample buffers", failures);
+    }
+  }
+
+  KernelDesc unknown;
+  unknown.precision = DataType::kFloat16;
+  unknown.kernel_key = "__missing__";
+  std::unique_ptr<Kernel> unknown_kernel;
+  Expect(backend->CreateKernel(unknown, &unknown_kernel).code() ==
+             ErrorCode::kUnsupportedOp,
+         "ocl unknown kernel_key rejected", failures);
+}
+
 // 测试 Backend 生命周期、Buffer 与 ConvertParam。
 void TestBackend(int* failures) {
   std::unique_ptr<Backend> backend;
@@ -126,8 +424,8 @@ void TestBackend(int* failures) {
   BackendCapability capability;
   Expect(backend->Capability(&capability).ok(), "ocl Capability",
          failures);
-  Expect(capability.supported_ops.size() == 8, "ocl supports 8 ops",
-         failures);
+  Expect(capability.supported_ops.size() == 3,
+         "ocl supports 3 implemented ops", failures);
   Expect(capability.h2d && capability.d2h, "ocl supports H2D/D2H",
          failures);
   Expect(capability.max_buffer_bytes > 0, "ocl max buffer bytes",
@@ -203,12 +501,7 @@ void TestBackend(int* failures) {
 
   Expect(backend->Synchronize(nullptr).ok(), "Synchronize", failures);
 
-  mobilenet::KernelDesc kernel_desc;
-  kernel_desc.kernel_key = "gather";
-  std::unique_ptr<mobilenet::Kernel> kernel;
-  Expect(backend->CreateKernel(kernel_desc, &kernel).code() ==
-             ErrorCode::kUnsupportedOp,
-         "P4.1 CreateKernel unsupported", failures);
+  TestOclKernels(backend.get(), failures);
 
   Expect(backend->Deinit().ok(), "ocl Deinit", failures);
   Expect(backend->Deinit().ok(), "double Deinit idempotent", failures);

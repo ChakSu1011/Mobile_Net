@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 文档版本 | v0.1 |
-| 文档状态 | 设计完成；P4.1（上下文/Buffer/传输/Program 缓存/Backend 契约）已落地，P4.2 起待继续 |
+| 文档状态 | 设计完成；P4.1 基础设施、P4.2 OclKernel/源码嵌入/分发与 gather/add/sample 首批 Kernel 已落地，P4.3 其余算子待继续 |
 | 编写日期 | 2026-11-20 |
 | 模块 | `Runtime/backend/ocl/` |
 | 权威位置 | `Runtime/backend/ocl/.doc/ocl_design.md` |
@@ -15,11 +15,13 @@
 **文档定位**：本文件是 OCL 后端的权威设计文档，定义 OCL 设备/上下文/队列、Buffer、传输、权重转换、Program 缓存、Kernel 接入框架、8 个融合算子的优化策略、NDK 真机测试与性能验收方法。算子级细节在
 `kernels/<op>/.doc/<op>_design.md` 展开，本文件不重复。
 
-**当前状态**：Mock 后端（P1）已完成并通过契约/执行链测试。P4.1 已落地：
+**当前状态**：Mock 后端（P1）已完成并通过契约/执行链测试。P4.1 已落地
 `OclApi/OclContext/OclBuffer/OclProgramCache/OclBackend/register_ocl`、SHA-256、
-FP32/BF16→FP16 转换、vendored Khronos CL 头；`ocl_contract_test` 在主机 Intel Arc
-与手机 Mali-G925 上均 38 条 PASS。`CreateKernel` 在 P4.1 返回 `kUnsupportedOp`，
-P4.2 起逐算子接入 OclKernel；数值/性能/端到端 Token 一致性仍待 P4.3–P4.6。
+FP32/BF16→FP16 转换、vendored Khronos CL 头。P4.2 已落地 `OclKernel` 基类、
+`.cl` 构建期源码嵌入、`OclKernelFactory` 分发，以及 gather/add/sample_argmax
+三个 Kernel；`ocl_contract_test` 在主机 Intel Arc 与手机 Mali-G925 上均 48 条 PASS。
+当前 `BackendCapability.supported_ops` 只声明这 3 个已实现算子；其余 5 个在
+P4.3 接入后扩展。数值/性能/端到端 Token 一致性仍待 P4.3–P4.6。
 
 ---
 
@@ -35,9 +37,16 @@ P4.2 起逐算子接入 OclKernel；数值/性能/端到端 Token 一致性仍�
   - `BackendRegistry` 自注册、`OpEnvFactory`、`KernelOpEnv`/`IoOpEnv` 执行链；
   - Buffer/ConvertParam/H2D/D2H/错误路径/生命周期；
   - 契约测试 88 条、OpEnv 测试 34 条、公共头检查 46 条全部通过。
-- 真实目标设备已确认（2026-11-20，`adb` 实测）：
+- **当前开发/测试主环境（2026-11-20 起）：本机 Intel Arc GPU**。已实测：
+  `Intel(R) Arc(TM) 130T GPU (16GB)`，OpenCL 3.0 NEO，OpenCL C 1.2，112 CU，
+  2200 MHz，global 17.6 GB，max alloc 4.29 GB，local 64 KB（专用类型），
+  max workgroup 1024，`cl_khr_fp16`、subgroups 可用。后续 P4.2 起的 Kernel
+  回归与性能测试以本机 Intel Arc 为主。
+- **手机 Mali-G925 为参考目标**：2026-11-20 曾用 vivo V2426A 实测通过 P4.1
+  与 P4.2 首批 Kernel；当前手机已断开，Mali 结果保留为历史参考，重连后补测
+  性能与端到端 Token 一致性。
 
-| 项目 | 值 |
+| 项目 | 值（历史/参考，2026-11-20） |
 | --- | --- |
 | 手机 | vivo V2426A（PD2426） |
 | SoC | MediaTek MT6991（Dimensity 9400） |
@@ -295,7 +304,7 @@ class OclBackend final : public Backend {
 - `Upload/Download`：`clEnqueueWriteBuffer/ReadBuffer`，`device_ptr` 为 `OclBuffer::DevicePtr()`
   （`cl_mem` 的 `void*` 表示），首期偏移 0；I/O 与权重均为独立 Buffer。
 - `CreateKernel`：按 `kernel_key` 分发到对应算子模块的 `Create<Op>OclKernel`；
-  P4.1 先返回 `kUnsupportedOp` 占位，P4.2 接入。
+  P4.2 已接入 gather/add/sample_argmax，其余 5 个 key 暂返回 `kUnsupportedOp`。
 - `Synchronize`：`clFinish`；每 Step 一次。
 
 ### 4.2 上下文与设备
@@ -405,9 +414,18 @@ kernels/<op>/
 
 详细设计、workgroup 选择、寄存器分块与实测目标见各算子 `.doc`。
 
-### 4.7 Mali-G925 优化要点
+### 4.7 目标设备优化要点
 
-基于实测能力：
+#### 4.7.1 Intel Arc（当前主环境）
+
+- 设备：Intel Arc 130T（16 GB），112 CU，2200 MHz，local 64 KB（专用），
+  max workgroup 1024，OpenCL 3.0 NEO，OpenCL C 1.2 编译器，`cl_khr_fp16`；
+- local memory 可用，但 Kernel 仍以寄存器分块 + half8 为主；
+- 编译器对 OpenCL C 1.2 语义更严格：不要使用 3.0-only 语法；
+- 主机性能不代表 Mali 手机；Intel 用于正确性回归、相对调优与快速迭代；
+- 同一 Kernel 源码必须在 Intel 与 Mali 都能编译（避免依赖 `cl_arm_*` 专有扩展）。
+
+#### 4.7.2 Mali-G925（参考目标）
 
 1. **Local memory 不可依赖**：`CL_DEVICE_LOCAL_MEM_TYPE=CL_GLOBAL`，32 KB；local 数组实际落在全局内存。
    - 优先用寄存器分块、subgroup 归约、`cl_khr_subgroup_*`；
@@ -486,6 +504,11 @@ svm_capabilities: 1
 `tests/test_results.md` 第 8 节。主机也具备 OpenCL 设备，因此契约测试在主机
 实际执行而非 skip。
 
+**P4.2 结果**：主环境 Intel Arc 上 `ocl_contract_test` 48 条 PASS，覆盖
+gather/add 的标量与 half8 路径、sample argmax、Program 编译/二进制缓存；
+手机 Mali-G925 断开前同样 48 条 PASS，作为历史参考。详见
+`tests/test_results.md` 第 9 节。**当前开发/测试主环境为本机 Intel Arc。**
+
 ---
 
 ## 5. 实施步骤
@@ -496,8 +519,8 @@ svm_capabilities: 1
 | --- | --- | --- |
 | P4.0 | 公共头/构建/NDK 路径/skill 骨架 | OCL 设计文档、CMake 骨架、头文件 |
 | P4.1 ✅ | 上下文/设备/Buffer/传输/Program 缓存 | OclBackend + 契约测试（已落地） |
-| P4.2 | 通用 OclKernel 基类 + kernel 分发 + 源码嵌入 | 可创建 8 个 key |
-| P4.3 | 8 个算子基线 Kernel + 与 Mock 数值对齐 | 每算子 `.doc`/Kernel/测试计划 |
+| P4.2 ✅ | 通用 OclKernel 基类 + kernel 分发 + 源码嵌入 | 已落地；首批 gather/add/sample_argmax 3 个 key |
+| P4.3 | 其余 5 个算子基线 Kernel + 与 Mock 数值对齐 | gather/add/sample 已完成；linear/rms_norm/swiglu/rope/attention 待做 |
 | P4.4 | 逐算子性能优化（寄存器分块/向量化/softmax 等） | 每算子优化记录与 `.skill` |
 | P4.5 | 真机性能测试（vs Mock）与回归 | 每算子 `tests/test_results.md` |
 | P4.6 | 全算子端到端 Token 一致性（OCL vs Mock） | 同一输入 Token 的生成序列对比报告 |
@@ -510,8 +533,8 @@ svm_capabilities: 1
 | OCL-T01 ✅ | `OclContext` + 设备探针 + 错误映射 | 本文件 |
 | OCL-T02 ✅ | `OclBuffer` + CreateBuffer/Upload/Download/ConvertParam | OCL-T01 |
 | OCL-T03 ✅ | `ProgramCache` + 源码嵌入 + 构建日志 | OCL-T01 |
-| OCL-T04 | `OclKernel` 基类 + `OclBackend::CreateKernel` 分发 | OCL-T02/03 |
-| OCL-T05 | gather / add / sample 基线 | OCL-T04 |
+| OCL-T04 ✅ | `OclKernel` 基类 + `OclBackend::CreateKernel` 分发 | OCL-T02/03 |
+| OCL-T05 ✅ | gather / add / sample 基线 | OCL-T04 |
 | OCL-T06 | rms_norm / linear / linear_swi_glu 基线 | OCL-T04 |
 | OCL-T07 | per_head_rmsnorm_rope / mega_attention 基线 | OCL-T04 |
 | OCL-T08 | 逐算子优化 + 与 Mock 性能对比 | OCL-T05/06/07 |

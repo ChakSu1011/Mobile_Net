@@ -160,8 +160,47 @@ P4.1 新增陷阱：
 5. vendored CL 头是 2.1；设备是 3.0；核心 API 兼容；P4.2 需要的 subgroup
    函数可通过扩展字符串/函数指针补充。
 
+## P4.2 已实现的 Kernel 框架与首批算子（2026-11-20）
+
+- `OclKernel`：首次 Execute 前 Prepare（编译 Program、创建 cl_kernel），
+  之后 ExecuteImpl 只绑定参数/下发；提供 SetMemArg/SetIntArg/SetFloatArg/
+  Enqueue1D/ValidateView/ElementOffset；
+- `.cl` 源码由 CMake 在配置期生成 `generated/<Op>_source.h`，避免运行期读文件
+  与手写重复源码；
+- `OclKernelFactory`：kernel_key → Kernel；已接入 gather/add/sample_argmax；
+- 各 Kernel 的 `.cl` + `<op>_kernel.h/.cc` 位于 `kernels/<op>/`；
+- `BackendCapability.supported_ops` 只声明已实现的 3 个 op。
+
+主机（当前主环境）验证：
+
+```bash
+cmake --build Runtime/backend/build
+ctest --test-dir Runtime/backend/build --output-on-failure
+./Runtime/backend/build/ocl_contract_test.exe
+```
+
+实际：Intel Arc 130T，5/5 CTest 通过，`ocl_contract_test` 48 条 PASS；
+add/gather 的标量与 half8 路径、sample argmax 均通过。
+
+P4.2 新增陷阱：
+
+1. **源码嵌入 CMake**：`file(READ)` + `file(WRITE)` 生成 raw string header；
+   源码中不要出现 `)OCLSRC"` 结束标记。
+2. **offset 单位**：KernelContext 的 `TensorView.offset` 是字节；传给 Kernel 前
+   必须转成元素 offset（`ElementOffset`），不要直接传字节。
+3. **half8 路径条件**：元素数、a/b/out offset 均为 8 的倍数时才走向量路径；
+   否则走标量，避免越界/未对齐。
+4. **Sample local size**：`.cl` 固定 `__local` 数组 256，host 必须用 local=256；
+   改 local size 时同步改数组。
+5. **Capability 诚实**：只声明已实现 op；P4.2 为 3 个，不要提前写 8 个。
+6. **Intel OpenCL C 1.2**：主机编译器按 OpenCL C 1.2 报错；不要使用 3.0-only
+   语法；同一源码仍要在 Mali 可编译。
+7. **首次 Execute 编译**：加载期 `CreateKernel` 只创建对象；Program 在首次
+   Execute 的 Prepare 中编译，错误会带 kernel_key；P4.3 可考虑前移到 Init。
+
 ## 当前状态
 
-- P4.1 已落地（主机 + 手机契约测试通过）；
-- P4.2 起：OclKernel 基类、8 个算子 Kernel、数值/性能、端到端 Token 一致性；
+- P4.1 基础设施、P4.2 Kernel 框架与 gather/add/sample 已落地；
+- **当前主测试环境：本机 Intel Arc GPU**；手机 Mali-G925 已断开，历史结果保留；
+- 待继续：其余 5 个算子 Kernel、逐算子 vs Mock/torch 精度、性能、端到端 Token；
 - 本 skill 不得在未实测时声称算子性能达标。

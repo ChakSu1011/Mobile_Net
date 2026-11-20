@@ -16,6 +16,11 @@
 
 #include "Add_source.h"
 #include "Gather_source.h"
+#include "LinearSwiGlu_source.h"
+#include "Linear_source.h"
+#include "MegaAttention_source.h"
+#include "PerHeadRmsNormRope_source.h"
+#include "RmsNorm_source.h"
 #include "Sample_source.h"
 
 namespace mobilenet {
@@ -34,6 +39,21 @@ const C8* GetOclSource(const C8* key) {
   }
   if (name == "sample_argmax") {
     return kSampleSource;
+  }
+  if (name == "rms_norm") {
+    return kRmsNormSource;
+  }
+  if (name == "linear") {
+    return kLinearSource;
+  }
+  if (name == "linear_swi_glu") {
+    return kLinearSwiGluSource;
+  }
+  if (name == "per_head_rmsnorm_rope") {
+    return kPerHeadRmsNormRopeSource;
+  }
+  if (name == "mega_attention") {
+    return kMegaAttentionSource;
   }
   return nullptr;
 }

@@ -31,6 +31,16 @@ mobilenet_embed_ocl_source(
   Add "${CMAKE_CURRENT_SOURCE_DIR}/kernels/add/add.cl")
 mobilenet_embed_ocl_source(
   Sample "${CMAKE_CURRENT_SOURCE_DIR}/kernels/sample/sample.cl")
+mobilenet_embed_ocl_source(
+  RmsNorm "${CMAKE_CURRENT_SOURCE_DIR}/kernels/rms_norm/rms_norm.cl")
+mobilenet_embed_ocl_source(
+  Linear "${CMAKE_CURRENT_SOURCE_DIR}/kernels/linear/linear.cl")
+mobilenet_embed_ocl_source(
+  LinearSwiGlu "${CMAKE_CURRENT_SOURCE_DIR}/kernels/linear_swi_glu/linear_swi_glu.cl")
+mobilenet_embed_ocl_source(
+  PerHeadRmsNormRope "${CMAKE_CURRENT_SOURCE_DIR}/kernels/linear_per_head_rmsnorm_rope/linear_per_head_rmsnorm_rope.cl")
+mobilenet_embed_ocl_source(
+  MegaAttention "${CMAKE_CURRENT_SOURCE_DIR}/kernels/mega_attention/mega_attention.cl")
 
 add_library(
   backend_ocl
@@ -50,6 +60,11 @@ add_library(
   kernels/gather/gather_kernel.cc
   kernels/add/add_kernel.cc
   kernels/sample/sample_kernel.cc
+  kernels/rms_norm/rms_norm_kernel.cc
+  kernels/linear/linear_kernel.cc
+  kernels/linear_swi_glu/linear_swi_glu_kernel.cc
+  kernels/linear_per_head_rmsnorm_rope/linear_per_head_rmsnorm_rope_kernel.cc
+  kernels/mega_attention/mega_attention_kernel.cc
 )
 
 target_include_directories(

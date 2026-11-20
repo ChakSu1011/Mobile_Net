@@ -161,3 +161,9 @@ int m, int hidden, int intermediate
 ### 6.4 通过标准
 
 数值、性能、文档/skill/结果齐全。
+
+## 7. 实现状态（P4.3）
+
+- 已实现 `linear_swi_glu` OCL 基线 Kernel：`.cl` + 宿主包装 + `Create<Op>OclKernel`；
+- 主机 Intel Arc 上经 `ocl_vs_mock_test` 与 Mock 数值对齐通过；
+- 当前为基线实现；性能优化与真实形状误差/端到端 Token 待 P4.5/P4.6。

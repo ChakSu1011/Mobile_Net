@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 文档版本 | v0.1 |
-| 文档状态 | 设计完成；P4.1 基础设施、P4.2 OclKernel/源码嵌入/分发与 gather/add/sample 首批 Kernel 已落地，P4.3 其余算子待继续 |
+| 文档状态 | 设计完成；P4.1 基础设施、P4.2 Kernel 框架、P4.3 全部 8 个基线 Kernel 与 vs Mock 数值对齐已落地，P4.5/P4.6 待继续 |
 | 编写日期 | 2026-11-20 |
 | 模块 | `Runtime/backend/ocl/` |
 | 权威位置 | `Runtime/backend/ocl/.doc/ocl_design.md` |
@@ -18,10 +18,11 @@
 **当前状态**：Mock 后端（P1）已完成并通过契约/执行链测试。P4.1 已落地
 `OclApi/OclContext/OclBuffer/OclProgramCache/OclBackend/register_ocl`、SHA-256、
 FP32/BF16→FP16 转换、vendored Khronos CL 头。P4.2 已落地 `OclKernel` 基类、
-`.cl` 构建期源码嵌入、`OclKernelFactory` 分发，以及 gather/add/sample_argmax
-三个 Kernel；`ocl_contract_test` 在主机 Intel Arc 与手机 Mali-G925 上均 48 条 PASS。
-当前 `BackendCapability.supported_ops` 只声明这 3 个已实现算子；其余 5 个在
-P4.3 接入后扩展。数值/性能/端到端 Token 一致性仍待 P4.3–P4.6。
+`.cl` 构建期源码嵌入、`OclKernelFactory` 分发；P4.3 已接入全部 8 个融合算子
+基线 Kernel，并在主机 Intel Arc 上通过 `ocl_vs_mock_test` 与 Mock 逐算子
+数值对齐（8/8 通过）。`BackendCapability.supported_ops` 已扩展为 8 个。
+当前主测试环境为本机 Intel Arc；手机 Mali-G925 已断开，历史结果保留。
+性能对比与端到端 Token 一致性仍待 P4.5/P4.6。
 
 ---
 
@@ -509,6 +510,11 @@ gather/add 的标量与 half8 路径、sample argmax、Program 编译/二进制�
 手机 Mali-G925 断开前同样 48 条 PASS，作为历史参考。详见
 `tests/test_results.md` 第 9 节。**当前开发/测试主环境为本机 Intel Arc。**
 
+**P4.3 结果**：8 个融合算子的 OCL 基线 Kernel 已全部接入，主环境 Intel Arc 上
+`ocl_vs_mock_test` 8/8 通过（small 形状 max_abs=0、cosine=1；sample token 完全
+一致），`ocl_contract_test` 48 条 PASS，主机 CTest 6/6；Android arm64 交叉编译
+通过但手机已断开未运行。详见 `tests/test_results.md` 第 10 节。
+
 ---
 
 ## 5. 实施步骤
@@ -520,7 +526,7 @@ gather/add 的标量与 half8 路径、sample argmax、Program 编译/二进制�
 | P4.0 | 公共头/构建/NDK 路径/skill 骨架 | OCL 设计文档、CMake 骨架、头文件 |
 | P4.1 ✅ | 上下文/设备/Buffer/传输/Program 缓存 | OclBackend + 契约测试（已落地） |
 | P4.2 ✅ | 通用 OclKernel 基类 + kernel 分发 + 源码嵌入 | 已落地；首批 gather/add/sample_argmax 3 个 key |
-| P4.3 | 其余 5 个算子基线 Kernel + 与 Mock 数值对齐 | gather/add/sample 已完成；linear/rms_norm/swiglu/rope/attention 待做 |
+| P4.3 ✅ | 8 个算子基线 Kernel + 与 Mock 数值对齐 | 全部 8 个 Kernel 已接入；`ocl_vs_mock_test` 8/8 通过 |
 | P4.4 | 逐算子性能优化（寄存器分块/向量化/softmax 等） | 每算子优化记录与 `.skill` |
 | P4.5 | 真机性能测试（vs Mock）与回归 | 每算子 `tests/test_results.md` |
 | P4.6 | 全算子端到端 Token 一致性（OCL vs Mock） | 同一输入 Token 的生成序列对比报告 |
@@ -535,8 +541,8 @@ gather/add 的标量与 half8 路径、sample argmax、Program 编译/二进制�
 | OCL-T03 ✅ | `ProgramCache` + 源码嵌入 + 构建日志 | OCL-T01 |
 | OCL-T04 ✅ | `OclKernel` 基类 + `OclBackend::CreateKernel` 分发 | OCL-T02/03 |
 | OCL-T05 ✅ | gather / add / sample 基线 | OCL-T04 |
-| OCL-T06 | rms_norm / linear / linear_swi_glu 基线 | OCL-T04 |
-| OCL-T07 | per_head_rmsnorm_rope / mega_attention 基线 | OCL-T04 |
+| OCL-T06 ✅ | rms_norm / linear / linear_swi_glu 基线 | OCL-T04 |
+| OCL-T07 ✅ | per_head_rmsnorm_rope / mega_attention 基线 | OCL-T04 |
 | OCL-T08 | 逐算子优化 + 与 Mock 性能对比 | OCL-T05/06/07 |
 | OCL-T09 | 真机测试脚本/结果/skill 收口 | OCL-T08 |
 | OCL-T10 | 全算子端到端 Token 一致性（同一输入 Token，OCL vs Mock） | OCL-T08、P3 Loader/op_runner |

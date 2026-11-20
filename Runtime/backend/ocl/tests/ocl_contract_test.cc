@@ -424,8 +424,8 @@ void TestBackend(int* failures) {
   BackendCapability capability;
   Expect(backend->Capability(&capability).ok(), "ocl Capability",
          failures);
-  Expect(capability.supported_ops.size() == 3,
-         "ocl supports 3 implemented ops", failures);
+  Expect(capability.supported_ops.size() == 8,
+         "ocl supports 8 ops", failures);
   Expect(capability.h2d && capability.d2h, "ocl supports H2D/D2H",
          failures);
   Expect(capability.max_buffer_bytes > 0, "ocl max buffer bytes",

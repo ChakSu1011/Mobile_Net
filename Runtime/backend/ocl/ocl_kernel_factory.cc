@@ -17,6 +17,11 @@
 
 #include "Runtime/backend/ocl/kernels/add/add_kernel.h"
 #include "Runtime/backend/ocl/kernels/gather/gather_kernel.h"
+#include "Runtime/backend/ocl/kernels/linear/linear_kernel.h"
+#include "Runtime/backend/ocl/kernels/linear_per_head_rmsnorm_rope/linear_per_head_rmsnorm_rope_kernel.h"
+#include "Runtime/backend/ocl/kernels/linear_swi_glu/linear_swi_glu_kernel.h"
+#include "Runtime/backend/ocl/kernels/mega_attention/mega_attention_kernel.h"
+#include "Runtime/backend/ocl/kernels/rms_norm/rms_norm_kernel.h"
 #include "Runtime/backend/ocl/kernels/sample/sample_kernel.h"
 
 namespace mobilenet {
@@ -41,10 +46,30 @@ Status CreateOclKernel(const KernelDesc& desc, OclContext* context,
     return CreateSampleOclKernel(context, programs, desc.kernel_key,
                                  kernel);
   }
+  if (desc.kernel_key == "rms_norm") {
+    return CreateRmsNormOclKernel(context, programs, desc.kernel_key,
+                                  kernel);
+  }
+  if (desc.kernel_key == "linear") {
+    return CreateLinearOclKernel(context, programs, desc.kernel_key,
+                                 kernel);
+  }
+  if (desc.kernel_key == "linear_swi_glu") {
+    return CreateLinearSwiGluOclKernel(context, programs, desc.kernel_key,
+                                       kernel);
+  }
+  if (desc.kernel_key == "per_head_rmsnorm_rope") {
+    return CreatePerHeadRmsNormRopeOclKernel(
+        context, programs, desc.kernel_key, kernel);
+  }
+  if (desc.kernel_key == "mega_attention") {
+    return CreateMegaAttentionOclKernel(context, programs, desc.kernel_key,
+                                        kernel);
+  }
   return MakeStatus(ErrorCode::kUnsupportedOp,
                     "[backend=ocl][stage=CreateKernel] kernel_key=" +
                         desc.kernel_key +
-                        ": not implemented in P4.2");
+                        ": not implemented");
 }
 
 }  // namespace ocl

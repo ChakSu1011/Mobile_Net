@@ -43,3 +43,9 @@
 ## 性能数据
 
 待 P4 真机实测后填写：WG、线程/行、归约方式、kernel 时间、Mock 时间、加速比、带宽。
+
+## P4.3 实现状态
+
+- `rms_norm` OCL 基线 Kernel 已实现，并在主机 Intel Arc 上通过 `ocl_vs_mock_test` 与 Mock 数值对齐；
+- 当前为基线；真实形状/多 seed 误差与性能优化待 P4.5；
+- 手机 Mali-G925 已断开，历史结果保留。

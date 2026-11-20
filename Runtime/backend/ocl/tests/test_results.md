@@ -492,3 +492,114 @@ ocl_contract_test：48 条 PASS，exit=0
 - 逐算子 vs Mock/torch 精度、性能、端到端 Token 一致性未执行；
 - Intel 与 Mali 的性能差异、workgroup 调优、half8 之外优化未做；
 - 手机断开，Mali 真机性能/Token 测试暂不可执行。
+
+---
+
+# 10. P4.3 结果（8 个基线 Kernel + OCL vs Mock 数值对齐）
+
+## 10.1 本阶段实现
+
+| 目录 | 内容 |
+| --- | --- |
+| `kernels/rms_norm/` | `rms_norm.cl` + 宿主包装；一行一 WG、FP32 平方和 + local 归约 |
+| `kernels/linear/` | `linear.cl` + 宿主包装；NT GEMM，4×4 输出块/寄存器累加 |
+| `kernels/linear_swi_glu/` | `linear_swi_glu.cl` + 宿主包装；gate/up 双点积 + SiLU epilogue |
+| `kernels/linear_per_head_rmsnorm_rope/` | `linear_per_head_rmsnorm_rope.cl` + 宿主包装；一 (row,head) 一 WG，per-head norm + NeoX RoPE |
+| `kernels/mega_attention/` | `mega_attention.cl` + 宿主包装；causal GQA，一 query 一 work-item，FP32 online softmax |
+| `ocl_source_registry.cc` | 注册 8 个 `.cl` 源码 |
+| `ocl_kernel_factory.cc` | 分发 8 个 kernel_key |
+| `ocl_backend.cc` | `supported_ops` 扩展为 8 个 |
+| `ocl/tests/ocl_vs_mock_test.cc` | 8 个算子 OCL vs Mock 数值对齐 |
+
+## 10.2 主机（Intel Arc，主环境）测试
+
+```bash
+cd d:/Mobile_Net
+cmake --build Runtime/backend/build
+ctest --test-dir Runtime/backend/build --output-on-failure
+./Runtime/backend/build/ocl_vs_mock_test.exe
+```
+
+CTest：
+
+```text
+1/6 backend_header_check ......... Passed
+2/6 backend_contract_test ........ Passed
+3/6 op_env_test .................. Passed
+4/6 ocl_sha256_test .............. Passed
+5/6 ocl_contract_test ............ Passed
+6/6 ocl_vs_mock_test ............. Passed
+
+100% tests passed out of 6
+```
+
+`ocl_contract_test`：48 条 PASS（Backend/Buffer/ConvertParam/ProgramCache/
+gather/add/sample 标量与 half8 路径/未知 key）。
+
+`ocl_vs_mock_test` 实际输出：
+
+```text
+PASS run add
+INFO add max_abs=0 cosine=1
+PASS add matches mock
+PASS run gather
+INFO gather max_abs=0 cosine=1
+PASS gather matches mock
+PASS run rms_norm
+INFO rms_norm max_abs=0 cosine=1
+PASS rms_norm matches mock
+PASS run linear
+INFO linear max_abs=0 cosine=1
+PASS linear matches mock
+PASS run linear_swi_glu
+INFO linear_swi_glu max_abs=0 cosine=1
+PASS linear_swi_glu matches mock
+PASS run per_head_rmsnorm_rope
+INFO per_head_rmsnorm_rope max_abs=0 cosine=1
+PASS per_head_rmsnorm_rope matches mock
+PASS run mega_attention
+INFO mega_attention max_abs=0 cosine=1
+PASS mega_attention matches mock
+PASS run sample_argmax
+PASS sample_argmax token exact
+ALL TESTS PASSED
+```
+
+说明：small 形状下 OCL 与 Mock 的累加顺序恰好一致，因此 `max_abs=0`；
+这只能说明两条实现对同一算法/顺序一致，不能替代真实形状/随机数据的
+统计误差评估（P4.5 用更大形状与多 seed 复测）。
+
+## 10.3 Android 交叉编译
+
+```bash
+NDK=d:/Mobile_Net/Reference/Neat/NEAT_Develop/android-ndk-r17b
+cmake -S Runtime/backend -B Runtime/backend/build-android -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+  -DANDROID_NDK="$NDK" -DANDROID_ABI=arm64-v8a \
+  -DANDROID_PLATFORM=android-24 -DCMAKE_BUILD_TYPE=Release \
+  -DMOBILENET_BACKEND_MOCK=OFF -DMOBILENET_BACKEND_OCL=ON
+cmake --build Runtime/backend/build-android
+```
+
+结果：arm64 交叉编译通过（14/14 目标）；手机已断开，未在 Mali 上运行本阶段。
+Mali 的 P4.2 48 PASS 结果仍为历史参考。
+
+## 10.4 结论
+
+| 检查项 | 结论 |
+| --- | --- |
+| 8 个 OCL Kernel 接入 | 通过（Capability 8 个 op） |
+| gather/add/sample 回归 | 通过 |
+| rms_norm / linear / swi_glu / rope / attention | 通过（vs Mock） |
+| OCL vs Mock 数值对齐 | 8/8 算子通过 |
+| Android arm64 交叉编译 | 通过 |
+| 主机 CTest | 6/6 通过 |
+
+## 10.5 未覆盖项与风险
+
+- 未做真实形状（S=256、H=1024、V=151936）数值与性能；
+- 未做多 seed/随机形状的误差分布；
+- 未做 torch 金标准对比（P4.4/P4.5）；
+- 未做端到端 OCL vs Mock Token 一致性（P4.6）；
+- Intel Arc 的主机性能不代表 Mali；Mali 重连后补测；
+- 当前 linear/attention 为 naive 基线，性能优化尚未开始（P4.5）。

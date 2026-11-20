@@ -191,5 +191,21 @@ if(MOBILENET_BACKEND_BUILD_TESTS)
     add_test(NAME ocl_contract_test COMMAND ocl_contract_test)
     set_tests_properties(ocl_contract_test PROPERTIES
                          SKIP_RETURN_CODE 77)
+
+    if(MOBILENET_BACKEND_MOCK)
+      # 8 个算子 OCL vs Mock 数值对齐（P4.3）。
+      add_executable(ocl_vs_mock_test ocl/tests/ocl_vs_mock_test.cc)
+      target_link_libraries(
+        ocl_vs_mock_test PRIVATE
+        "$<LINK_LIBRARY:WHOLE_ARCHIVE,runtime_backend>")
+      if(MSVC)
+        target_compile_options(ocl_vs_mock_test PRIVATE /W4)
+      else()
+        target_compile_options(ocl_vs_mock_test PRIVATE -Wall -Wextra)
+      endif()
+      add_test(NAME ocl_vs_mock_test COMMAND ocl_vs_mock_test)
+      set_tests_properties(ocl_vs_mock_test PROPERTIES
+                           SKIP_RETURN_CODE 77)
+    endif()
   endif()
 endif()

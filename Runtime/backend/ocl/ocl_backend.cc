@@ -4,7 +4,7 @@
 //   实现设备/上下文/队列、Buffer、传输、权重转换、Program 缓存与同步。
 //
 // 边界：
-//   P4.1 不实现 Kernel；CreateKernel 返回 kUnsupportedOp，P4.2 接入。
+//   P4.3 已接入 8 个融合算子 Kernel；CreateKernel 由 OclKernelFactory 分发。
 //
 // 依赖：
 //   Runtime/backend/ocl/ocl_backend.h、ocl_buffer.h、ocl_convert.h、
@@ -51,10 +51,14 @@ Status OclBackend::Init(const BackendConfig& config) {
   }
 
   capability_.supported_dtypes = {DataType::kFloat16};
-  // P4.2 只接入 gather/add/sample_argmax；其余算子在 P4.3 加入后
-  // 再扩展 supported_ops，禁止提前声明未实现能力。
+  // P4.3 已接入全部 8 个融合算子；Capability 声明与工厂分发一致。
   capability_.supported_ops = {
       runtime_graph::OpType::kGather,
+      runtime_graph::OpType::kRmsNorm,
+      runtime_graph::OpType::kLinear,
+      runtime_graph::OpType::kLinearSwiGlu,
+      runtime_graph::OpType::kLinearPerHeadRMSNormRope,
+      runtime_graph::OpType::kMegaAttention,
       runtime_graph::OpType::kAdd,
       runtime_graph::OpType::kSample,
   };

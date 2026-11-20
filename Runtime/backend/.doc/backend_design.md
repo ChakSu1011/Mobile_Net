@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 文档版本 | v0.1 |
-| 文档状态 | 设计完成；P0 契约与骨架、P1 Mock 后端与 8 个 CPU Kernel、P4.1 OCL 基础设施、P4.2 Kernel 框架与 gather/add/sample 已落地，P2/P3/P4.3–P5 待继续 |
+| 文档状态 | 设计完成；P0 契约与骨架、P1 Mock 后端与 8 个 CPU Kernel、P4.1 OCL 基础设施、P4.2 Kernel 框架、P4.3 全部 8 个 OCL 基线 Kernel 与 vs Mock 对齐已落地，P2/P3/P4.5–P5 待继续 |
 | 编写日期 | 2026-11-17 |
 | 模块 | `Runtime/backend/` |
 | 权威位置 | `Runtime/backend/.doc/backend_design.md` |
@@ -793,10 +793,10 @@ ocl/kernels/<op>.cl             # OCL 源（构建期嵌入）
 OCL 后端设计已完成，见 [`Runtime/backend/ocl/.doc/ocl_design.md`](../ocl/.doc/ocl_design.md)；
 8 个算子的接入框架与优化文档在 `Runtime/backend/ocl/kernels/<op>/.doc/<op>_design.md`，
 每目录同时包含 `.skill/SKILL.md` 与 `tests/test_plan.md`。P4.1 已落地 OclApi/OclContext/
-OclBuffer/OclProgramCache/OclBackend；P4.2 已落地 OclKernel 框架、`.cl` 源码嵌入、
-kernel_key 分发与 gather/add/sample 三个 Kernel。当前 OCL 契约测试在主环境
-Intel Arc 上 48 条 PASS；手机 Mali-G925 已断开，历史结果保留。其余 5 个算子、
-数值/性能与端到端 Token 一致性待 P4.3–P4.6。本文件冻结以下原则：
+OclBuffer/OclProgramCache/OclBackend；P4.2 已落地 OclKernel 框架、`.cl` 源码嵌入与 kernel_key 分发；P4.3 已接入
+全部 8 个 OCL 基线 Kernel，并在主环境 Intel Arc 上通过 `ocl_vs_mock_test`
+与 Mock 逐算子数值对齐（8/8）。手机 Mali-G925 已断开，历史结果保留。
+真实形状性能与端到端 Token 一致性待 P4.5–P4.6。本文件冻结以下原则：
 
 1. **动态加载**：`OpenCL.dll`/`libOpenCL.so` 通过 `LoadLibrary/dlopen` 加载，函数指针表由本后端维护；
    公共头不出现 `cl_*`。构建期可切换为直接链接（`MOBILENET_OCL_STATIC`）。

@@ -198,9 +198,54 @@ P4.2 新增陷阱：
 7. **首次 Execute 编译**：加载期 `CreateKernel` 只创建对象；Program 在首次
    Execute 的 Prepare 中编译，错误会带 kernel_key；P4.3 可考虑前移到 Init。
 
+## P4.3 已实现的 8 个基线 Kernel（2026-11-20）
+
+已接入全部 8 个融合算子（Capability 8 个 op）：
+
+| Kernel | 基线策略 | 备注 |
+| --- | --- | --- |
+| gather | 一 token 一 WG；half8/标量 | P4.2 已实现 |
+| add | half8/标量 | P4.2 已实现 |
+| sample_argmax | 一行一 WG；local 归约 | P4.2 已实现 |
+| rms_norm | 一行一 WG；FP32 平方和 + local 归约 | P4.3 |
+| linear | NT GEMM，4×4 输出块，FP32 累加 | P4.3 |
+| linear_swi_glu | 一输出一 work-item；gate/up 双点积 + SiLU | P4.3 |
+| per_head_rmsnorm_rope | 一 (row,head) 一 WG；per-head norm + NeoX RoPE | P4.3 |
+| mega_attention | 一 query 一 work-item；causal GQA + online softmax | P4.3 |
+
+主机 Intel Arc 结果：
+
+```bash
+cmake --build Runtime/backend/build
+ctest --test-dir Runtime/backend/build --output-on-failure
+./Runtime/backend/build/ocl_vs_mock_test.exe
+```
+
+- CTest 6/6 通过；
+- `ocl_contract_test` 48 PASS；
+- `ocl_vs_mock_test` 8/8 通过，small 形状下 max_abs=0、cosine=1，
+  sample token 完全一致；
+- Android arm64 交叉编译通过，但手机已断开，未做 Mali 运行。
+
+P4.3 新增陷阱：
+
+1. **small 形状 max_abs=0 不代表真实形状也零误差**：两条实现恰好同序；
+   P4.5 要用真实形状/多 seed 做统计误差与性能。
+2. **linear 4×4 tile 的越界**：`tiles_n/tiles_m`、`row<m`/`col<n` 必须保护；
+   全局 work-item 可能超过 tile 数。
+3. **per_head 的 head 归约**：D≤128；local 数组 128；`lane<head_dim` 才计算，
+   但所有 lane 都要参与 barrier。
+4. **attention 的 private `acc[128]`**：D≤128；真实 S=256 时该基线很慢，
+   P4.5 必须改成分块 online softmax。
+5. **rope 的 position 是 token position_ids**，不是行号；必须读 positions buffer。
+6. **Sample 的 local size 固定 256**，与 `.cl` 中 `__local[256]` 一致。
+7. **Capability 8 个 op** 必须与 factory 分发一致；新增算子同步两处。
+
 ## 当前状态
 
-- P4.1 基础设施、P4.2 Kernel 框架与 gather/add/sample 已落地；
+- P4.1 基础设施、P4.2 Kernel 框架、P4.3 全部 8 个基线 Kernel 与 vs Mock
+  数值对齐已落地（主机 Intel Arc 6/6 CTest，`ocl_vs_mock_test` 8/8）；
 - **当前主测试环境：本机 Intel Arc GPU**；手机 Mali-G925 已断开，历史结果保留；
-- 待继续：其余 5 个算子 Kernel、逐算子 vs Mock/torch 精度、性能、端到端 Token；
+- 待继续：真实形状/多 seed 精度、torch 金标准、逐算子性能 vs Mock（P4.5）、
+  端到端 OCL vs Mock Token 一致性（P4.6）；
 - 本 skill 不得在未实测时声称算子性能达标。

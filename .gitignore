@@ -12,6 +12,7 @@ Graph/build/
 Runtime/build/
 Runtime/backend/build/
 Runtime/backend/build-android/
+mobilenet_ocl_cache/
 ToolChain/*.log
 
 # Python 缓存

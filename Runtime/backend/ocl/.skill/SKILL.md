@@ -117,7 +117,51 @@ MSYS_NO_PATHCONV=1 "$ADB" push <binary> /data/local/tmp/<binary>
 MSYS_NO_PATHCONV=1 "$ADB" shell "chmod 755 /data/local/tmp/<binary> && /data/local/tmp/<binary>"
 ```
 
+## P4.1 已实现的基础设施（2026-11-20）
+
+- `OclApi`：dlopen/LoadLibrary 动态加载；主机 Intel Arc（OpenCL 3.0）与手机
+  Mali-G925 均通过；
+- `OclContext`：平台/GPU 选择、Context/Queue（profiling）、设备信息查询；
+- `OclBuffer`：`cl_mem` 封装；`Storage.data_ptr=OclBuffer*`；
+- `OclProgramCache`：SHA-256 键、源码编译、二进制磁盘缓存、build log；
+- `OclBackend`：Init/Deinit/Capability/CreateBuffer/DestroyBuffer/ConvertParam/
+  Upload/Download/Synchronize；`CreateKernel` 在 P4.1 返回 `kUnsupportedOp`；
+- `ocl_contract_test`：主机 38 PASS、手机 38 PASS；`ocl_sha256_test` 4 PASS。
+
+P4.1 实测命令：
+
+```bash
+# 主机
+cmake --build Runtime/backend/build --clean-first
+ctest --test-dir Runtime/backend/build --output-on-failure
+
+# Android（r17b）
+cmake -S Runtime/backend -B Runtime/backend/build-android -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE=<NDK>/build/cmake/android.toolchain.cmake \
+  -DANDROID_NDK=<NDK> -DANDROID_ABI=arm64-v8a \
+  -DANDROID_PLATFORM=android-24 -DMOBILENET_BACKEND_MOCK=OFF \
+  -DMOBILENET_BACKEND_OCL=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build Runtime/backend/build-android
+MSYS_NO_PATHCONV=1 adb push Runtime/backend/build-android/ocl_contract_test \
+  /data/local/tmp/ocl_contract_test
+MSYS_NO_PATHCONV=1 adb shell \
+  "chmod 755 /data/local/tmp/ocl_contract_test && /data/local/tmp/ocl_contract_test"
+```
+
+P4.1 新增陷阱：
+
+1. **SHA-256 是右旋（ROTR）**：不要写成左旋；否则所有向量失败。
+2. `clBuildProgram`/`clCreateProgramWithBinary` 需要 `cl_device_id` 的地址；
+   先把 `context_->device()` 存入本地变量，不能对返回值取地址。
+3. 本机存在 Intel Arc OpenCL 3.0，主机 OCL 测试可实际执行；不要条件反射地
+   把所有失败当 skip。
+4. `min_alignment` 取设备 base alignment（Mali 128 B），不是 MemoryPlan 的 256；
+   Loader 只需验证 256 是其倍数。
+5. vendored CL 头是 2.1；设备是 3.0；核心 API 兼容；P4.2 需要的 subgroup
+   函数可通过扩展字符串/函数指针补充。
+
 ## 当前状态
 
-- 设计已完成；代码/真机数值/性能与端到端 Token 一致性待 P4 执行后补充；
-- 本 skill 不得在未实测时声称性能达标。
+- P4.1 已落地（主机 + 手机契约测试通过）；
+- P4.2 起：OclKernel 基类、8 个算子 Kernel、数值/性能、端到端 Token 一致性；
+- 本 skill 不得在未实测时声称算子性能达标。

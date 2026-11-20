@@ -3,7 +3,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 文档版本 | v0.1 |
-| 文档状态 | 设计完成；代码/测试/skill 待 P4 落地 |
+| 文档状态 | 设计完成；P4.1（上下文/Buffer/传输/Program 缓存/Backend 契约）已落地，P4.2 起待继续 |
 | 编写日期 | 2026-11-20 |
 | 模块 | `Runtime/backend/ocl/` |
 | 权威位置 | `Runtime/backend/ocl/.doc/ocl_design.md` |
@@ -15,7 +15,11 @@
 **文档定位**：本文件是 OCL 后端的权威设计文档，定义 OCL 设备/上下文/队列、Buffer、传输、权重转换、Program 缓存、Kernel 接入框架、8 个融合算子的优化策略、NDK 真机测试与性能验收方法。算子级细节在
 `kernels/<op>/.doc/<op>_design.md` 展开，本文件不重复。
 
-**当前状态**：Mock 后端（P1）已完成并通过契约/执行链测试；OCL 后端尚无实现。本文件先冻结 OCL 设计、逐算子接入框架与优化方法；代码、测试结果与 skill 在 P4 按四件套补齐。
+**当前状态**：Mock 后端（P1）已完成并通过契约/执行链测试。P4.1 已落地：
+`OclApi/OclContext/OclBuffer/OclProgramCache/OclBackend/register_ocl`、SHA-256、
+FP32/BF16→FP16 转换、vendored Khronos CL 头；`ocl_contract_test` 在主机 Intel Arc
+与手机 Mali-G925 上均 38 条 PASS。`CreateKernel` 在 P4.1 返回 `kUnsupportedOp`，
+P4.2 起逐算子接入 OclKernel；数值/性能/端到端 Token 一致性仍待 P4.3–P4.6。
 
 ---
 
@@ -87,7 +91,7 @@
 | --- | --- | --- |
 | FR-OCL-01 | `OclBackend` 完整实现 `Backend` 全部纯虚接口，注册名 `"ocl"` | 契约测试通过；`BackendRegistry::Create("ocl")` 成功 |
 | FR-OCL-02 | 动态加载 `libOpenCL.so`，不使用链接期 OpenCL 依赖 | 未安装 OpenCL 时返回 `kBackendInitError`；设备上探针可用 |
-| FR-OCL-03 | Capability 声明 FP16、8 个融合 op、H2D/D2H、`max_buffer_bytes`、`min_alignment=256`、`attention_block_size=16`、`kNhd` | Loader 能力校验通过 |
+| FR-OCL-03 | Capability 声明 FP16、8 个融合 op、H2D/D2H、`max_buffer_bytes`、`min_alignment=device base alignment（Mali 128 B）`、`attention_block_size=16`、`kNhd` | Loader 能力校验通过 |
 | FR-OCL-04 | Buffer 以 `OclBuffer` 封装 `cl_mem`；`Storage.data_ptr=Buffer*`，`offset` 为字节偏移 | Kernel 按句柄+偏移寻址；Arena 子分配正确 |
 | FR-OCL-05 | ConvertParam 支持 FP16 直通、FP32/BF16→FP16 主机转换、后端私有权重打包 | 权重逐元素对齐；Kernel 读到正确布局 |
 | FR-OCL-06 | Program 按源码 SHA-256 + 选项 + 驱动版本缓存；支持源码编译与二进制复用 | 二次加载不重复编译；编译失败返回 `kKernelError` 并落 build log |
@@ -206,7 +210,7 @@ Runtime/backend/ocl/
 Loader → BackendRegistry::Create("ocl") → OclBackend::Init
   → dlopen libOpenCL.so → clGetPlatformIDs → clGetDeviceIDs (GPU)
   → clCreateContext → clCreateCommandQueue (单队列)
-  → Capability 填充（FP16、8 op、H2D/D2H、max_buffer_bytes、min_alignment=256、block=16）
+  → Capability 填充（FP16、8 op、H2D/D2H、max_buffer_bytes、min_alignment=device base alignment（Mali 128 B）、block=16）
   → ConvertParam(权重): 主机 dtype 转换/打包 → clCreateBuffer → clEnqueueWriteBuffer
   → CreateBuffer(arena/I/O) → 返回 OclBuffer
   → OpEnvFactory → KernelOpEnv::Init → OclBackend::CreateKernel(kernel_key)
@@ -284,13 +288,14 @@ class OclBackend final : public Backend {
   `clCreateContext`/`clCreateCommandQueue(CL_QUEUE_PROFILING_ENABLE)`；全有或全无。
 - `Deinit`：释放 Program 缓存、Kernel 残留、Queue、Context；幂等。
 - `Capability`：FP16、8 op、H2D/D2H、`max_buffer_bytes=CL_DEVICE_MAX_MEM_ALLOC_SIZE`、
-  `min_alignment=256`、`attention_block_size=16`、`kNhd`。
+  `min_alignment=device base alignment（Mali 128 B）`、`attention_block_size=16`、`kNhd`。
 - `CreateBuffer`：`clCreateBuffer(CL_MEM_READ_WRITE, bytes)`；`bytes=0`/超限/对齐不满足返回错误。
 - `ConvertParam`：FP16 直通；FP32/BF16→FP16 主机转换；按 kernel 需要做私有打包；
   创建 `OclBuffer` 并 `clEnqueueWriteBuffer`。
 - `Upload/Download`：`clEnqueueWriteBuffer/ReadBuffer`，`device_ptr` 为 `OclBuffer::DevicePtr()`
   （`cl_mem` 的 `void*` 表示），首期偏移 0；I/O 与权重均为独立 Buffer。
-- `CreateKernel`：按 `kernel_key` 分发到对应算子模块的 `Create<Op>OclKernel`。
+- `CreateKernel`：按 `kernel_key` 分发到对应算子模块的 `Create<Op>OclKernel`；
+  P4.1 先返回 `kUnsupportedOp` 占位，P4.2 接入。
 - `Synchronize`：`clFinish`；每 Step 一次。
 
 ### 4.2 上下文与设备
@@ -476,6 +481,11 @@ svm_capabilities: 1
 
 （完整输出见 `tests/test_results.md` 与 `TempSpace/ocl_probe_20261120_212351/`。）
 
+**P4.1 契约测试结果**：主机（Intel Arc OpenCL 3.0）与手机（Mali-G925）各
+`ocl_contract_test` 38 条 PASS；`ocl_sha256_test` 4 条 PASS。详细命令与输出见
+`tests/test_results.md` 第 8 节。主机也具备 OpenCL 设备，因此契约测试在主机
+实际执行而非 skip。
+
 ---
 
 ## 5. 实施步骤
@@ -485,7 +495,7 @@ svm_capabilities: 1
 | 阶段 | 内容 | 交付 |
 | --- | --- | --- |
 | P4.0 | 公共头/构建/NDK 路径/skill 骨架 | OCL 设计文档、CMake 骨架、头文件 |
-| P4.1 | 上下文/设备/Buffer/传输/Program 缓存 | OclBackend + 契约测试 |
+| P4.1 ✅ | 上下文/设备/Buffer/传输/Program 缓存 | OclBackend + 契约测试（已落地） |
 | P4.2 | 通用 OclKernel 基类 + kernel 分发 + 源码嵌入 | 可创建 8 个 key |
 | P4.3 | 8 个算子基线 Kernel + 与 Mock 数值对齐 | 每算子 `.doc`/Kernel/测试计划 |
 | P4.4 | 逐算子性能优化（寄存器分块/向量化/softmax 等） | 每算子优化记录与 `.skill` |
@@ -497,9 +507,9 @@ svm_capabilities: 1
 
 | 编号 | 任务 | 依赖 |
 | --- | --- | --- |
-| OCL-T01 | `OclContext` + 设备探针 + 错误映射 | 本文件 |
-| OCL-T02 | `OclBuffer` + CreateBuffer/Upload/Download/ConvertParam | OCL-T01 |
-| OCL-T03 | `ProgramCache` + 源码嵌入 + 构建日志 | OCL-T01 |
+| OCL-T01 ✅ | `OclContext` + 设备探针 + 错误映射 | 本文件 |
+| OCL-T02 ✅ | `OclBuffer` + CreateBuffer/Upload/Download/ConvertParam | OCL-T01 |
+| OCL-T03 ✅ | `ProgramCache` + 源码嵌入 + 构建日志 | OCL-T01 |
 | OCL-T04 | `OclKernel` 基类 + `OclBackend::CreateKernel` 分发 | OCL-T02/03 |
 | OCL-T05 | gather / add / sample 基线 | OCL-T04 |
 | OCL-T06 | rms_norm / linear / linear_swi_glu 基线 | OCL-T04 |

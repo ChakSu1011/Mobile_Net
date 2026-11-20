@@ -36,6 +36,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(MOBILENET_BACKEND_BUILD_TESTS "Build backend tests" ON)
 option(MOBILENET_BACKEND_MOCK "Build the mock CPU backend" ON)
+option(MOBILENET_BACKEND_OCL "Build the OpenCL backend" ON)
 
 # 非 MSVC 工具链的归档器覆盖。
 #
@@ -68,9 +69,12 @@ if(NOT TARGET graph)
                    "${CMAKE_BINARY_DIR}/graph")
 endif()
 
-# Mock 后端以 object library 编入，防止静态注册被链接器裁剪。
+# 后端以 object library 编入，防止静态注册被链接器裁剪。
 if(MOBILENET_BACKEND_MOCK)
   add_subdirectory(mock)
+endif()
+if(MOBILENET_BACKEND_OCL)
+  add_subdirectory(ocl)
 endif()
 
 # Backend 框架静态库：公共契约 + 注册表 + 执行型 OpEnv + 算子规格与 Kernel。
@@ -102,9 +106,16 @@ add_library(
 if(MOBILENET_BACKEND_MOCK)
   target_sources(runtime_backend PRIVATE $<TARGET_OBJECTS:backend_mock>)
 endif()
+if(MOBILENET_BACKEND_OCL)
+  target_sources(runtime_backend PRIVATE $<TARGET_OBJECTS:backend_ocl>)
+endif()
 
 target_include_directories(runtime_backend PUBLIC "${MOBILENET_ROOT}")
 target_link_libraries(runtime_backend PUBLIC graph)
+if(MOBILENET_BACKEND_OCL AND UNIX)
+  # OclApi 使用 dlopen/dlsym；Android/Linux 需要 libdl。
+  target_link_libraries(runtime_backend PUBLIC dl)
+endif()
 
 if(MSVC)
   target_compile_options(runtime_backend PRIVATE /W4)
@@ -151,5 +162,34 @@ if(MOBILENET_BACKEND_BUILD_TESTS)
       target_compile_options(op_env_test PRIVATE -Wall -Wextra)
     endif()
     add_test(NAME op_env_test COMMAND op_env_test)
+  endif()
+
+  if(MOBILENET_BACKEND_OCL)
+    # SHA-256 主机测试：无需 OpenCL 设备。
+    add_executable(ocl_sha256_test ocl/tests/ocl_sha256_test.cc)
+    target_link_libraries(ocl_sha256_test PRIVATE runtime_backend)
+    if(MSVC)
+      target_compile_options(ocl_sha256_test PRIVATE /W4)
+    else()
+      target_compile_options(ocl_sha256_test PRIVATE -Wall -Wextra)
+    endif()
+    add_test(NAME ocl_sha256_test COMMAND ocl_sha256_test)
+
+    # OCL 契约测试：无设备时返回 77，CTest 记为 Skipped。
+    add_executable(ocl_contract_test ocl/tests/ocl_contract_test.cc)
+    target_include_directories(
+      ocl_contract_test PRIVATE
+      "${CMAKE_CURRENT_SOURCE_DIR}/ocl/third_party")
+    target_link_libraries(
+      ocl_contract_test PRIVATE
+      "$<LINK_LIBRARY:WHOLE_ARCHIVE,runtime_backend>")
+    if(MSVC)
+      target_compile_options(ocl_contract_test PRIVATE /W4)
+    else()
+      target_compile_options(ocl_contract_test PRIVATE -Wall -Wextra)
+    endif()
+    add_test(NAME ocl_contract_test COMMAND ocl_contract_test)
+    set_tests_properties(ocl_contract_test PROPERTIES
+                         SKIP_RETURN_CODE 77)
   endif()
 endif()

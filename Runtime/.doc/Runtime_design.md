@@ -2,10 +2,10 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | v0.5 |
-| 文档状态 | 架构设计（Runtime Mock 全链路已实现） |
-| 编写日期 | 2026-11-20 |
-| 变更摘要 | v0.5：Loader/Scheduler/KVCache/Executor/Destroy 实现完成；Mock 后端 Qwen3-0.6B 单步前向与 PyTorch token 对齐；新增 `recompute_attention` 模式；v0.4：`sequence.h` 请求/响应模型；v0.3：Engine→Executor→Backend 所有权 |
+| 文档版本 | v0.6 |
+| 文档状态 | 架构设计（阶段一 KV 推理契约已冻结，Paged Attention 待实现） |
+| 编写日期 | 2026-11-21 |
+| 变更摘要 | v0.6：阶段一 KV 推理契约：Paged Attention、混合 batch 元数据、recompute 抢占；`KvLayerView` 设备句柄改为 `Buffer*`；新增 `kv_layer_index` 图属性；v0.5：Loader/Scheduler/KVCache/Executor/Destroy 实现完成；Mock 后端 Qwen3-0.6B 单步前向与 PyTorch token 对齐；新增 `recompute_attention` 模式；v0.4：`sequence.h` 请求/响应模型；v0.3：Engine→Executor→Backend 所有权 |
 | 模块 | `Runtime/` |
 | 权威位置 | `Runtime/.doc/Runtime_design.md` |
 | 上游文档 | [`.doc/MobileNet_design.md`](../../.doc/MobileNet_design.md)、[`Graph/.doc/Graph_design.md`](../../Graph/.doc/Graph_design.md) |
@@ -14,9 +14,9 @@
 
 **文档定位**：本文件是 Runtime 模块的权威架构文档，定义分层、Engine 组合方式、模块统一接口、调用关系、交互数据对象、所有权与生命周期。子模块文档只展开算法与实现细节；跨模块契约以本文件为准。
 
-**本阶段交付范围**：本文件、全部接口头文件与 Engine 实现（见
-`Runtime/engine/.doc/engine_design.md`）；请求/响应对象迁移到 `sequence.h`
-后的 Loader/Scheduler/KVCache/Executor 实现与测试按 R0–R4 补齐。
+**本阶段交付范围**：阶段一 KV 推理契约（本文件 v0.6）、Runtime 全模块实现与
+Paged Attention 的 Mock/OCL 双后端；请求/响应模型、调度、KV 管理、执行器与
+Engine 的接口以本文件为准。Paged Attention 的实现细节见 Backend/OCL 子文档。
 
 ---
 
@@ -37,14 +37,15 @@ Runtime 目前只有 `common/`、`backend/backend.h`（含 `backend/kernel.h`）
 5. 定义 Runtime 对外（阶段二 Service 层）的稳定 API。
 6. 沉淀 vLLM v1 / SGLang 的可迁移技术，并明确 MobileNet 的取舍。
 7. 交付可编译检查的接口头文件（仅声明），为后续实现与并行开发提供唯一契约。
+8. 阶段一支持带调度的 KV 推理：Continuous Batching、chunked prefill、Paged Attention（OCL/Mock）与 OOM 时的 recompute 抢占，且图包与 Backend 的 KV 契约一致。
 
 ### 1.3 非目标
 
-- 不实现任何模块的 `.cc` 内部逻辑（本阶段只冻结接口）。
-- 不定义 Kernel 数学实现、OCL 调优、Attention 算法（ExecBackend 文档）。
+- 不定义 Kernel 数学实现与 OCL 调优参数（见 `Runtime/backend/ocl/.doc/ocl_design.md`）。
 - 不定义模型转换、图优化、序列化格式（ToolChain 文档）。
 - 不实现阶段二 Service 与阶段三功能（投机解码、异步调度、HiCache、多类型 KV），只冻结扩展点。
-- 不做性能调优与真机基准。
+- 阶段一只实现 full attention 的 Paged KV；前缀缓存/COW、sliding window、MLA/Mamba 不在范围内。
+- 不做性能调优与真机基准；阶段一 paged kernel 以正确性 baseline 为准。
 
 ---
 
@@ -69,6 +70,13 @@ Runtime 目前只有 `common/`、`backend/backend.h`（含 `backend/kernel.h`）
 | R-ARCH-13 | 阶段三扩展点预留：投机解码、异步调度、HiCache、多类型 KV | 字段/接口存在且不破坏现有实现 | TC-ARCH-02 |
 | R-ARCH-14 | 请求/响应对象统一在 `Runtime/common/sequence.h` 定义：Request/Response/RequestStatus/SampleParams/Token/Sequence；原 `request.h` 同义对象迁移 | 无重复定义；Scheduler 与 Service 只使用 sequence.h 类型 | TC-ARCH-06 |
 | R-ARCH-15 | Service→Engine→Scheduler 管理请求与响应：`Merge(Request)`、`Update(Token)→Response`、`Stop/Fail→Response`；Response 经 Engine 回调给 Service | 请求状态与 Response 一致；终态 KV 释放；流式回调顺序正确 | TC-ENG-01、TC-SCHED-02 |
+| R-ARCH-16 | Paged Attention：attention op 在 `use_kv_cache=true` 时按块表读取 KV 池，块大小来自 `BackendCapability.attention_block_size`，KV 布局为 NHD | 与全量 attention 数值一致；块表/slot 越界被拒绝 | TC-PA-01、TC-PA-02 |
+| R-ARCH-17 | Attention 元数据：每步由 Executor 装配 `seq_lens/query_lens/context_lens/positions/request_indices/block_table/slots`，一次上传到设备缓冲，经 `AttentionMetadataView` 传给 Kernel | 混合 batch 下元数据逐 token 正确；每步只有一次 H2D | TC-EXEC-01、TC-PA-01 |
+| R-ARCH-18 | 混合 batch：同一 `ExecutionPlan` 可同时包含 prefill chunk 与 decode；Kernel 不依赖全局 `is_prefill` | mixed 计划输出与分开执行一致 | TC-PA-03 |
+| R-ARCH-19 | 抢占：KV Reserve 失败时按确定规则释放 victim 的 KV 并重算其完整历史，`StepStats.preempted_requests` 反映实际次数 | OOM 后请求全部完成；无死锁/重复释放 | TC-SCHED-03 |
+| R-ARCH-20 | KV 图包：`use_kv_cache=true` 且每个 attention op 带 `kv_layer_index`；保留 `use_kv_cache=false` 的 prefill 包用于回归 | 两套包均可加载；属性缺失被拒绝 | TC-LOAD-02 |
+| R-ARCH-21 | 阶段一验收：4 个不同长度请求并发、chunked prefill、混合 batch、OOM 抢占均与 PyTorch 金标准逐 token 一致 | 见 2.4 AC-07～AC-10 | TC-E2E-02 |
+| R-ARCH-22 | 加载期一致性：`recompute_attention` 与图中 attention op 的 `use_kv_cache` 属性必须匹配，否则 Load 失败 | 两种错配均返回 `kInvalidArgument` | TC-LOAD-02 |
 
 ### 2.2 非功能需求
 
@@ -105,6 +113,10 @@ Runtime 目前只有 `common/`、`backend/backend.h`（含 `backend/kernel.h`）
 | AC-04 | 后续阶段：Qwen3 包加载成功，IR 哈希与 manifest 一致 |
 | AC-05 | 后续阶段：单请求贪心 64 Token 与金标准一致率 ≥95% |
 | AC-06 | 后续阶段：100 次 Load/Destroy 无泄漏；四个模块四件套齐全 |
+| AC-07 | 4 个不同长度请求并发执行，每请求输出 token 与 PyTorch golden 逐 token 一致 |
+| AC-08 | chunked prefill、decode、混合 batch 均走 `mega_attention_paged`，与 Mock 全量 attention 数值在阈值内一致 |
+| AC-09 | 小 KV 预算下触发抢占后全部请求完成，无崩溃、无重复释放，`preempted_requests > 0` |
+| AC-10 | 不出现 Qwen3 层数/头数/block size 硬编码；全部来自 manifest 与 `BackendCapability` |
 
 ---
 
@@ -241,6 +253,28 @@ Engine.RunOnce
        └─ 终态：Scheduler 通过 KvAllocator::Release 释放 KV
   → response.status 为终态时 ResponseCallback(response)
   → StepStats
+```
+
+**单步推理（KV 模式，阶段一）**
+
+```text
+Engine.RunOnce
+  → scheduler_->Schedule(&plan)
+      ├─ Waiting/ChunkedPrefill/Recompute：Reserve + GetBlockTable/GetSlots
+      │    entry.context_length = 已计算 token 数
+      │    entry.token_count    = 本 chunk 长度
+      └─ Running：Reserve(1) + GetBlockTable/GetSlots，token_count=1
+  → kv_cache_->BuildView(&kv_view)
+  → executor_->Execute(plan, kv_view, &step_result)
+      ├─ 校验 slots/块表覆盖范围
+      ├─ 装配元数据并一次 Upload 到设备缓冲
+      ├─ StepContext.attention_meta = 7 个数组的 TensorView
+      └─ 逐 op Forward
+           → KernelOpEnv 按 kv_layer_index 选层，填 AttentionContext
+           → mega_attention_paged：
+                paged_kv_store → mega_attention_paged → out
+  → 逐请求 scheduler_->Update(id, tokens, &response)
+  → ResponseCallback / StepStats
 ```
 
 **请求生命周期**
@@ -641,6 +675,31 @@ struct StepStats {
 
 不变量：`total_tokens == Σ entry.token_count ≤ max_num_tokens`；`entry.slots.size() == token_count`；`output_slot` 仅在产生 token 时有效。`Token` 来自 `sequence.h`；`plan.h` 依赖 `sequence.h`。`PlanEntry.draft_token_ids` 仍为执行期 draft ID 列表，`Sequence.draft_token` 为请求级当前 draft。
 
+KV 模式的字段语义：
+
+| 字段 | 语义 |
+| --- | --- |
+| `context_length` | 本步前该请求已写入 KV 的 token 数（prompt + generated） |
+| `token_count` | 本步 query token 数：prefill chunk 长度或 decode 的 1 |
+| `block_table` | 本步快照；长度必须覆盖 `ceil((context_length+token_count)/block_size)` |
+| `slots` | 长度等于 `token_count`；每个 token 一个扁平 slot（`block_id×block_size+offset`） |
+| `is_chunk` | 只表示 prefill 未完成，不参与 attention mask 判断 |
+| `phase` | 用于统计与调度，Kernel 不依赖它 |
+
+Executor 由 plan 推导 attention 元数据：
+
+```text
+seq_lens[r]        = context_length + token_count
+query_lens[r]      = token_count
+context_lens[r]    = context_length
+request_indices[t] = entry 的 batch 下标
+positions[t]       = entry.positions[i]
+slots[t]           = entry.slots[i]
+block_table[r][b]  = entry.block_table[b]，不足 stride 补 0
+```
+
+同一 `ExecutionPlan` 可混合 prefill chunk 与 decode；禁止用单一全局 `is_prefill` 表达整步阶段。
+
 #### 4.1.5 KV 契约 `kv_allocator.h` / `kv_view.h`
 
 ```cpp
@@ -668,8 +727,15 @@ struct KvCacheSpec {
   int32_t sliding_window = 0;  // full attention 为 0
 };
 
-struct KvLayerView { void* k_base = nullptr; void* v_base = nullptr;
-                     int64_t block_stride = 0; };
+struct KvLayerView {
+  void* k_buffer = nullptr;   // Buffer*，不是 Buffer::DevicePtr()
+  void* v_buffer = nullptr;   // Buffer*
+  int64_t block_stride = 0;   // 单块单边字节数
+  int64_t num_blocks = 0;
+  int32_t num_kv_heads = 0;
+  int32_t head_dim = 0;
+  DataType dtype = DataType::kUnknown;
+};
 struct KvCacheView {
   std::vector<KvLayerView> layers;
   int32_t block_size = 0;
@@ -681,6 +747,16 @@ struct KvCacheStats {
   int64_t total_blocks = 0, free_blocks = 0, max_total_tokens = 0;
 };
 ```
+
+KV 视图约定（阶段一）：
+
+- `KvLayerView.k_buffer/v_buffer` 与 `TensorView.data` 同约定：设备侧为
+  `Buffer*`，不是 `Buffer::DevicePtr()`；Kernel 按后端类型转换；
+- 布局固定为 NHD、块主序：
+  `offset = block_id × block_stride + token_in_block × num_kv_heads × head_dim × dtype_size + kv_head × head_dim × dtype_size`；
+- slot 公式：`slot = block_id × block_size + offset_in_block`，直接作为扁平 token 下标；
+- 视图由 `IKVCache::BuildView` 生成，在 `ResourceStack::Clear` 前有效；
+- `KVCache::Init` 校验 `BackendCapability.kv_layout == KvLayout::kNhd`，非 NHD 返回 `kUnsupportedOp`。
 
 #### 4.1.6 其他公共契约
 
@@ -751,6 +827,7 @@ struct SchedulerConfig {
   int64_t context_length = 0;
   std::vector<int64_t> stop_ids;
   bool recompute_attention = false; // true: 每步提交完整历史，不分配 KV
+  int32_t max_preemptions_per_step = 4; // KV 模式单步抢占上限
 };
 
 struct SchedulerStats {
@@ -791,6 +868,13 @@ std::unique_ptr<IScheduler> CreateDefaultScheduler();
 - `recompute_attention=true` 时（Mock 等无 KV 后端）：Scheduler 每步提交
   完整历史 token/positions，`output_slot` 为最后位置，不调用
   `KvAllocator::Reserve`；`false` 时走 chunked prefill + decode 的 KV 模式。
+- KV 模式 Reserve 失败时执行 recompute 抢占：按“`priority` 数值大优先、
+  其次 `context_length` 大、最后 `request_id` 大”选择 victim，释放其 KV、
+  将 `computed_tokens` 归零并置 `kRecompute`；下一步按完整历史重算。
+  单步最多抢占 `max_preemptions_per_step` 个；无可抢占对象时返回
+  `kDeviceOom`。
+- 加载期必须校验 `recompute_attention` 与图中 attention op 的
+  `use_kv_cache` 属性一致（见 R-ARCH-22）。
 - `Response*` 不允许为空；调用方（Engine）提供栈上对象，Scheduler 填充。
 - 实现必须保证 `Merge/Stop/HasRequests` 可被调用方线程与推理线程并发调用
   （内部加锁）；`Schedule/Update/Fail/Stats` 由推理线程调用。
@@ -830,6 +914,15 @@ std::unique_ptr<IExecutor> CreateDefaultExecutor();
 ```
 
 说明：Executor 是 Backend 的唯一所有者；`Deinit` 负责 `Backend::Deinit` 并释放；OpEnv/KVCache 只借用 Backend。`Init` 失败时必须释放已接管的 Backend，不得把半初始化资源留给 Engine。`StepResult` 中的 token 为 `sequence.h` 的 `Token`；Executor 只负责本步 token/logits，不构建 `Response`，`Response` 由 Scheduler 生成。
+
+KV 模式下 Executor 额外承担：
+
+- 由 `ExecutionPlan` 推导 `seq_lens/query_lens/context_lens/positions/request_indices/block_table/slots`；
+- 维护一个 Executor 私有的高水位元数据 Buffer，按需增长；steady-state 不逐步分配；
+- 每步只做一次 H2D（一个连续元数据缓冲）；
+- 在 `StepContext.attention_meta` 中提供 7 个 `TensorView`，Mock 与 OCL 消费同一契约；
+- 校验 `slots.size()==token_count`、块表覆盖 `ceil(seq_lens/block_size)`、packed 区间不重叠；
+- 不再使用全局 `is_prefill`；混合 batch 由每个 entry 的 `query_lens/context_lens` 表达。
 
 #### 4.2.5 `IDestroyer`（`Runtime/destroy/destroyer.h`）
 
@@ -930,6 +1023,60 @@ class Kernel {
   virtual Status Execute(const runtime_graph::KernelContext& context) = 0;
 };
 ```
+
+#### 4.3.1 Attention 执行上下文与元数据视图
+
+```cpp
+// Runtime/backend/kernel_context.h
+struct AttentionMetadataView {
+  TensorView seq_lens;         // I32[batch]：本步结束后总 KV 长度
+  TensorView query_lens;       // I32[batch]：本步 query token 数
+  TensorView context_lens;     // I32[batch]：本步前已有 KV 长度
+  TensorView request_indices;  // I32[token_count]：token → batch 行
+  TensorView positions;        // I32[token_count]：绝对位置
+  TensorView slots;            // I64[token_count]：KV 写入 slot
+  TensorView block_table;      // I32[batch * block_table_stride]
+  int32_t block_table_stride = 0;
+};
+
+struct AttentionContext {
+  int32_t batch = 0;
+  int32_t token_count = 0;
+  int32_t kv_block_size = 0;
+  int32_t layer_index = -1;    // 对应 KvCacheView.layers 下标
+  const runtime::KvCacheView* kv = nullptr;
+  AttentionMetadataView meta;
+};
+```
+
+约定：
+
+1. 元数据数组由 Executor 每步装配，位于同一设备缓冲的不同 offset；
+   `TensorView.offset` 是缓冲内字节偏移，Kernel 必须把 offset 作为显式参数
+   传入（`OclKernel::SetMemArg` 不使用 `view.offset`）。
+2. Mock 与 OCL 消费同一组 `TensorView`；Mock 后端可把元数据缓冲实现为主机
+   内存，但 `TensorView.device` 仍按 `kDevice` + `Buffer*` 约定填写。
+3. `batch/token_count` 是有效上限；数组长度不得小于对应值。
+4. `block_table` 的物理块 ID 用 `I32`；`slots` 用 `I64`；KV 池内偏移在
+   Kernel 中用 64 位运算。
+5. 删除旧字段 `AttentionContext.is_prefill` 与 `StepContext.seq_lens`；
+   阶段一所有 Kernel 只依赖 `AttentionMetadataView`。
+
+#### 4.3.2 Attention Kernel 契约
+
+| `use_kv_cache` | kernel_key | 语义 |
+| --- | --- | --- |
+| `false` | `mega_attention` | q/k/v 为完整序列，全量 causal（现有实现） |
+| `true` | `mega_attention_paged` | q/k/v 只含本步 token；先写 KV 池，再按块表读历史 KV |
+
+`use_kv_cache=true` 时 attention op 必须带 `kv_layer_index`：
+非负整数，且 `< KvCacheView.layers.size()`。OpSpec 在加载期校验；
+`KernelOpEnv` 用它选择 `KvLayerView`。禁止按拓扑序推断层号。
+
+`mega_attention_paged` 在一次 `Kernel::Execute` 内顺序下发两个 kernel
+（同队列保序）：`paged_kv_store` 写入本步 K/V，`mega_attention_paged`
+按块表与 causal 位置计算输出。详细签名与算法见
+`Runtime/backend/ocl/kernels/mega_attention/.doc/mega_attention_design.md`。
 
 ### 4.4 Graph 接口边界
 
@@ -1091,7 +1238,9 @@ Engine 对外接口与模块统一接口的对应关系：
 | `Request` | Service | Engine → IScheduler | 值 | Merge 后由 Scheduler 持有 |
 | `SampleParams` | Service | Request/Response | 值 | 请求生命周期 |
 | `ExecutionPlan` | IScheduler | IExecutor/Engine | 值（不可变快照） | 单步 |
-| `KvCacheView` | IKVCache | Engine → IExecutor | 值（裸指针视图） | 单步 |
+| `KvCacheView` | IKVCache | Engine → IExecutor | 值（`Buffer*` 视图） | 单步 |
+| `AttentionMetadataView` | IExecutor | OpEnv → Kernel | 值（7 个 `TensorView`） | 单步 |
+| 元数据设备缓冲 | IExecutor | OCL/Mock Kernel | `Buffer*` + offset | Executor 生命周期 |
 | `StepResult` | IExecutor | Engine/IScheduler | 值（含 `Token`） | 单步 |
 | `Token` | IExecutor | IScheduler | 值 | 单步 |
 | `Sequence` | IScheduler | IScheduler/Response | 值快照 | 请求生命周期 |
@@ -1243,6 +1392,11 @@ cmake --build Runtime/build
 | TC-ROBUST-01 | 设备错误、Forward 失败、绑定缺失 | 不崩溃；可定位；可回收 |
 | TC-COMPAT-01 | mock 后端接入 | 只加目录 + 配置；上层零改动 |
 | TC-E2E-MOCK-01 | Mock 后端加载 Qwen3-0.6B，执行单步完整序列前向，比较 argmax token 与 PyTorch | Token 与参考一致；无崩溃/泄漏 |
+| TC-PA-01 | Paged vs 全量 attention：S=1/8/16/17/40/256、decode context=1..256、非 block 整数倍、非连续块表 | max_abs ≤ 3e-2、relative_l2 ≤ 1e-2、cosine ≥ 0.999 |
+| TC-PA-02 | Paged 边界：块表越界、slot 越界、layer_index 越界、KV 视图与 attr 不一致 | 返回明确错误码；不崩溃 |
+| TC-PA-03 | 混合 batch：2 个 prefill chunk + 2 个 decode 同一步 | 与分开执行逐 token 一致 |
+| TC-E2E-02 | 4 并发（prompt 1/5/17/33）、chunked prefill、OOM 抢占 | 每请求 token 与 PyTorch golden 一致；抢占后全部完成 |
+| TC-LOAD-02 | KV 包/预填包加载；`recompute_attention` 与 `use_kv_cache` 四种组合 | 匹配组合成功；错配返回 `kInvalidArgument` |
 
 环境：Windows 11 / Linux 主机，C++17，CMake 3.20+，MockBackend；真机 Android + OCL 用于 R4/R5。测试结果写入各模块 `tests/test_results.md` 与 `Runtime/tests/test_results.md`。
 
@@ -1295,6 +1449,8 @@ cmake --build Runtime/build
 | C7 | 错误码只接受 `Runtime/common/status.h` 的追加式扩展 |
 | C8 | 构建分工：RuntimeCore 维护 `Runtime/CMakeLists.txt`；ExecBackend 提供 executor/backend（含 backend/kernel）子构建 |
 | C9 | `BackendCapability.attention_block_size` 与 `kv_layout` 由 Attention Kernel 声明；KVCache 据此计算块大小与容量 |
+| C10 | `KvLayerView` 的设备句柄改为 `Buffer*` + `num_blocks/num_kv_heads/head_dim/dtype`；`KvCacheView` 不携带布局枚举，阶段一固定 NHD，由 KVCache 校验 |
+| C11 | Attention 元数据以 `AttentionMetadataView` 的 7 个 `TensorView` 传递；`StepContext` 删除 `seq_lens`/`is_prefill`；Kernel 显式接收数组 offset |
 
 **与 ToolChain（G1–G2）**
 
@@ -1302,6 +1458,8 @@ cmake --build Runtime/build
 | --- | --- |
 | G1 | Graph 暴露 C++ `DumpIr`，Python 绑定复用同一实现 |
 | G2 | 图格式语义冻结：`graph.ops` 创建顺序、`<op>.out[.<i>]` 命名、Input/Output 重建、常量 `data_ptr=0` |
+| G3 | KV 图属性：attention op 的 `use_kv_cache` 与 `kv_layer_index` 由模型构建器显式写入；`kv_layer_index` 必须覆盖 `0..num_layers-1` 且与层号一致 |
+| G4 | KV 模型包：新增 `use_kv_cache=true` 的包（如 `qwen3_0_6b_kv`）；保留 `use_kv_cache=false` 的包用于 prefill 回归；两包 K/V 输入形状均只含本步 token |
 
 ## 附录 C：术语
 

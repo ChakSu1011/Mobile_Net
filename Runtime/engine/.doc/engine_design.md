@@ -137,6 +137,7 @@ Load(config)
   → 校验 ResourceStack 为空
   → loader_->Load(...)
   → graph_ = std::move(result.graph)
+  → CheckAttentionMode(graph_, runtime.recompute_attention)  // 图/Runtime 模式一致性
   → BuildSchedulerConfig / Backend::Capability / BuildKvCacheSpec / ComputeKvBudget
   → kv_cache_->Init(backend)
   → scheduler_->Init(kv_cache, model)
@@ -212,6 +213,18 @@ std::atomic<ErrorCode> fatal_code_;
 
 ### 4.2 配置推导
 
+**图模式一致性**
+
+`CheckAttentionMode` 扫描 `graph_->GetOrderlyOPList()` 中全部
+`kMegaAttention` op，读取 `use_kv_cache`：
+
+- 任一为 `true` 且 `runtime.recompute_attention == true` → `kInvalidArgument`；
+- 全部为 `false` 且 `runtime.recompute_attention == false` → `kInvalidArgument`；
+- 图中没有 attention op → 不限制（单算子/测试图）；
+- 错误消息说明“图属性与 RuntimeConfig 不匹配”，并给出首个不一致 op 名。
+
+该检查在 `KVCache::Init` 之前执行，避免错误模式分配 KV 或产生错误计划。
+
 **SchedulerConfig**
 
 - `max_num_tokens = runtime.max_num_tokens > 0 ? runtime : model`；
@@ -219,12 +232,15 @@ std::atomic<ErrorCode> fatal_code_;
 - `max_concurrent_requests = runtime > 0 ? runtime : min(max_num_tokens, 8)`；
 - `max_prefill_chunk = max_num_tokens`；
 - `context_length = model.context_length`；
-- `stop_ids = model.stop_token_ids`。
+- `stop_ids = model.stop_token_ids`；
+- `max_preemptions_per_step = 4`（阶段一默认值，后续可由 RuntimeConfig 覆盖）。
 
 **KvCacheSpec**
 
 - `block_size = runtime.kv_block_size > 0 ? runtime : capability.attention_block_size`；
 - 两者均非正返回 `kInvalidArgument`；
+- `runtime.kv_block_size` 与 `capability.attention_block_size` 不一致时返回
+  `kInvalidArgument`（块大小必须与后端 Attention tile 一致）；
 - 类型 FullAttention；层数/KV 头数/头维度/精度来自 ModelConfig。
 
 **KV 预算**
@@ -317,6 +333,8 @@ std::atomic<ErrorCode> fatal_code_;
 | TC-ENG-04 | AddRequest → RunOnce → ResponseCallback | Response.status/current_token/generated_count 正确；统计更新 |
 | TC-ENG-05 | threaded Start/回调/RunUntilIdle/Destroy | 线程正常退出；回调一次 |
 | TC-ENG-06 | Destroy 幂等 | 重复调用安全 |
+| TC-ENG-07 | 图模式一致性：KV 图 + recompute=true、prefill 图 + recompute=false、匹配组合 | 错配返回 `kInvalidArgument`；匹配可加载 |
+| TC-ENG-08 | `runtime.kv_block_size` 与 Capability 不一致 | `kInvalidArgument`，不分配 KV |
 
 ### 6.3 测试环境
 

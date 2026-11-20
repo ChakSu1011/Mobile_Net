@@ -2,9 +2,9 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | v0.1 |
-| 文档状态 | 设计完成；P0 契约与骨架、P1 Mock 后端与 8 个 CPU Kernel、P4.1 OCL 基础设施、P4.2 Kernel 框架、P4.3 全部 8 个 OCL 基线 Kernel 与 vs Mock 对齐已落地，P2/P3/P4.5–P5 待继续 |
-| 编写日期 | 2026-11-17 |
+| 文档版本 | v0.2 |
+| 文档状态 | 设计完成；P0 契约与骨架、P1 Mock 后端与 8 个 CPU Kernel、P4.1 OCL 基础设施、P4.2 Kernel 框架、P4.3 全部 8 个 OCL 基线 Kernel 与 vs Mock 对齐已落地；v0.2 增加阶段一 Paged Attention ABI 与 Attention 元数据契约，P4.8 待实现 |
+| 编写日期 | 2026-11-21 |
 | 模块 | `Runtime/backend/` |
 | 权威位置 | `Runtime/backend/.doc/backend_design.md` |
 | 上游文档 | [`.doc/MobileNet_design.md`](../../../.doc/MobileNet_design.md) 第 4.4 节；[`Runtime/.doc/Runtime_design.md`](../../.doc/Runtime_design.md) 第 4.3、4.4、4.6、4.7 节与附录 B |
@@ -60,6 +60,7 @@
 | G-BE-06 | 明确测试流水线中可省略与不可省略的环节，给出快速路径与验收路径的边界 |
 | G-BE-07 | 定义错误映射、内存/带宽约束、日志与可观测性，保证加载期失败可定位到 op/常量 |
 | G-BE-08 | 给出 P0–P5 实施步骤、依赖、风险与测试通过标准 |
+| G-BE-09 | 定义阶段一 Paged Attention 的 Kernel ABI：KV 池视图、Attention 元数据视图、两段式下发与 64 位池偏移 |
 
 ### 1.3 非目标
 
@@ -68,6 +69,7 @@
 - 不实现 Loader/Engine/Scheduler/KVCache/Destroy 的内部算法（RuntimeCore 负责）。
 - 不定义 Qwen3 之外的新融合算子；新增算子按第 4.4.4 节流程扩展。
 - 不做量化 Kernel、投机解码、异步多队列、HiCache（只保留扩展点）。
+- 阶段一只实现 full attention 的 NHD Paged KV；前缀共享/COW、sliding window、MLA/Mamba 不做。
 - 不在本文件展开 OCL 具体 Kernel 的调优参数与真机微基准（见 `ocl_design.md` 与各算子文档）。
 - 不修改 Graph/ToolChain 的生产代码；测试所需的合成图构造与 torch 参考放在测试侧。
 
@@ -94,6 +96,11 @@
 | FR-BE-13 | 错误映射：设备/编译/缓冲/OOM/不支持算子映射到 `Runtime/common/status.h` 错误码；消息带 backend/stage/op | 错误码可断言；日志可定位 | TC-BE-10 |
 | FR-BE-14 | 销毁与回滚：Kernel/Buffer 释放顺序正确；Backend 比 OpEnv/Kernel 活得更久 | 100 次 Load/Destroy 无句柄泄漏；重复 Deinit 安全 | TC-BE-11 |
 | FR-BE-15 | 可观测性：缓冲字节统计、Kernel 编译/执行失败信息、Per-op 测试指标（max_abs、relative_l2、cosine） | 测试报告可机器解析 | TC-BE-05 |
+| FR-BE-16 | `AttentionMetadataView` 提供 7 个 `TensorView`（seq_lens/query_lens/context_lens/request_indices/positions/slots/block_table）与 `block_table_stride` | Mock 与 OCL 消费同一契约；数组 offset 显式传入 | TC-BE-03、TC-BE-05 |
+| FR-BE-17 | `KvLayerView` 输出 `Buffer*`、`block_stride/num_blocks/num_kv_heads/head_dim/dtype`；阶段一固定 NHD | 视图字段与 KVCache 实际布局一致 | TC-BE-03 |
+| FR-BE-18 | `use_kv_cache=true` 时 OpSpec 选择 `mega_attention_paged`；`false` 保持现有 `mega_attention` | 两种 kernel_key 均可创建；未知 key 返回 `kUnsupportedOp` | TC-BE-03 |
+| FR-BE-19 | Mock 后端提供 paged attention CPU 参考实现，用于与 OCL 交叉验证 | 与全量 attention 阈值内一致 | TC-BE-05、TC-BE-09 |
+| FR-BE-20 | KV 池内偏移用 64 位、元数据数组偏移用 32 位；越界在加载期或执行前拒绝 | 大 KV 池不溢出；越界错误可定位 | TC-BE-03 |
 
 ### 2.2 非功能需求
 
@@ -118,6 +125,11 @@
 | C-BE-06 | `Kernel` 公共接口只有 `Execute(const runtime_graph::KernelContext&)`；加载期准备在 `CreateKernel` 内部完成，不扩展公共契约 |
 | C-BE-07 | `KernelDesc.op_type`、`BackendCapability.supported_ops` 统一使用 `runtime_graph::OpType`；图侧精度/布局/设备使用 `runtime_graph::{Precision,Layout,DeviceType}` |
 | C-BE-08 | 跨终端接口变更必须先改 `Runtime/.doc/Runtime_design.md` 与附录 B，双方确认后再改代码 |
+| C-BE-09 | `use_kv_cache=true` 时 K/V 输入只含本步 token；历史 KV 从 `KvCacheView` 读取，二者不得混用 |
+| C-BE-10 | KV 布局阶段一固定 NHD、块主序；`block_size` 必须等于 `BackendCapability.attention_block_size` |
+| C-BE-11 | 元数据由 Executor 每步一次上传；OpEnv/Kernel 不得在 `Execute` 内分配或上传元数据 |
+| C-BE-12 | KV 池偏移使用 64 位运算；元数据数组偏移使用 32 位；Kernel 必须显式接收 offset 参数 |
+| C-BE-13 | `kv_layer_index` 必须由模型构建器写入；禁止按 attention op 的拓扑序推断层号 |
 
 ### 2.4 验收标准
 
@@ -130,6 +142,9 @@
 | AC-BE-05 | 误差阈值：见 6.3.6；`sample` 的 argmax Token 100% 一致 |
 | AC-BE-06 | 100 次 Load/Destroy 无 Buffer/Kernel 句柄泄漏；重复 `Deinit` 安全 |
 | AC-BE-07 | OCL 后端在参考机上跑通 8 个算子测试；主机无设备时明确跳过并记录风险 |
+| AC-BE-08 | Paged attention 与全量 attention 在相同输入下 max_abs ≤ 3e-2、relative_l2 ≤ 1e-2、cosine ≥ 0.999 |
+| AC-BE-09 | chunked prefill、decode、混合 batch 的元数据逐 token 正确；块表/slot/layer index 越界均被拒绝 |
+| AC-BE-10 | Mock 与 OCL 的 paged attention 使用同一份 `AttentionMetadataView`，交叉验证 token 一致 |
 
 ---
 
@@ -413,7 +428,7 @@ class Buffer {
 | 权重常量 | 该常量专属 `Buffer*` | 0 | 后端私有句柄 | Kernel |
 | Activation | arena `Buffer*` | MemoryPlan 字节偏移 | arena 句柄 | Kernel |
 | 图输入/输出 | 专用 `Buffer*` | 0 | 专用句柄 | IoOpEnv/Kernel |
-| KV Cache | `Buffer*`（经 `KvCacheView.layers[i].k_base/v_base`） | 由 slot 计算 | KV 块句柄 | Attention Kernel |
+| KV Cache | `Buffer*`（经 `KvCacheView.layers[i].k_buffer/v_buffer`） | 由 slot 计算 | KV 块句柄 | Attention Kernel |
 | Workspace | workspace `Buffer*` | 0 或计划偏移 | 句柄 | 需要 workspace 的 Kernel |
 
 规则：
@@ -541,18 +556,26 @@ struct TensorView {
   DeviceType device = DeviceType::kUnknown;
 };
 
-// Attention 本步元数据；v1 只用 batch/token/seq，KV 字段为阶段二预留。
+// Attention 本步元数据；数组由 Executor 每步装配，位于同一元数据缓冲。
+struct AttentionMetadataView {
+  TensorView seq_lens;         // I32[batch]：本步结束后总 KV 长度
+  TensorView query_lens;       // I32[batch]：本步 query token 数
+  TensorView context_lens;     // I32[batch]：本步前已有 KV 长度
+  TensorView request_indices;  // I32[token_count]：token → batch 行
+  TensorView positions;        // I32[token_count]：绝对位置
+  TensorView slots;            // I64[token_count]：KV 写入 slot
+  TensorView block_table;      // I32[batch * block_table_stride]
+  int32_t block_table_stride = 0;
+};
+
+// Attention 本步上下文；阶段一只使用 batch/token_count/kv_layer_index/meta。
 struct AttentionContext {
   int32_t batch = 0;
   int32_t token_count = 0;
-  const int32_t* seq_lens = nullptr;      // 每 batch 行有效 token 数
-  const int32_t* block_table = nullptr;   // 每请求物理块表（预留）
-  int32_t block_table_stride = 0;
-  const int64_t* slots = nullptr;         // KV 写入 slot（预留）
-  int32_t slot_count = 0;
   int32_t kv_block_size = 0;
+  int32_t layer_index = -1;   // 对应 KvCacheView.layers 下标
   const runtime::KvCacheView* kv = nullptr;  // 非拥有，可为空
-  bool is_prefill = true;
+  AttentionMetadataView meta;
 };
 
 // 单节点执行上下文。
@@ -590,6 +613,14 @@ struct KernelContext {
 7. `packed_tokens=true` 表示本步张量行按 packed token 紧凑排布（KernelOpEnv 在生产执行时设置）；
    Kernel 可在 `batch==1` 时据此把有效行数截断到 `token_count`；直接调用 Kernel 的测试/基准保持
    `false`，按静态 shape 全量计算。
+8. `AttentionMetadataView` 的每个 `TensorView` 使用与普通张量相同的约定：设备侧
+   `data=Buffer*`、`offset` 为字节偏移；数组位于同一元数据缓冲的不同 offset。
+9. `OclKernel::SetMemArg` 不使用 `TensorView.offset`，因此 paged Kernel 必须把
+   每个元数据数组的 offset 作为显式 `int` 参数传入；KV 池内偏移用 64 位。
+10. `block_table` 的物理块 ID 为 `I32`，未使用的尾部补 0；Kernel 只读到
+    `ceil(seq_lens[r]/kv_block_size)`。`slots` 长度必须等于 `token_count`。
+11. `batch` 可大于 1，`packed_tokens` 截断只适用于 `batch==1` 的现有全量算子；
+    paged attention 逐 token 读取 `request_indices`，不依赖该截断。
 
 #### 4.2.3 StepContext 与动态数据注入
 
@@ -605,11 +636,10 @@ struct StepContext {
   Stream* stream = nullptr;
   const runtime::ExecutionPlan* plan = nullptr;      // 可为空
   const runtime::KvCacheView* kv_view = nullptr;     // 可为空
-  const int32_t* seq_lens = nullptr;                 // 可为空
+  AttentionMetadataView attention_meta;              // KV 模式必填
   int32_t batch = 1;
   int32_t packed_tokens = 0;
   TensorView workspace;                              // 可为空
-  bool is_prefill = true;
 };
 
 class ExecOpEnv : public runtime_graph::OpEnv {
@@ -631,6 +661,12 @@ Status SetStepContext(runtime_graph::OpEnv* env, const StepContext* context);
   工厂创建，因此该转换在本模块内是封闭的。
 - Executor 在 `Execute` 开始时设置、结束时清空；测试驱动同样。
 - 该扩展不改变 `Graph::OpEnv` 与 `Runtime_design.md` 的公开契约；属于 ExecBackend 内部约定。
+- `attention_meta` 由 Executor 在每步装配：7 个 `TensorView` 指向同一元数据
+  缓冲；Mock 与 OCL 消费同一契约。单算子测试可直接填 `kHost` 视图。
+- 删除旧字段 `seq_lens`/`is_prefill`；`seq_lens` 改由
+  `attention_meta.seq_lens` 表达，阶段信息由 `PlanEntry.phase` 表达。
+- `KernelOpEnv::Forward` 仅在 `kMegaAttention` 节点填充 `AttentionContext`；
+  非 attention 节点 `attention=nullptr`。
 
 #### 4.2.4 Kernel 生命周期
 
@@ -693,6 +729,12 @@ class KernelOpEnv final : public ExecOpEnv {
 1. 校验 `step_context_` 非空；未设置返回 `kStateError`。
 2. 复制缓存的 `TensorView`（不修改缓存本身）。
 3. 从 StepContext/Plan 填充 `AttentionContext`、`SamplingParams`、`batch/token_count/seq_len`。
+   `kMegaAttention` 节点额外：
+   - 读取 `use_kv_cache`；为 `true` 时要求 `kv_layer_index` 存在且小于
+     `kv_view->layers.size()`，把对应 `KvLayerView` 与 `attention_meta` 填入；
+   - 校验 `kv_block_size` 等于 `KvLayerView.block_stride` 对应的块大小、
+     `num_kv_heads/head_dim/dtype` 与 attr 一致；
+   - `use_kv_cache=false` 时不要求 `kv_layer_index`，`meta` 可为空。
 4. 构造 `KernelContext`，调用 `kernel_->Execute(ctx)`；失败用 `PrefixStatus` 加 op 名。
 5. 不 Save/Kernel 不得修改 TensorView。
 
@@ -751,7 +793,8 @@ Status GetStringAttr(const runtime_graph::Op& op, const char* name, std::string*
 | `kLinear` | x `[1,S,K]` fp16；W `[N,K]` fp16 | `[1,S,N]` | `in_features, out_features, transpose_weight=true` | `y=x·Wᵀ`，FP32 累加 | `x @ W.T` |
 | `kLinearSwiGlu` | x `[1,S,H]`；gate/up `[I,H]` | `[1,S,I]` | `intermediate_size, activation=silu` | `silu(x·gateᵀ)*(x·upᵀ)` | 同式 |
 | `kLinearPerHeadRMSNormRope` | x `[1,S,H]`；W `[N,H]`；norm `[D]`；pos `[1,S]` int64 | `[1,S,N]` | `num_heads, head_dim, norm_eps, rope_theta, rope_layout=neox, transpose_weight` | GEMM → reshape `[B,S,heads,D]` → per-head RMSNorm → RoPE(neox) | 同式（rotate_half） |
-| `kMegaAttention` | q `[1,S,heads·D]`；k/v `[1,S,kv_heads·D]` | `[1,S,heads·D]` | `num_heads, num_kv_heads, head_dim, causal, softmax_scale, merge_heads, has_output_projection=false, use_kv_cache=false`；`gqa_ratio` 可选，若提供必须等于 `num_heads/num_kv_heads` | GQA repeat、causal mask、online softmax、FP32 累加 | `softmax(QKᵀ·scale+mask)V` |
+| `kMegaAttention`（`use_kv_cache=false`） | q `[1,S,heads·D]`；k/v `[1,S,kv_heads·D]` | `[1,S,heads·D]` | `num_heads, num_kv_heads, head_dim, causal, softmax_scale, merge_heads, has_output_projection=false, use_kv_cache=false`；`gqa_ratio` 可选，若提供必须等于 `num_heads/num_kv_heads` | GQA repeat、causal mask、online softmax、FP32 累加 | `softmax(QKᵀ·scale+mask)V` |
+| `kMegaAttention`（`use_kv_cache=true`） | q `[1,S,heads·D]`；k/v `[1,S,kv_heads·D]`（只含本步 token） | `[1,S,heads·D]` | 同上，且 `use_kv_cache=true`、`kv_layer_index` 必填；`sliding_window=0` | 先 `paged_kv_store` 写池，再按块表读历史 K/V；causal 用绝对位置；GQA、online softmax、FP32 累加 | 同式，KV 来自池 |
 | `kAdd` | a/b `[1,S,H]` | `[1,S,H]` | 无 | `a+b`，FP16 舍入 | `a+b` |
 | `kSample` | logits `[1,S,V]` fp16 | `[1,S]` int64 | `method=argmax, axis=-1` | 首个最大值；并列取最小下标 | `argmax(logits,-1)` |
 
@@ -761,6 +804,11 @@ Status GetStringAttr(const runtime_graph::Op& op, const char* name, std::string*
 - `normalized_shape` 必须等于最后一维；`num_heads % num_kv_heads == 0`；`out_features % head_dim == 0`。
 - `transpose_weight=true` 表示权重布局 `[N,K]`；首期不支持 `bias=true`，遇到返回 `kUnsupportedOp`。
 - 缺失必需 attr、属性类型不符、形状/字节不一致：加载期失败，禁止静默降级。
+- `use_kv_cache=true` 时，S 仍是静态最大行数；有效 token 由
+  `AttentionContext.token_count` 截断。K/V 输入只含本步 token，历史 KV
+  必须来自 `KvLayerView`，不得把二者混用。
+- Paged attention 的 block 大小固定等于 `BackendCapability.attention_block_size`
+  （当前 Mock/OCL 均为 16）；若 runtime 覆盖块大小，必须与后端声明一致。
 
 #### 4.3.3 每个算子模块的文件清单
 
@@ -798,6 +846,9 @@ ocl/kernels/<op>.cl             # OCL 源（构建期嵌入）
 - **传输**：`Upload/Download` 为 `memcpy`；`Synchronize` 为空操作。
 - **ConvertParam**：dtype 直通或主机侧转换；不做后端私有打包（或仅按 64 B 对齐）。
 - **Kernel**：CPU 参考实现，内部 FP32 计算，写回时 FP16 舍入；单线程、确定性。
+  阶段一新增 `MockMegaAttentionPagedKernel`：读取 `AttentionMetadataView` 与
+  `KvLayerView`，先按 slot 写 KV 池，再逐 token/head 按块表计算；作为 OCL
+  paged kernel 的数值基准。
 - **Capability**：8 op、FP16 计算（ConvertParam 源支持 BF16/FP32）、H2D/D2H、
   `max_buffer_bytes=SIZE_MAX/2`、`min_alignment=1`、`attention_block_size=16`、`kNhd`。
 - **用途**：主机 CI、OpEnv/Kernel ABI 验证、8 算子精度测试、OCL 数值的对照基线。
@@ -835,6 +886,12 @@ attention，性能数据见 `ocl/tests/test_results.md` 第 11 节。手机 Mali
    - `CL_INVALID_*` → `kInvalidArgument`/`kKernelError`；
    - 所有错误消息带 backend/stage/kernel_key/原生错误码。
 8. **数值**：FP16 存储、FP32 累加；禁止 `-cl-fast-relaxed-math`；`mad` 只允许在 FP32 累加语义下使用。
+9. **Paged Attention（P4.8）**：`kernel_key="mega_attention_paged"`；一次
+   `Execute` 内顺序下发 `paged_kv_store` 与 `mega_attention_paged`（同队列
+   保序）；KV 池按 `KvLayerView` 的 `Buffer*` 绑定；元数据数组按
+   `TensorView.offset` 显式传参；KV 池偏移用 `long`。baseline 一
+   work-item 处理一个 `(token, q_head)`，正确性优先，tiled/FlashDecoding
+   作为后续优化。
 
 ### 4.6 构建与注册
 
@@ -893,7 +950,7 @@ attention，性能数据见 `ocl/tests/test_results.md` 第 11 节。手机 Mali
 | --- | --- | --- |
 | BE-C-01 | 设备侧 `Storage.data_ptr` 为 `Buffer*`，`offset` 为字节偏移；Loader 分配后回填 | RuntimeCore/Loader |
 | BE-C-02 | Loader 在绑定 Input storage 时必须同时写 Input op 的 `attr["storage"]` 与输入 Tensor 的 Storage（或保证计算 op 能经 Tensor 读到设备 Buffer） | RuntimeCore/Loader |
-| BE-C-03 | `KvLayerView.k_base/v_base` 为 `Buffer*`；slot/块步长由 KVCache 与 Attention Kernel 约定 | RuntimeCore/KVCache |
+| BE-C-03 | `KvLayerView.k_buffer/v_buffer` 为 `Buffer*`，并含 `block_stride/num_blocks/num_kv_heads/head_dim/dtype`；阶段一固定 NHD；slot/块步长由 KVCache 与 Attention Kernel 约定 | RuntimeCore/KVCache |
 | BE-C-04 | Loader 使用 `BackendRegistry::Create`、`Backend::Init/Capability/ConvertParam/CreateBuffer`；`OpEnvFactory` 由 `CreateDefaultOpEnvFactory()` 提供 | RuntimeCore |
 | BE-C-05 | Executor 每步对每个 `ExecOpEnv` 调用 `SetStepContext`，并在步末清空；每步只 `Synchronize` 一次 | RuntimeCore/Executor（ExecBackend 实现） |
 | BE-C-06 | 销毁顺序：Synchronize → ClearOpEnv（DestroyKernel）→ ResourceStack（DestroyBuffer）→ ClearGraphEnv → Deinit | RuntimeCore/Destroy |
@@ -901,6 +958,8 @@ attention，性能数据见 `ocl/tests/test_results.md` 第 11 节。手机 Mali
 | BE-C-08 | 合成 ModelGraph 与 torch 参考由测试侧构造，不进入生产工具链；可复用 `ToolChain.testing` 的 `make_tensor/write_safetensors` | ToolChain |
 | BE-C-09 | Graph 提供 C++ `DumpIr` 供 Loader 校验 IR 哈希；Kernel 不依赖 Graph 执行接口 | ToolChain |
 | BE-C-10 | `DataType` 与 `runtime_graph::Precision` 的互转由本模块 `kernel_types.h` 提供 | RuntimeCore |
+| BE-C-11 | Executor 每步提供 `AttentionMetadataView`（7 个数组 + stride），并保证数组长度不小于 `batch/token_count/ceil(seq/block)`；OpEnv 只校验、不分配 | RuntimeCore/Executor（ExecBackend 实现） |
+| BE-C-12 | ToolChain/模型构建器必须为 `use_kv_cache=true` 的 attention op 写 `kv_layer_index`（0..num_layers-1）；缺失或越界在加载期失败 | ToolChain/模型构建器 |
 
 ### 4.10 已知限制与待确认项
 
@@ -913,6 +972,8 @@ attention，性能数据见 `ocl/tests/test_results.md` 第 11 节。手机 Mali
 | L-BE-05 | `kernel_types.h` 遗留枚举 | 可能误导实现者 | P0 删除并同步 Runtime 文档 |
 | L-BE-06 | Loader/Destroyer 尚未实现（RuntimeCore R1/R3） | 算子测试的 Loader 路径依赖对方 | 先用 mock + 测试本地清理打通 Kernel；Loader 就绪后切验收路径 |
 | L-BE-07 | Image 路径、量化、多队列未实现 | 后续性能/量化需求 | 预留 `BufferUsage`/`Capability`/源码结构，不提前实现 |
+| L-BE-08 | Paged attention baseline 为“一 token 一 work-item”，长上下文性能有限 | 阶段一正确性可验收，性能不达标 | P4.8 先对齐数值；后续做 query tile、GQA K/V 复用、FlashDecoding |
+| L-BE-09 | 元数据缓冲由 Executor 持有并按高水位增长 | 首次超过容量时有一次重新分配 | 稳态不分配；容量与峰值在测试中记录 |
 
 ---
 
@@ -927,6 +988,7 @@ attention，性能数据见 `ocl/tests/test_results.md` 第 11 节。手机 Mali
 | P2 Python 算子图与包 | 每算子合成 ModelGraph、torch 散算子参考、Optimizer/Serializer 打包、case 数据 | 8 套 Python 测试与包生成器 | P1；ToolChain API |
 | P3 Runtime 单算子执行 | `op_runner`、TestIoBinder、Loader 集成、Destroy；mock 上 8 算子精度测试 | 8 份算子测试结果 | P2；RuntimeCore Loader/Destroyer |
 | P4 OCL 后端 | OCL 封装、传输、Program 缓存、8 个 Kernel、契约与精度测试 | OCL 代码 + 真机测试结果 | P1；OpenCL 头/参考机 |
+| P4.8 Paged Attention | `AttentionMetadataView`、`KvLayerView` 改造、Mock paged 参考、OCL 两段式 kernel、chunked/mixed e2e | 契约代码 + paged kernel + 测试结果 + skill | P1、P4；RuntimeCore 元数据 |
 | P5 四件套收口 | 8 个算子 `.doc`/`.skill`/测试报告；后端框架 skill；文档一致性审计 | 完整四件套 | P1–P4 |
 
 ### 5.2 任务拆解
@@ -945,6 +1007,10 @@ attention，性能数据见 `ocl/tests/test_results.md` 第 11 节。手机 Mali
 | BE-T10 | OCL 后端基础设施 | OCL 封装与契约测试 | BE-T02、OpenCL 头 |
 | BE-T11 | 8 个 OCL Kernel 与真机测试 | OCL 算子实现与报告 | BE-T10、参考机 |
 | BE-T12 | 每算子文档/skill/审计 | 四件套 | BE-T09、BE-T11 |
+| BE-T13 | Attention 元数据 ABI：`AttentionMetadataView`、`StepContext` 改造、`KvLayerView` 字段 | 头文件与契约测试 | BE-T01、RuntimeCore |
+| BE-T14 | Mock paged attention 参考实现与单元测试 | Mock kernel + 数值报告 | BE-T13 |
+| BE-T15 | OCL paged：`paged_kv_store` + `mega_attention_paged` + 工厂分发 | OCL kernel + 契约/精度报告 | BE-T10、BE-T13 |
+| BE-T16 | Paged e2e：chunked prefill、decode、混合 batch、4 并发 | 端到端报告 | BE-T14、BE-T15、RuntimeCore 调度 |
 
 ### 5.3 依赖关系
 
@@ -953,6 +1019,8 @@ BE-T00 ─▶ BE-T01 ─▶ BE-T02 ─┬─▶ BE-T03 ─▶ BE-T05 ─┐
                             │                      ├─▶ BE-T06 ─▶ BE-T07 ─▶ BE-T08 ─▶ BE-T09 ─▶ BE-T12
                             └─▶ BE-T04 ────────────┘
 BE-T02 ─▶ BE-T10 ─▶ BE-T11 ───────────────────────────────────────────────▶ BE-T12
+BE-T13 ─▶ BE-T14 ─┬──────────────────────────────────────────▶ BE-T16
+BE-T13 ─▶ BE-T15 ─┘
 RuntimeCore Loader/Destroyer（R1/R3）──────────────────────▶ BE-T08
 ToolChain testing API / 权重读写 ─────────────────────────▶ BE-T06
 ```
@@ -965,6 +1033,7 @@ ToolChain testing API / 权重读写 ──────────────�
 | M-B2 | 8 个算子在 mock 上通过算子精度测试；每算子测试包可重复生成 |
 | M-B3 | OCL 在参考机上通过 8 个算子精度测试与契约测试 |
 | M-B4 | 每算子四件套齐全；文档与代码一致；审计通过 |
+| M-B5 | Paged attention 在 Mock/OCL 与全量 attention 数值一致；chunked/mixed e2e 通过 |
 
 | 风险 | 影响 | 应对 |
 | --- | --- | --- |
@@ -1005,6 +1074,10 @@ ToolChain testing API / 权重读写 ──────────────�
 | TC-BE-08 | 错误路径：设备丢失/编译失败/超大分配（可注入） | 错误码与消息可定位；不崩溃 |
 | TC-BE-09 | 生命周期：100 次 Init/Deinit；Buffer/Kernel 计数归零 | 无泄漏 |
 | TC-BE-10 | 公共头：`-fsyntax-only`；扫描 `cl_`/`Vk`/`cuda` 类型 | 零错误；公共头零厂商类型 |
+| TC-BE-11 | Attention 元数据：7 个数组 offset 对齐、batch/token_count 边界、块表尾部补 0 | 元数据逐项可读；越界被拒绝 |
+| TC-BE-12 | Paged ABI：`kv_layer_index` 缺失/越界、KV 视图与 attr 不一致、slot 越界 | 加载期或执行前返回明确错误 |
+| TC-BE-13 | Paged 数值：prefill/decode/chunked/混合 batch 与全量 attention 对比 | 阈值见 AC-BE-08 |
+| TC-BE-14 | Mock 与 OCL paged 交叉验证：相同元数据、相同 KV 池输入 | token 一致；logits 阈值内 |
 
 ### 6.3 算子精度测试
 
@@ -1058,6 +1131,12 @@ Loader 内部环节的取舍：
 | KVCache 初始化 | 省略 | 单算子测试不建 KV；`use_kv_cache=false` |
 | Engine/Scheduler/Executor | 省略 | 由测试驱动替代 |
 | Warmup | 不存在（v1 无） | — |
+
+**Paged attention 例外**：上述“KVCache 省略、`use_kv_cache=false`”只适用于
+全量单算子测试。Paged 用例必须额外建立 KVCache（Fake 或真实 DefaultKVCache）、
+构造 `KvCacheView` 与 `AttentionMetadataView`，并在 `StepContext` 中同时提供
+二者；数值基准为 Mock 全量 attention 或 Mock paged 参考实现。该路径的测试
+结果单独记录，不得与全量单算子结果混写。
 
 Destroy 的取舍：算子验收必须经过真实 Destroy 路径（Synchronize → ClearOpEnv → ResourceStack →
 ClearGraphEnv → Deinit），以获得无泄漏证据；只有快速路径允许测试本地等价清理，且不得作为验收结论。
@@ -1138,7 +1217,8 @@ case = OpCase(
    名称/大小不匹配返回错误。
 3. 找到目标计算 op（按 `case.json.op`），校验其 `OpEnv` 是 `ExecOpEnv`。
 4. 构造 `StepContext`：`backend=result.backend.get()`、`batch=1`、`packed_tokens=S`、
-   `seq_lens` 指向 `[S]`、`is_prefill=true`、`plan=null`、`kv_view=null`。
+   `attention_meta` 为空（全量 attention 单算子测试）、`plan=null`、`kv_view=null`。
+   Paged 单算子测试另行填 `attention_meta` 与 `kv_view`。
 5. 对 `GetOrderlyOPList()` 中每个 op 调用 `SetStepContext`，再逐个 `Forward()`：
    Input（Upload）→ 目标计算 op（Kernel::Execute）→ Output（Download）。
 6. `Backend::Synchronize(nullptr)`。

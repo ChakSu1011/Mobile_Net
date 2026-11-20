@@ -7,7 +7,7 @@
 | 上游设计 | `Runtime/.doc/Runtime_design.md` 4.2.3；`MobileNet_design.md` 4.3.3 |
 | 实现文件 | `Runtime/kvcache/kv_cache_manager.cc` |
 | 测试 | `Runtime/kvcache/tests/kvcache_test.cc`、`Runtime/kvcache/tests/test_results.md` |
-| 状态 | 阶段一/二默认实现；共享/COW 仅预留 |
+| 状态 | 阶段一默认实现；v0.2 增加 Paged Attention 所需视图字段与 NHD 校验；共享/COW 仅预留 |
 
 ## 1. 背景与目标
 
@@ -31,8 +31,9 @@ Scheduler 只通过 `KvAllocator` 子接口申请/释放块；Executor 只通过
    由 Destroy 统一释放。
 3. 实现 `Reserve/Release/FreeBlocks/BlockSize/MaxTotalTokens/GetBlockTable/
    GetSlots`，`Reserve` 失败零副作用，`Release` 幂等。
-4. `BuildView` 输出每层 `k_base/v_base/block_stride`、`block_size` 与
-   `max_total_tokens`。
+4. `BuildView` 输出每层 `k_buffer/v_buffer`（`Buffer*`）、
+   `block_stride/num_blocks/num_kv_heads/head_dim/dtype`、`block_size` 与
+   `max_total_tokens`；阶段一固定 NHD。
 5. 预算不足、规格非法、后端分配失败有明确错误码。
 
 ### 1.3 非目标
@@ -52,13 +53,17 @@ Scheduler 只通过 `KvAllocator` 子接口申请/释放块；Executor 只通过
 | FR-KV-01 | 由 spec/backend 计算 `block_bytes = block_size × num_kv_heads × head_dim × dtype_size` | TC-KV-01 |
 | FR-KV-02 | 由预算计算 `blocks = budget / (num_layers × 2 × block_bytes)`；预算不足返回 `kDeviceOom` | TC-KV-01/03 |
 | FR-KV-03 | 每层分配 K/V 两个缓冲，登记到 `ResourceStack`；Init 失败回滚已创建缓冲 | TC-KV-01/04 |
-| FR-KV-04 | `BuildView` 提供每层 k/v base、`block_stride=block_bytes`、`block_size`、`max_total_tokens` | TC-KV-01 |
+| FR-KV-04 | `BuildView` 提供每层 `k_buffer/v_buffer`（`Buffer*`）、`block_stride=block_bytes`、`num_blocks`、`num_kv_heads`、`head_dim`、`dtype`、`block_size`、`max_total_tokens` | TC-KV-01、TC-KV-05 |
 | FR-KV-05 | 维护请求块表、空闲块池；`Reserve` 按累计容量追加块，失败零副作用 | TC-KV-02 |
 | FR-KV-06 | `Release` 逆序归还全部块并删除块表；重复 Release 幂等 | TC-KV-02 |
 | FR-KV-07 | `GetSlots` 计算 `block_id×block_size+offset`，越界返回 `kInvalidArgument` | TC-KV-02 |
 | FR-KV-08 | `GetBlockTable` 对未知请求返回 `kRequestNotFound` | TC-KV-02 |
 | FR-KV-09 | 非 `kFullAttention`、未知 dtype、零块大小等非法规格返回对应错误 | TC-KV-03 |
 | FR-KV-10 | `BackendCapability.max_buffer_bytes` 限制单缓冲块数，避免超限分配 | TC-KV-03 |
+| FR-KV-11 | `KvLayerView` 保存 `Buffer*` 而非 `DevicePtr()`，并附 `num_blocks/num_kv_heads/head_dim/dtype` | TC-KV-05 |
+| FR-KV-12 | `Init` 校验 `BackendCapability.kv_layout == KvLayout::kNhd`，非 NHD 返回 `kUnsupportedOp` | TC-KV-05 |
+| FR-KV-13 | `Init` 校验 KV dtype 在 `supported_dtypes` 中，否则 `kUnsupportedDtype` | TC-KV-05 |
+| FR-KV-14 | slot 仍为扁平 token 下标；Kernel 可直接用 `slot × num_kv_heads × head_dim` 定位 NHD 池 | TC-KV-02、TC-KV-05 |
 
 ### 2.2 非功能需求
 
@@ -76,7 +81,11 @@ Scheduler 只通过 `KvAllocator` 子接口申请/释放块；Executor 只通过
 - `block_size/num_layers/num_kv_heads/head_dim > 0`，`dtype_size > 0`。
 - `Init` 只允许成功一次；重复 Init 返回 `kStateError`。
 - 块 ID 使用 `I32`，物理块数不得超过 `INT32_MAX`。
-- `KvCacheView` 的裸指针在 `ResourceStack::Clear` 之前有效；清理后视图失效。
+- `KvCacheView` 的 `Buffer*` 在 `ResourceStack::Clear` 之前有效；清理后视图失效。
+- 阶段一布局固定 NHD：块主序、`[block_size, num_kv_heads, head_dim]`；
+  `block_stride = block_size × num_kv_heads × head_dim × dtype_size`。
+- `KVCache` 内部保留非拥有 `Buffer*`（`k_buffers_/v_buffers_`）供
+  `BuildView` 使用；实际释放由 `ResourceStack` 闭包完成。
 - 阶段二共享/COW 不实现；`RequestEntry.ref_cnt` 仅为未来扩展保留。
 
 ### 2.4 验收标准
@@ -97,7 +106,7 @@ Engine
         ├── Backend*            （借用，CreateBuffer/DestroyBuffer）
         ├── ResourceStack*      （借用，登记释放闭包）
         ├── 物理层：
-        │     ├── k_bases_/v_bases_：每层 K/V 基址
+        │     ├── k_buffers_/v_buffers_：每层 K/V 的 Buffer*
         │     ├── block_bytes_：单块单边字节数
         │     ├── total_blocks_/max_total_tokens_
         │     └── free_blocks_：空闲块池
@@ -173,7 +182,7 @@ slot[i] = blocks[(first+i)/block_size] * block_size + (first+i)%block_size
 | `total_blocks_` | `I64` | 物理块总数 |
 | `max_total_tokens_` | `I64` | `total_blocks × block_size` |
 | `free_blocks_` | `vector<I32>` | 空闲物理块 |
-| `k_bases_/v_bases_` | `vector<void*>` | 每层 K/V 基址 |
+| `k_buffers_/v_buffers_` | `vector<void*>` | 每层 K/V 的 `Buffer*`（非拥有）；原 `k_bases_/v_bases_` 由该字段替代 |
 | `tables_` | `map<U64, RequestEntry>` | 请求块表 |
 
 ```cpp
@@ -189,7 +198,7 @@ struct RequestEntry {
 | 接口 | 成功 | 失败 |
 | --- | --- | --- |
 | `Init` | 分配完成、视图可构建 | `kInvalidArgument`/`kUnsupportedOp`/`kUnsupportedDtype`/`kDeviceOom`/`kBufferError`/`kInternal` |
-| `BuildView` | 写入 layers/block_size/max_total_tokens | `kInvalidArgument`（空视图）/`kStateError` |
+| `BuildView` | 写入 layers（Buffer*/stride/num_blocks/heads/dtype）、block_size、max_total_tokens | `kInvalidArgument`（空视图）/`kStateError` |
 | `Stats` | 返回统计；未初始化返回全 0 | 无 |
 | `Reserve` | 容量满足、块表可追加 | `kInvalidArgument`（new_tokens≤0 或溢出）/`kDeviceOom`/`kStateError` |
 | `Release` | 归还块并删除表项 | 无（幂等） |
@@ -208,8 +217,10 @@ struct RequestEntry {
   `blocks = min(blocks, max_buffer_bytes / block_bytes)`（当
   `max_buffer_bytes > 0`）。
 - `KvCacheView.layers[i].block_stride = block_bytes`；Attention 通过
-  `slot` 与块步长计算地址，因此 K/V 层内布局必须与后端 `kv_layout` 约定
-  一致（当前实现按 kNhd 连续块布局）。
+  `slot` 与块步长计算地址。阶段一固定 NHD 块主序：
+  `offset = block_id×block_stride + token_in_block×num_kv_heads×head_dim×dtype_size + kv_head×head_dim×dtype_size`。
+- `Init` 读取 `BackendCapability.kv_layout`；非 `kNhd` 直接拒绝，避免
+  KVCache 与 Kernel 对布局的理解不一致。
 
 ### 4.4 异常与错误处理
 
@@ -230,14 +241,14 @@ struct RequestEntry {
   块数通常为个位数到数百。
 - `GetSlots` 每次分配 count 个 I64；chunk 大小受单步预算限制。
 - 每层 K/V 各一个缓冲，总字节数 ≤ 预算；单缓冲 ≤ `max_buffer_bytes`。
-- `k_bases_/v_bases_` 只为 BuildView 缓存，不持有所有权。
+- `k_buffers_/v_buffers_` 只为 BuildView 缓存 `Buffer*`，不持有所有权。
 
 ### 4.6 扩展点与限制
 
 1. **共享/COW**：`RequestEntry.ref_cnt` 已预留；实现时需增加块级引用计数与
    复制路径，`Release` 改为递减引用。
 2. **滑窗/MLA**：当前拒绝非 `kFullAttention`；阶段三在 `Init` 分支中扩展。
-3. **视图生命周期**：`ResourceStack::Clear` 后基址失效；Engine 必须在
+3. **视图生命周期**：`ResourceStack::Clear` 后 `Buffer*` 失效；Engine 必须在
    Destroy 阶段清理栈后不再调用 `BuildView`。
 4. **线程安全**：无锁；`Merge/Stop` 不会直接调用 KVCache，Scheduler 在锁内
    串行化 Reserve/Release。
@@ -290,6 +301,7 @@ struct RequestEntry {
 | TC-KV-02 | FR-KV-05/06/07/08 | Reserve 5/1、越界 OOM、slot 公式、Release 幂等、满容量 |
 | TC-KV-03 | FR-KV-02/09/10 | 预算 511/512、max_buffer_bytes=200/100、零块大小/零层/未知 dtype/滑窗 |
 | TC-KV-04 | FR-KV-03 | 第 4 次 CreateBuffer 失败 → 3 个缓冲回滚；重试成功并全部释放 |
+| TC-KV-05 | FR-KV-04/11/12/13 | 视图字段逐项断言；非 NHD 拒绝；不支持 dtype 拒绝；`Buffer*` 与分配句柄一致 |
 
 ### 6.3 测试环境与命令
 
@@ -337,3 +349,7 @@ python -m ziglang c++ -std=c++17 -Wall -Wextra -I "d:/Mobile_Net" \
 | FR-KV-08 | 4.2 | TC-KV-02 |
 | FR-KV-09 | 4.4 | TC-KV-03 |
 | FR-KV-10 | 4.3 | TC-KV-03 |
+| FR-KV-11 | 4.1/4.2 | TC-KV-05 |
+| FR-KV-12 | 4.3 | TC-KV-05 |
+| FR-KV-13 | 3.3.1 | TC-KV-05 |
+| FR-KV-14 | 3.3.3/4.3 | TC-KV-02/05 |

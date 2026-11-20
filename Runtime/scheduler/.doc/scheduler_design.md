@@ -7,7 +7,7 @@
 | 上游设计 | `Runtime/.doc/Runtime_design.md` 4.2.2；`MobileNet_design.md` 4.3.2 |
 | 实现文件 | `Runtime/scheduler/scheduler.cc` |
 | 测试 | `Runtime/scheduler/tests/scheduler_test.cc`、`Runtime/scheduler/tests/test_results.md` |
-| 状态 | 阶段一/二默认实现；不含抢占与投机解码 |
+| 状态 | 阶段一默认实现；v0.2 增加 recompute 抢占与 OOM 处理；不含投机解码 |
 
 ## 1. 背景与目标
 
@@ -35,10 +35,13 @@ Runtime 以 Continuous Batching 方式执行推理：Engine 每个 Step 调用
 4. `Update/Stop/Fail` 生成完整 `Response`，终态统一经 `KvAllocator::Release`
    释放 KV，并支持重复调用幂等。
 5. 所有错误通过 `Status` 返回，空指针与非法规格有明确错误码。
+6. KV 模式下 Reserve 失败时执行 recompute 抢占：释放 victim 的 KV，
+   重算其完整历史，保证高负载下不发生不可恢复的 OOM。
 
 ### 1.3 非目标
 
-- 不实现抢占/换出；`preempted_requests` 恒为 0。
+- 不实现 swap 换出或 COW 抢占；阶段一只有 recompute 抢占。
+- 不实现前缀共享/COW、优先级公平调度、超时抢占。
 - 不实现阶段三投机解码、Beam、采样；只按 token id 判停。
 - 不调用设备 API、不操作 Kernel、不解析文本。
 - 不拥有 KV 物理块；块表与 slot 由 `KvAllocator` 提供。
@@ -54,7 +57,7 @@ Runtime 以 Continuous Batching 方式执行推理：Engine 每个 Step 调用
 | FR-SCH-02 | `Merge` 初始化 `Sequence`：history=prompt、prompt_count、vocab_size（来自 `ModelConfig`）、generated_count=0、status=`kWaiting`，并保存 `SampleParams` | TC-SCH-01 |
 | FR-SCH-03 | 重算模式 `Schedule` 生成完整历史计划：token_ids=history、positions=0..len-1、token_count=len、output_slot=len-1、context_length=len-1；generated_count=0 时 phase=Prefill，否则 Decode | TC-SCH-01 |
 | FR-SCH-04 | 重算模式不调用 `KvAllocator::Reserve`，slots/block_table 为空 | TC-SCH-01 |
-| FR-SCH-05 | KV 模式 Waiting 请求按 `min(prompt 剩余, max_prefill_chunk, 预算)` 切 chunk；调用 Reserve/GetBlockTable/GetSlots；未完成置 `kChunkedPrefill`，完成置 `kRunning` | TC-SCH-02 |
+| FR-SCH-05 | KV 模式 Waiting/`kRecompute` 请求以 `history.size()` 为目标（初次 prefill 时等于 prompt），按 `min(剩余, max_prefill_chunk, 预算)` 切 chunk；调用 Reserve/GetBlockTable/GetSlots；未完成置 `kChunkedPrefill`，完成置 `kRunning` | TC-SCH-02/03 |
 | FR-SCH-06 | KV 模式 Running 请求每步 decode 1 token，token 取自 `history[computed_tokens]`，位置与 KV slot 一致 | TC-SCH-02 |
 | FR-SCH-07 | 单步总 token 不超过 `max_num_tokens`；Prefill 优先于 Decode | TC-SCH-01/02/04 |
 | FR-SCH-08 | `Update` 追加 token 到 history/current_token/generated_count；按 min_tokens、stop_token_ids、ignore_eos、max_tokens、context_length 判停 | TC-SCH-01/02/05 |
@@ -63,6 +66,10 @@ Runtime 以 Continuous Batching 方式执行推理：Engine 每个 Step 调用
 | FR-SCH-11 | `Snapshot` 返回 request_id/status/prompt/computed/generated；`Stats` 返回 waiting/running/preempted/free/total blocks；`HasRequests` 反映未结束请求 | TC-SCH-02 |
 | FR-SCH-12 | `Merge/Stop/HasRequests` 可与推理线程并发；内部互斥锁保护 | 代码审查 + 设计约束 |
 | FR-SCH-13 | `Response*`/`ExecutionPlan*`/`request_id*` 为空返回 `kInvalidArgument` | TC-SCH-03 |
+| FR-SCH-14 | Reserve 失败时选择 victim：优先 `priority` 数值大，其次 `context_length` 大，最后 `request_id` 大；不抢占当前请求 | TC-SCH-03 |
+| FR-SCH-15 | 抢占动作：`KvAllocator::Release`、`computed_tokens=0`、`kv_reserved=false`、状态 `kRecompute`；不得删除已生成 token | TC-SCH-03 |
+| FR-SCH-16 | `kRecompute` 请求按完整 history 重算；完成后置 `kRunning`，下一步正常 decode | TC-SCH-03 |
+| FR-SCH-17 | 单步最多抢占 `max_preemptions_per_step` 个；无可抢占对象且 Reserve 仍失败返回 `kDeviceOom`；`StepStats.preempted_requests` 记录本步次数 | TC-SCH-03 |
 
 ### 2.2 非功能需求
 
@@ -86,6 +93,9 @@ Runtime 以 Continuous Batching 方式执行推理：Engine 每个 Step 调用
   容纳“prompt + 至少 1 个生成 token”。
 - 阶段一/二请求 `multimodal_inputs` 必须为空，否则 `kUnsupportedOp`。
 - 终态请求的 `status` 不再改变；`Stop` 不会把 `kIllegal` 改成 `kStopped`。
+- `max_preemptions_per_step` 默认 4；设为 0 表示不抢占（OOM 直接返回错误）。
+- 被抢占请求的完整 history 必须严格小于 `context_length`，否则无法重算，
+  直接返回 `kDeviceOom` 并由上层结束该请求。
 
 ### 2.4 验收标准
 
@@ -150,17 +160,33 @@ for request in requests_（按 id 升序，跳过终态）:
 #### 3.3.3 Schedule（KV 模式）
 
 ```text
-收集 waiting（kWaiting/kChunkedPrefill）与 running（kRunning）id
+收集 waiting（kWaiting/kChunkedPrefill/kRecompute）与 running（kRunning）id
 for waiting:
-    chunk = min(prompt 剩余, max_prefill_chunk, 剩余预算)
-    Reserve(chunk) → GetBlockTable → GetSlots(computed, chunk)
-    entry.context_length = computed; entry.output_slot 仅在 chunk 完成 prompt 时有效
+    target = history.size()                  // 初次=prompt，抢占后=完整历史
+    chunk = min(target - computed, max_prefill_chunk, 剩余预算)
+    if Reserve(chunk) 失败:
+        Victimize()  // 见下；成功释放后重试一次
+        if 仍失败: 记录首个错误，跳过该请求
+    GetBlockTable → GetSlots(computed, chunk)
+    entry.context_length = computed
+    entry.output_slot = 完成 target ? packed+chunk-1 : -1
     computed += chunk; status = 完成?kRunning:kChunkedPrefill
 for running:
-    Reserve(1) → GetBlockTable → GetSlots(computed, 1)
+    if Reserve(1) 失败:
+        Victimize()；重试，仍失败则跳过
+    GetBlockTable → GetSlots(computed, 1)
     entry = {history[computed], positions={computed}, phase=Decode}
     computed += 1
+
+Victimize():
+    候选 = 非终态、非当前请求、kv_reserved=true
+    排序：priority 降序 → context_length 降序 → request_id 降序
+    取首个；Release(id)；computed=0；kv_reserved=false；status=kRecompute
+    本步抢占数 +1；达到 max_preemptions_per_step 停止
 ```
+
+若 `plan.entries` 为空且存在 Reserve 失败，返回首个 KV 错误；否则返回
+`kOk`（部分调度成功，已抢占的请求下一步重算）。
 
 ### 3.4 技术选型与取舍
 
@@ -199,6 +225,8 @@ struct RequestState {
 | `context_length_` | 上下文长度 |
 | `vocab_size_` | token 校验上界；0 表示未知 |
 | `recompute_attention_` | 执行形态开关 |
+| `max_preemptions_per_step_` | 单步抢占上限（默认 4） |
+| `total_preempted_requests_` | 累计抢占次数（供 Stats） |
 | `default_stop_ids_` | 模型默认停止 token（config 优先） |
 | `kv_allocator_` | 非拥有 KvAllocator |
 | `requests_` | 请求表 |
@@ -208,13 +236,10 @@ struct RequestState {
 
 ```text
 Merge ──► kWaiting
-             │ Schedule（chunk 未完成）
-             ▼
-       kChunkedPrefill ──Schedule（chunk 完成）──► kRunning
-             │                                      │
-             │ Stop/Fail                            │ Update/Stop/Fail
-             ▼                                      ▼
-        kStopped/kIllegal  ◄──────────────── kStopped/kIllegal
+kWaiting/kChunkedPrefill ──Schedule(chunk 未完成)──► kChunkedPrefill
+kWaiting/kChunkedPrefill ──Schedule(chunk 完成)────► kRunning
+kRunning ──Reserve 失败被抢占──► kRecompute ──Schedule(完整历史)──► kRunning
+kChunkedPrefill/kRunning ──Stop/Fail/Update(命停)──► kStopped/kIllegal
 ```
 
 - `kRunning` 的 `Update` 追加 token；若未停止则保持 `kRunning`。
@@ -260,7 +285,9 @@ Merge ──► kWaiting
 | 多模态输入非空 | `kUnsupportedOp` |
 | 并发已满 | `kDeviceOom` |
 | 请求不存在 | `kRequestNotFound` |
-| 计划为空且 KV 分配失败 | 首个 KV 错误（通常 `kDeviceOom`） |
+| 计划为空且 KV 分配失败（无可抢占对象） | 首个 KV 错误（通常 `kDeviceOom`） |
+| 被抢占请求 history ≥ context_length | `kDeviceOom`；该请求不能重算 |
+| 抢占后仍无法 Reserve | 若计划为空返回 `kDeviceOom`；否则本步跳过该请求 |
 | 重算 history 超预算/空 history | `kInternal` |
 
 #### 4.3.4 线程与性能
@@ -274,15 +301,18 @@ Merge ──► kWaiting
 
 1. **Prefill 优先**：Waiting 先于 Running 消耗预算；短预算下可能推迟 Decode，
    与设计文档 4.3.2 的策略一致。
-2. **无抢占**：Running 请求 Reserve(1) 失败时保留 `kRunning`，等下一步重试；
-   `preempted_requests` 恒为 0。
-3. **chunked prefill 输出**：Executor 对 partial chunk 可能返回 `token_id=-1`，
+2. **recompute 抢占**：Reserve 失败时按 `priority/context_length/request_id`
+   选 victim，释放 KV 并置 `kRecompute`；victim 的完整 history 保留，下一步
+   按 chunked prefill 重算。单步抢占数受限，避免抖动；swap/COW 不做。
+3. **抢占与部分计划**：本步已成功的 entry 保留；victim 不在本步继续产生
+   token；`Update` 不会为 victim 收到结果（其本步无 entry）。
+4. **chunked prefill 输出**：Executor 对 partial chunk 可能返回 `token_id=-1`，
    `Update` 在 `kChunkedPrefill` 状态下忽略所有输出 token。
-4. **终态保留**：请求表不自动清理，长时间服务需 Engine 重建或后续版本增加
+5. **终态保留**：请求表不自动清理，长时间服务需 Engine 重建或后续版本增加
    回收接口（当前无公共接口，故不实现）。
-5. **预算保障**：重算模式在 `Update` 中按 `max_num_tokens` 截停，保证下一次
+6. **预算保障**：重算模式在 `Update` 中按 `max_num_tokens` 截停，保证下一次
    `Schedule` 的 history 不会超预算。
-6. **max_concurrent_requests**：在 Merge 处作为未结束请求上限；Token packing
+7. **max_concurrent_requests**：在 Merge 处作为未结束请求上限；Token packing
    模式下它是请求数上限，不是单步条目上限。
 
 ## 5. 实施步骤
@@ -295,7 +325,8 @@ Merge ──► kWaiting
 | P2 | 实现 Merge/Init/Snapshot/Stats/HasRequests | `scheduler.cc` 基础部分 |
 | P3 | 实现重算 Schedule 与 Update 停止判定 | 重算模式可运行 |
 | P4 | 实现 KV 模式 chunked prefill/decode 与 Release | KV 模式可运行 |
-| P5 | 编写单元测试、修复边界、记录结果 | `tests/` |
+| P5 | 实现 recompute 抢占、victim 选择、OOM 路径与统计 | 抢占可运行 |
+| P6 | 编写单元测试、修复边界、记录结果 | `tests/` |
 
 ### 5.2 依赖与里程碑
 
@@ -309,7 +340,7 @@ Merge ──► kWaiting
 
 | 风险 | 影响 | 应对 |
 | --- | --- | --- |
-| KV 不足导致请求长期等待 | 请求不结束 | 当前保留 `kRunning`/`kWaiting`；后续实现抢占 |
+| KV 不足导致请求长期等待 | 请求不结束 | recompute 抢占 + `max_preemptions_per_step`；单请求历史放不进 context 时返回 OOM |
 | 终态请求累积 | 内存增长 | Engine 销毁时释放；后续增加请求回收接口 |
 | partial chunk 无输出 | Update 误判 | 按 `kChunkedPrefill` 状态忽略输出 token |
 | 重算 history 超单步预算 | 无法调度 | Merge/Update 双重截停 |
@@ -332,6 +363,7 @@ Merge ──► kWaiting
 | TC-SCH-04 | FR-SCH-07 | 重算模式两个 3-token prompt、预算 5：每步只调度一个请求 |
 | TC-SCH-05 | FR-SCH-08 | min_tokens 阻止提前停止、ignore_eos 忽略默认停止 token、max_tokens 截停 |
 | TC-SCH-06 | 约束 | 并发上限 1 的 Merge 准入与 Stop 后重新准入 |
+| TC-SCH-07 | FR-SCH-14/15/16/17 | 小 KV 预算：4 请求竞争、抢占 victim 选择、`kRecompute` 重算、preempted 计数、无 victim 时 OOM |
 
 ### 6.3 测试环境与命令
 
@@ -352,17 +384,12 @@ python -m ziglang c++ -std=c++17 -Wall -Wextra -I "d:/Mobile_Net" \
 ### 6.4 未覆盖项与残余风险
 
 - 未测试多线程并发 Merge/Stop（实现有锁，但未做压力测试）。
-- 未测试抢占、投机解码、Beam、采样温度/惩罚。
+- 未测试投机解码、Beam、采样温度/惩罚。
 - 未测试超长 prompt（> I32 上限）与极端预算的整型边界。
 - 终态请求回收策略不在本模块实现。
-- **端到端 chunked prefill 契约缺口**：本模块对未完成 Prefill 的
-  `PlanEntry` 设置 `output_slot=-1`（符合 `plan.h` 语义），Executor 会跳过
-  该请求不返回 `RequestStepResult`；当前 `Engine::ExecuteStep` 把“缺少
-  result”视为 `kInternal` 并调用 `Scheduler::Fail`。因此长 prompt 分块在
-  真实 Engine 路径会被判失败（本模块单测不经过 Engine）。修复点在 Engine
-  或 Executor：Engine 应跳过 `output_slot<0` 的条目，或 Executor 返回
-  `token_id=-1` 的结果；Scheduler 的 `Update` 已能忽略后者。该修复不需要
-  修改 `scheduler.h`。
+- 抢占策略为 FCFS+优先级启发式，未做公平性/抖动长期压测；swap/COW 未实现。
+- ~~端到端 chunked prefill 契约缺口~~：已修复，Engine 跳过
+  `output_slot<0` 的条目，不再把 partial chunk 判为失败。
 
 ## 附录 A：需求-设计-测试追溯
 
@@ -381,3 +408,7 @@ python -m ziglang c++ -std=c++17 -Wall -Wextra -I "d:/Mobile_Net" \
 | FR-SCH-11 | 4.1/4.3.1 | TC-SCH-02 |
 | FR-SCH-12 | 4.3.4 | 代码审查 |
 | FR-SCH-13 | 4.3.3 | TC-SCH-03 |
+| FR-SCH-14 | 3.3.3/4.4 | TC-SCH-07 |
+| FR-SCH-15 | 3.3.3/4.2 | TC-SCH-07 |
+| FR-SCH-16 | 3.3.3/4.2 | TC-SCH-07 |
+| FR-SCH-17 | 3.3.3/4.3.3 | TC-SCH-07 |

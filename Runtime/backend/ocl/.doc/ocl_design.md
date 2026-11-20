@@ -2,9 +2,9 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | v0.2 |
-| 文档状态 | 设计完成；P4.1 基础设施、P4.2 Kernel 框架、P4.3 全部 8 个基线 Kernel 与 vs Mock 数值对齐、P4.6 端到端 Token 一致性（3/3）已落地；P4.5 第一轮优化（有效 token 截断、linear/swiglu/rope half8、单遍 attention）已完成并记录性能 |
-| 编写日期 | 2026-11-20 |
+| 文档版本 | v0.3 |
+| 文档状态 | 设计完成；P4.1 基础设施、P4.2 Kernel 框架、P4.3 全部 8 个基线 Kernel 与 vs Mock 数值对齐、P4.6 端到端 Token 一致性（3/3）已落地；P4.5 第一轮优化已完成；v0.3 将 Paged Attention 纳入阶段一（P4.8），P4.7 待实现 |
+| 编写日期 | 2026-11-21 |
 | 模块 | `Runtime/backend/ocl/` |
 | 权威位置 | `Runtime/backend/ocl/.doc/ocl_design.md` |
 | 上游文档 | [`backend_design.md`](../../.doc/backend_design.md)、[`Runtime_design.md`](../../../.doc/Runtime_design.md)、[`MobileNet_design.md`](../../../../.doc/MobileNet_design.md) 4.4 |
@@ -32,7 +32,8 @@ attention 单遍 online softmax、linear 的 K 维 `vload_half8` 向量化与单
 1.66–2.56x、swiglu 2.50x、rope 2.22x、attention 1.22x（vs 优化前）。
 数值回归由 `ocl_vs_mock_test` 与 `ocl_contract_test` 覆盖（64 条 PASS）。
 当前主测试环境为本机 Intel Arc；手机 Mali-G925 已断开，Mali 性能待重连补测。
-下一轮优化重点：attention 寄存器分块/GQA K/V 复用与多 batch 截断。
+下一轮重点：P4.8 Paged Attention（KV store + 块表 attention）的正确性
+baseline 与调度 e2e；之后再做 attention 寄存器分块/GQA K/V 复用与多 batch 截断。
 
 ---
 
@@ -92,12 +93,14 @@ attention 单遍 online softmax、linear 的 K 维 `vload_half8` 向量化与单
 | G-OCL-06 | 建立 NDK 真机测试路径：arm64-v8a 可执行文件 → `adb push` → `/data/local/tmp` 运行 → `cl_event` 计时 |
 | G-OCL-07 | 明确 Mali-G925 的优化取舍：fp16 向量化、寄存器分块、避免依赖专用 local memory、控制 workgroup 与占用率 |
 | G-OCL-08 | 所有算子完成后，用与 Mock 相同的输入 Token 做端到端生成，逐 Token 比较 OCL 与 Mock 输出是否一致 |
+| G-OCL-09 | 阶段一实现 Paged Attention：KV 池按块表读取，支持 chunked prefill、decode 与混合 batch；先正确性 baseline，再做性能优化 |
 
 ### 1.3 非目标
 
-- 不实现 KV Cache 的 Paged Attention（阶段二；首期 `use_kv_cache=false`）。
+- 阶段一实现 full attention 的 NHD Paged Attention baseline；前缀共享/COW、sliding window、MLA/Mamba 不做。
 - 不做量化 Kernel、Image 路径、多队列/异步传输（保留接口与扩展点）。
 - 不追求所有形状的通用最优；首期以 Qwen3-0.6B 的 8 个融合算子为准。
+- Paged attention 的 tiled query、GQA K/V 复用、FlashDecoding/分块归约属于后续性能优化，不作为阶段一正确性门槛。
 - 不复制 NEAT 的专有 Kernel 源码；只借鉴其工程结构、数据布局与调优方法。
 - 不在本文件重复 Runtime 的调度/Engine 接口；OCL 只实现 Backend/Kernel 层。
 
@@ -122,6 +125,11 @@ attention 单遍 online softmax、linear 的 K 维 `vload_half8` 向量化与单
 | FR-OCL-11 | 8 个算子各有 `.doc`、`.skill`、Kernel 源码与性能/精度测试计划 | P4 四件套齐全 |
 | FR-OCL-12 | 真机测试可编译、推送、运行并输出 Kernel 时间、Mock 时间、加速比 | 测试结果含实际命令与输出 |
 | FR-OCL-13 | 全算子集成后，OCL 与 Mock 使用相同模型包、相同输入 Token、相同贪心采样，比较生成 Token 序列 | 一致率达标；分歧 Step 有 logits 证据 |
+| FR-OCL-14 | `kernel_key="mega_attention_paged"`：一次 `Execute` 内顺序下发 `paged_kv_store` 与 `mega_attention_paged` | 两 kernel 均 successful；同队列保序 |
+| FR-OCL-15 | KV 池按 `KvLayerView` 的 `Buffer*` 绑定；块地址由 `block_table` 与 `block_size` 计算；池偏移用 64 位 | 跨块、非连续物理块读取正确 |
+| FR-OCL-16 | 元数据 7 个数组按 `TensorView.offset` 显式传参；数组位于同一元数据缓冲 | 每个数组读到正确切片 |
+| FR-OCL-17 | 支持 chunked prefill、decode、混合 batch：按 `request_indices/positions/seq_lens/context_lens` 逐 token 处理 | 与全量 attention 数值一致 |
+| FR-OCL-18 | KV 布局固定 NHD；`block_size` 取自 `BackendCapability.attention_block_size`，不得硬编码 | 非 NHD/非 16 块仍按声明工作或明确拒绝 |
 
 ### 2.2 非功能需求
 
@@ -148,6 +156,10 @@ attention 单遍 online softmax、linear 的 K 维 `vload_half8` 向量化与单
 | C-OCL-08 | OpenCL 头不来自 NDK；使用 vendored Khronos `CL/` 头（Apache-2.0）或本地参考头，禁止复制 NEAT 专有代码 |
 | C-OCL-09 | 首期只支持 `kFloat16` 计算；BF16/FP32 仅作为 ConvertParam 源 |
 | C-OCL-10 | `max_work_group_size=1024`，`max_work_item_sizes=1024³`；local size 必须是 global size 的整除（或使用 non-uniform 扩展） |
+| C-OCL-11 | Paged attention 的 KV 池使用 NHD、块主序；`block_stride` 为单块单边字节数 |
+| C-OCL-12 | KV 池内偏移用 `long`（64 位）；元数据数组偏移用 `int`（32 位）；不得把 `cl_mem` 句柄做指针加法 |
+| C-OCL-13 | `paged_kv_store` 与 `mega_attention_paged` 在同一 in-order 队列顺序入队；不在 Kernel 内同步 |
+| C-OCL-14 | block size 以 `BackendCapability.attention_block_size` 为准；runtime 覆盖值必须与后端声明一致 |
 
 ### 2.4 验收标准
 
@@ -161,6 +173,9 @@ attention 单遍 online softmax、linear 的 K 维 `vload_half8` 向量化与单
 | AC-OCL-06 | `Backend` 契约测试通过；100 次 Init/Deinit 无句柄泄漏 |
 | AC-OCL-07 | 无 OpenCL 设备时测试返回明确 skip，不伪造通过 |
 | AC-OCL-08 | 端到端 OCL vs Mock：同一模型包、同一输入 Token、贪心生成的 Token 序列逐 Step 一致率 ≥95%（目标 100%）；分歧 Step 有 logits/概率证据与归因 |
+| AC-OCL-09 | Paged attention 与全量 attention 在 prefill/decode/chunked/混合 batch 下 max_abs ≤ 3e-2、relative_l2 ≤ 1e-2、cosine ≥ 0.999 |
+| AC-OCL-10 | 4 个不同长度请求并发、chunked prefill、OOM 抢占的 OCL 端到端输出与 PyTorch golden 一致 |
+| AC-OCL-11 | 元数据/kv_layer_index/块表/slot 越界均返回明确错误；不崩溃、不越界写 |
 
 ---
 
@@ -248,6 +263,19 @@ Executor → 逐 op OpEnv::Forward
        → clEnqueueNDRangeKernel(global/local)
        →（可选）clFlush
   → Backend::Synchronize → clFinish（每 Step 一次）
+```
+
+**单步执行（Paged Attention，P4.8）**
+
+```text
+Executor → KernelOpEnv（attention 节点）
+  → 按 kv_layer_index 取 KvLayerView；组装 AttentionContext + AttentionMetadataView
+  → OclKernel::Execute（mega_attention_paged）
+       → 绑定 q/k/v/out（本步 token）
+       → 绑定 KV 池 k_buffer/v_buffer、元数据数组（cl_mem + offset 参数）
+       → enqueue paged_kv_store（token × kv_head）
+       → enqueue mega_attention_paged（token × q_head；块循环 + causal）
+  → Backend::Synchronize
 ```
 
 **释放**
@@ -407,6 +435,9 @@ Status Create<Op>OclKernel(std::unique_ptr<Kernel>* kernel);
 - `Execute` 中完成：动态参数（输入/输出 buffer、offset、seq_len 等）绑定、NDRange、可选 profile；
 - `Release`：`clReleaseKernel`；
 - 不在 `Execute` 内 `clFinish`；错误统一映射。
+- Paged attention 额外约定：元数据数组与 KV 池都是 `cl_mem` 加偏移，
+  `SetMemArg` 只设置句柄，偏移必须作为显式参数传入；KV 池偏移用
+  `cl_long`，新增 `SetLongArg(index, int64_t)` 辅助。
 
 **算子目录约定**：
 
@@ -447,6 +478,10 @@ token_count>0` 时返回 `min(token_count, static_rows)`，否则返回静态行
 **边界**：仅在 `batch==1` 启用；多 batch 的 packed 布局与静态 `[B,S]` 行跨度
 不同，沿用静态全量计算，待多 batch 布局契约明确后再优化。
 
+**Paged attention 例外**：paged kernel 不使用 `EffectiveRows` 截断。有效
+token 由 `AttentionContext.token_count` 与 `request_indices/positions` 逐
+token 描述；`seq_lens/context_lens` 决定每个请求的 KV 扫描范围。
+
 ### 4.6 8 个算子的优化策略摘要
 
 | 算子 | 瓶颈 | 核心策略 | 关键参数 |
@@ -456,13 +491,19 @@ token_count>0` 时返回 `min(token_count, static_rows)`，否则返回静态行
 | linear | 计算/带宽 | NT GEMM；4×4/8×4 寄存器分块；half8 向量；权重打包；N 方向 grid-stride | M=256,K=1024,N≤151936 |
 | linear_swi_glu | 计算 + 双 GEMM | 共享 x，gate/up 双累加；silu 融合 epilogue | I=3072 |
 | per_head_rmsnorm_rope | 计算 + 逐头归约 | GEMM 后逐 head RMSNorm + RoPE epilogue；预计算/查表 cos/sin；half8 | H=16/8,D=128 |
-| mega_attention | 计算 + 带宽 | 分块 online softmax；Q tile 寄存器；K/V 复用 2 个 Q head；causal 跳过 | S≤256,H=16,KV=8,D=128 |
+| mega_attention | 计算 + 带宽 | 全量：分块 online softmax、Q tile 寄存器、K/V 复用、causal 跳过；paged：两段式（KV store + 块表读取），baseline 一 token 一 work-item | S≤256,H=16,KV=8,D=128；block=16 |
 | add | 带宽 | half8；一 WG 多元素；合并访存 | 1024 元素 |
 | sample | 带宽 | 两阶段 argmax；half8 比较；确定性 tie-break | V=151936 |
 
 详细设计、workgroup 选择、寄存器分块与实测目标见各算子 `.doc`。
 
 ### 4.7 目标设备优化要点
+
+**Paged attention 的阶段性预期**：P4.8 先实现“一 work-item 一
+(token, q_head)”的 baseline，长上下文下每 token 需扫描全部 KV 块，性能
+有限；阶段一以正确性与端到端可运行为目标。后续优化顺序：
+query tile 共享 K/V、GQA K/V 复用、按块并行 + 归约（FlashDecoding）、
+half8 向量加载与 causal 块跳过。
 
 #### 4.7.1 Intel Arc（当前主环境）
 
@@ -577,7 +618,8 @@ gather/add 的标量与 half8 路径、sample argmax、Program 编译/二进制�
 | P4.4 | 逐算子性能优化（寄存器分块/向量化/softmax 等） | 第一轮：linear half8/单行尾部、attention 单遍 online softmax |
 | P4.5 | 真机性能测试（vs Mock）与回归 | 主机 Intel Arc 已记录（`test_results.md` 11.5）；Mali 待重连 |
 | P4.6 ✅ | 全算子端到端 Token 一致性（OCL vs Mock） | 3 条 prompt 的 OCL/Mock/PyTorch token 全部一致（`test_results.md` 11.3–11.4） |
-| P4.7 | OCL 后端四件套收口与审计 | 完整四件套 |
+| P4.7 | OCL 后端四件套收口与审计（前置 8 算子） | 完整四件套 |
+| P4.8 | Paged Attention（阶段一）：KV store + 块表 attention + chunked/mixed | paged kernel + 数值/端到端测试结果 + skill |
 
 ### 5.2 任务拆解
 
@@ -593,6 +635,9 @@ gather/add 的标量与 half8 路径、sample argmax、Program 编译/二进制�
 | OCL-T08 | 逐算子优化 + 与 Mock 性能对比（第一轮：linear/attention 已优化并记录） | OCL-T05/06/07 |
 | OCL-T09 | 真机测试脚本/结果/skill 收口（主机完成；Mali 待重连） | OCL-T08 |
 | OCL-T10 ✅ | 全算子端到端 Token 一致性（同一输入 Token，OCL vs Mock） | OCL-T08、P3 Loader/op_runner |
+| OCL-T11 | `paged_kv_store`：slot 写入、NHD 地址、64 位偏移 | OCL-T04、RuntimeCore 元数据 |
+| OCL-T12 | `mega_attention_paged`：块表循环、causal、GQA、混合 batch | OCL-T11 |
+| OCL-T13 | Paged 单测与调度 e2e：chunked/mixed/4 并发/OOM | OCL-T12、RuntimeCore 调度 |
 
 ### 5.3 里程碑与风险
 
@@ -602,6 +647,7 @@ gather/add 的标量与 half8 路径、sample argmax、Program 编译/二进制�
 | M-OCL-2 | 8 个基线 Kernel 与 Mock 数值对齐 |
 | M-OCL-3 | 8 个算子完成优化并记录 vs Mock 性能 |
 | M-OCL-4 | 四件套齐全 |
+| M-OCL-5 | Paged attention 与全量 attention 数值一致；调度 e2e 通过 |
 
 | 风险 | 影响 | 应对 |
 | --- | --- | --- |
@@ -632,6 +678,9 @@ gather/add 的标量与 half8 路径、sample argmax、Program 编译/二进制�
 - 默认 small：`B=1, S=8, H=64, I=128, heads=4, kv_heads=2, D=16, V=128`；
 - 真实形状（性能）：`B=1, S=256, H=1024, I=3072, heads=16, kv_heads=8, D=128, V=151936`；
 - 每算子至少：default、`S=1`、zero/边界、不同 seed。
+- Paged attention 额外：`block_size=16`；seq=1/8/16/17/33/40/256；
+  chunked（context=16+16、15+17）；decode（context=1..256）；混合 batch
+  （2 个 prefill chunk + 2 个 decode）；非连续物理块表。
 
 ### 6.3 正确性阈值
 
@@ -645,7 +694,8 @@ gather/add 的标量与 half8 路径、sample argmax、Program 编译/二进制�
 | linear | 2e-2 | 5e-3 | 0.9999 |
 | linear_swi_glu | 2e-2 | 5e-3 | 0.9999 |
 | per_head_rmsnorm_rope | 2e-2 | 5e-3 | 0.9999 |
-| mega_attention | 3e-2 | 1e-2 | 0.999 |
+| mega_attention（全量） | 3e-2 | 1e-2 | 0.999 |
+| mega_attention_paged | 3e-2 | 1e-2 | 0.999 |
 | sample | Token 100% 一致 | — | — |
 
 ### 6.4 性能测试协议
@@ -707,11 +757,25 @@ gather/add 的标量与 half8 路径、sample argmax、Program 编译/二进制�
   `Backend::UploadAt/DownloadAt`（见 `backend_design.md` 4.1.1），OCL 映射为
   `clEnqueue*Buffer` 的 `buffer_offset`。
 
+**调度模式端到端（P4.8）**：
+
+- 使用 `qwen3_0_6b_kv` 包（`use_kv_cache=true`）与 `recompute_attention=false`；
+- 用例：
+  1. 单请求 chunked prefill（prompt > `max_prefill_chunk`）；
+  2. 4 并发，prompt 长度 1/5/17/33，`max_tokens=16`；
+  3. decode 进行中提交新请求（混合 batch）；
+  4. 小 KV 预算触发 recompute 抢占，4 个请求全部完成；
+- 判定：每请求 token 与 PyTorch golden 逐 token 一致；OCL 与 Mock paged
+  使用同一元数据契约，结果一致；记录 preempted_requests、每步 KV 块数；
+- 旧 `qwen3_0_6b`（`use_kv_cache=false`）的 3 条 prompt 回归必须继续通过。
+
 **与单算子测试的关系**：单算子 vs Mock 保证 kernel 级正确；端到端 Token 保证融合图、I/O、Sample、packing/offset 与多算子累积误差可接受。两者都通过才算 OCL 后端可用。
 
 ### 6.7 未覆盖项与风险
 
-- 未覆盖 Paged KV / Decode attention（阶段二）；
+- Paged attention 只覆盖 full attention、NHD、block=16；前缀共享/COW、
+  sliding window、MLA/Mamba 未覆盖；
+- Paged baseline 的性能未达产品目标；tiled/FlashDecoding 优化未做；
 - 未覆盖 Image 路径、SVM、量化；
 - 未覆盖多设备/多驱动矩阵（首期锁定 Mali-G925）；
 - 未覆盖 APK/JNI 集成（真机测试用可执行文件）；

@@ -13,7 +13,7 @@
 ## 输入
 
 1. `Runtime/.doc/Runtime_design.md` 4.2.5 与 `MobileNet_design.md` 4.3.6；
-2. `Runtime/destroy/.doc/destroyer_design.md`（本模块权威设计）；
+2. `Runtime/destroy/.doc/destroy_design.md`（本模块权威设计）；
 3. `Runtime/destroy/destroyer.h`（DestroyContext/IDestroyer）；
 4. `Graph/include/{graph,op}.h`、`Runtime/backend/backend.h`、
    `Runtime/executor/executor.h`、`Runtime/common/{resource_stack,status}.h`；
@@ -67,7 +67,7 @@ python -m ziglang c++ -std=c++17 -Wall -Wextra -I "d:/Mobile_Net" \
 
 ### 5. 更新文档与结果
 
-- 顺序/幂等语义变化先改 `Runtime/destroy/.doc/destroyer_design.md`；
+- 顺序/幂等语义变化先改 `Runtime/destroy/.doc/destroy_design.md`；
 - 实际命令/输出写入 `Runtime/destroy/tests/test_results.md`；
 - 新增阶段需在追溯表中补需求与用例。
 

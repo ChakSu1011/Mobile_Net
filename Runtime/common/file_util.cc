@@ -97,6 +97,7 @@ Status FileReader::Open(const std::string& path) {
                       "FileReader::Open: path must not be empty");
   }
   Close();
+  stream_.clear();
   stream_.open(path, std::ios::binary | std::ios::in);
   if (!stream_.is_open()) {
     return IoError("open", path, "");

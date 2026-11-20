@@ -106,7 +106,7 @@ checks=26 failures=0
 - 编译：退出码 0，`-Wall -Wextra` 无警告。
 - 运行：退出码 0，`checks=26 failures=0`。
 - 释放顺序、错误收集与幂等符合
-  `Runtime/destroy/.doc/destroyer_design.md` 的 FR-DES-01~08。
+  `Runtime/destroy/.doc/destroy_design.md` 的 FR-DES-01~08。
 
 ## 7. 未覆盖项与风险
 

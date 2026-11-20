@@ -206,6 +206,20 @@ Engine test                         -> all engine checks passed
 Runtime 全部 .cc 单文件编译          -> failed=0
 ```
 
+### 5.8 模块实现测试汇总
+
+| 模块 | 命令/结果 | 结论 |
+| --- | --- | --- |
+| Scheduler | `scheduler_test.exe`：`checks=83 failures=0` | 通过 |
+| KVCache | `kvcache_test.exe`：`checks=63 failures=0` | 通过 |
+| Destroy | `destroyer_test.exe`：`checks=26 failures=0` | 通过 |
+| Executor | `executor_test.exe`：54 PASS / 0 FAIL | 通过 |
+| Loader | `loader_smoke.exe` T1 全量加载：PASSED，9.328 s | 通过 |
+| Engine | `engine_test.exe`：`all engine checks passed` | 通过 |
+| Runtime CMake | `TempSpace/runtime_cmake_20261120` 构建 66/66 成功 | 通过 |
+
+细节见各模块 `tests/test_results.md`。
+
 ## 6. 结论
 
 - 全部 Runtime 公共头文件（common、loader、scheduler、kvcache、engine、

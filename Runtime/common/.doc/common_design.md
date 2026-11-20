@@ -77,7 +77,7 @@ resource_stack` 等契约文件，但缺少 JSON、哈希与文件读取实现�
 
 | 文件 | 职责 | 依赖 |
 | --- | --- | --- |
-| `jaon.h/.cc`（实际 `json.h`） | 严格 JSON 解析与只读访问 | status.h |
+| `json.h/.cc` | 严格 JSON 解析与只读访问 | status.h |
 | `sha256.h/.cc` | 流式 SHA-256 | 无 |
 | `file_util.h/.cc` | 文件大小/区间/顺序读取/文件哈希 | status.h、sha256.h |
 

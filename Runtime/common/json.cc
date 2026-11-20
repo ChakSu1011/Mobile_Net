@@ -470,15 +470,16 @@ class Parser {
     C8* token_end = nullptr;
     errno = 0;
     if (!is_float) {
-      const long long parsed = std::strtoll(token_begin, &token_end, 10);
+      const I64 parsed = static_cast<I64>(
+          std::strtoll(token_begin, &token_end, 10));
       if (errno == ERANGE ||
           token_end != token_begin + token.size()) {
         return Error("integer out of range");
       }
-      *out = JsonValue::MakeInt(static_cast<I64>(parsed));
+      *out = JsonValue::MakeInt(parsed);
       return Status::Ok();
     }
-    const double parsed = std::strtod(token_begin, &token_end);
+    const FP64 parsed = std::strtod(token_begin, &token_end);
     if (token_end != token_begin + token.size()) {
       return Error("invalid floating point number");
     }

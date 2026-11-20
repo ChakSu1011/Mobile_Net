@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <map>
 #include <string>
 #include <vector>
@@ -51,12 +52,14 @@ Bool Check(Bool condition, const C8* message) {
 // 测试入口。
 //
 // 参数：
-//   argv[1]（可选）：模型包目录，默认 Models/Qwen3/artifacts/qwen3_0_6b。
+//   argv[1]（可选）：模型包目录，默认 Models/Qwen3/artifacts/qwen3_0_6b；
+//   argv[2]（可选）：仅运行指定下标的用例，缺省运行全部。
 // 返回：
 //   全部用例通过返回 0；否则返回 1。
 I32 main(I32 argc, C8** argv) {
   const std::string package =
       argc > 1 ? argv[1] : "Models/Qwen3/artifacts/qwen3_0_6b";
+  const I32 only_case = argc > 2 ? std::atoi(argv[2]) : -1;
   const std::vector<GoldenCase> cases = {
       {"Hello", {9707}, 21806},
       {"The capital of France is", {785, 6722, 315, 9625, 374}, 12095},
@@ -89,7 +92,11 @@ I32 main(I32 argc, C8** argv) {
   }
 
   I32 failures = 0;
-  for (const GoldenCase& item : cases) {
+  for (Usize case_index = 0; case_index < cases.size(); ++case_index) {
+    if (only_case >= 0 && static_cast<I32>(case_index) != only_case) {
+      continue;
+    }
+    const GoldenCase& item = cases[case_index];
     mobilenet::runtime::Request request;
     request.prompt_token_ids = item.prompt_ids;
     request.sample_param.is_valid = true;

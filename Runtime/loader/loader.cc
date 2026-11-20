@@ -21,6 +21,7 @@
 #include "Runtime/loader/loader.h"
 
 #include <algorithm>
+#include <cstring>
 #include <limits>
 #include <map>
 #include <memory>
@@ -961,14 +962,28 @@ Status DefaultLoader::LoadPackage(const LoadConfig& config,
       if (!status.ok()) {
         return status;
       }
-      std::vector<U8> host_bytes;
-      status = reader.ReadAt(entry.offset, entry.byte_size, &host_bytes);
-      if (!status.ok()) {
-        return status;
+      // 按 8 MB 分块读取单个条目并增量哈希；ConvertParam 需要完整主机
+      // 缓冲，因此只保留当前条目（最大约 311 MB）。
+      std::vector<U8> host_bytes(static_cast<Usize>(entry.byte_size));
+      Sha256 entry_sha;
+      U64 done = 0;
+      while (done < entry.byte_size) {
+        const U64 chunk = std::min<U64>(
+            kWeightReadChunkBytes, entry.byte_size - done);
+        std::vector<U8> part;
+        status = reader.ReadAt(entry.offset + done, chunk, &part);
+        if (!status.ok()) {
+          return status;
+        }
+        std::memcpy(host_bytes.data() + static_cast<Usize>(done),
+                    part.data(), static_cast<Usize>(chunk));
+        if (verify_weights && !entry.sha256.empty()) {
+          entry_sha.Update(part.data(), part.size());
+        }
+        done += chunk;
       }
       if (verify_weights && !entry.sha256.empty()) {
-        const std::string actual =
-            Sha256::Hex(host_bytes.data(), host_bytes.size());
+        const std::string actual = entry_sha.HexDigest();
         if (actual != entry.sha256) {
           return PackageError("weight SHA-256 mismatch: " + entry.name);
         }

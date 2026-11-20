@@ -2,10 +2,10 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档版本 | v0.4 |
-| 文档状态 | 架构设计（请求/响应模型已迁移） |
-| 编写日期 | 2026-11-19 |
-| 变更摘要 | v0.4：新增 `Runtime/common/sequence.h` 请求/响应模型（Request/Response/RequestStatus/SampleParams/Token/Sequence）；定义 Service→Engine→Scheduler 的请求与响应流；原 `request.h` 迁移；v0.3：Engine→Executor→Backend 所有权；Kernel 契约迁至 `Runtime/backend/` |
+| 文档版本 | v0.5 |
+| 文档状态 | 架构设计（Runtime Mock 全链路已实现） |
+| 编写日期 | 2026-11-20 |
+| 变更摘要 | v0.5：Loader/Scheduler/KVCache/Executor/Destroy 实现完成；Mock 后端 Qwen3-0.6B 单步前向与 PyTorch token 对齐；新增 `recompute_attention` 模式；v0.4：`sequence.h` 请求/响应模型；v0.3：Engine→Executor→Backend 所有权 |
 | 模块 | `Runtime/` |
 | 权威位置 | `Runtime/.doc/Runtime_design.md` |
 | 上游文档 | [`.doc/MobileNet_design.md`](../../.doc/MobileNet_design.md)、[`Graph/.doc/Graph_design.md`](../../Graph/.doc/Graph_design.md) |
@@ -438,6 +438,7 @@ struct RuntimeConfig {
   bool allow_metadata_only = false;
   bool threaded = false;
   int32_t max_concurrent_batches = 1;    // 阶段三使用，v1 固定 1
+  bool recompute_attention = false;      // 无 KV/调试时每步重算完整序列
 };
 
 struct ModelConfig {                     // 来自 manifest metadata
@@ -749,6 +750,7 @@ struct SchedulerConfig {
   int32_t max_prefill_chunk = 0;
   int64_t context_length = 0;
   std::vector<int64_t> stop_ids;
+  bool recompute_attention = false; // true: 每步提交完整历史，不分配 KV
 };
 
 struct SchedulerStats {
@@ -786,6 +788,9 @@ std::unique_ptr<IScheduler> CreateDefaultScheduler();
   重复释放。
 - `Update` 的 token 向量支持阶段三投机解码一次接受多个 token；阶段一/二
   长度为 1。
+- `recompute_attention=true` 时（Mock 等无 KV 后端）：Scheduler 每步提交
+  完整历史 token/positions，`output_slot` 为最后位置，不调用
+  `KvAllocator::Reserve`；`false` 时走 chunked prefill + decode 的 KV 模式。
 - `Response*` 不允许为空；调用方（Engine）提供栈上对象，Scheduler 填充。
 - 实现必须保证 `Merge/Stop/HasRequests` 可被调用方线程与推理线程并发调用
   （内部加锁）；`Schedule/Update/Fail/Stats` 由推理线程调用。
@@ -1156,22 +1161,34 @@ engine.Destroy()              // 任意非 DESTROYED → DESTROYED
 ```text
 Runtime/
 ├── .doc/Runtime_design.md          # 本文件
-├── CMakeLists.txt                  # 后续阶段创建，汇总子目录
-├── common/                         # 数据对象与工具（本阶段：头文件）
-├── loader/loader.h                 # ILoader
-├── scheduler/scheduler.h           # IScheduler
-├── kvcache/kv_cache_manager.h      # IKVCache
-├── engine/engine.h                 # Engine
+├── CMakeLists.txt                  # Runtime 汇总构建
+├── common/                         # 数据对象、JSON/SHA/文件工具
+├── loader/loader.h/.cc             # ILoader + manifest/IR dump
+├── scheduler/scheduler.h/.cc       # IScheduler
+├── kvcache/kv_cache_manager.h/.cc  # IKVCache
+├── engine/engine.h/.cc             # Engine
 ├── engine/engine_modules.h         # EngineModules（可注入模块集合）
-├── destroy/destroyer.h             # IDestroyer
-├── executor/executor.h             # IExecutor（ExecBackend）
+├── destroy/destroyer.h/.cc         # IDestroyer
+├── executor/executor.h/.cc         # IExecutor
 ├── backend/backend.h               # Backend/Buffer/BackendCapability（ExecBackend）
 ├── backend/kernel.h                # Kernel/KernelDesc 公共契约（ExecBackend）
 ├── backend/kernel_context.h        # KernelContext（ExecBackend）
-└── backend/kernel_types.h          # Backend/Kernel 类型映射（ExecBackend）
+├── backend/kernel_types.h          # Backend/Kernel 类型映射（ExecBackend）
+└── tests/mock_e2e_test.cc          # Mock 后端 Qwen3 端到端
 ```
 
-构建：后续阶段由 `Runtime/CMakeLists.txt` 链接 Graph 静态库（`GRAPH_BUILD_PYTHON=OFF`）；各模块独立 target 与测试 target。本阶段只要求头文件可 `-fsyntax-only`。
+构建：
+
+```bash
+cmake -S Runtime -B Runtime/build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CXX_COMPILER=d:/Mobile_Net/Graph/tools/zig_cxx.cmd
+cmake --build Runtime/build
+./Runtime/build/mock_e2e_test.exe Models/Qwen3/artifacts/qwen3_0_6b 0
+```
+
+`Runtime/CMakeLists.txt` 链接 Graph 静态库（`GRAPH_BUILD_PYTHON=OFF`）与
+`runtime_backend`（含 Mock 自注册，whole-archive），并构建 Mock 端到端测试。
 
 ---
 
@@ -1225,8 +1242,9 @@ Runtime/
 | TC-ENG-01 | Load/Destroy ×100、非法状态、重复 Destroy、中途失败 | 无泄漏；幂等；错误码正确 |
 | TC-ROBUST-01 | 设备错误、Forward 失败、绑定缺失 | 不崩溃；可定位；可回收 |
 | TC-COMPAT-01 | mock 后端接入 | 只加目录 + 配置；上层零改动 |
+| TC-E2E-MOCK-01 | Mock 后端加载 Qwen3-0.6B，执行单步完整序列前向，比较 argmax token 与 PyTorch | Token 与参考一致；无崩溃/泄漏 |
 
-环境：Windows 11 / Linux 主机，C++17，CMake 3.20+，FakeBackend；真机 Android + OCL 用于 R4/R5。测试结果写入各模块 `tests/test_results.md`。
+环境：Windows 11 / Linux 主机，C++17，CMake 3.20+，MockBackend；真机 Android + OCL 用于 R4/R5。测试结果写入各模块 `tests/test_results.md` 与 `Runtime/tests/test_results.md`。
 
 ---
 

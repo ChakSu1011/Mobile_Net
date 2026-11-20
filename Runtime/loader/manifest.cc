@@ -1383,6 +1383,11 @@ Status ReadModelPackageHeader(const std::string& model_file,
   if (!status.ok()) {
     return status;
   }
+  if (file_size < kModelPackageHeaderSize) {
+    return MakeStatus(ErrorCode::kInvalidModelFile,
+                      "model file is too short for header: " +
+                          model_file);
+  }
   std::vector<U8> bytes;
   status = ReadFileRange(model_file, 0, kModelPackageHeaderSize, &bytes);
   if (!status.ok()) {

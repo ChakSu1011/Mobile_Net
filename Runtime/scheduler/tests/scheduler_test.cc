@@ -627,6 +627,10 @@ void TestMinTokensAndIgnoreEos() {
 
 }  // namespace
 
+// 测试入口。
+//
+// 返回：
+//   全部用例通过返回 0；存在失败断言返回 1。
 int main() {
   std::cout << "Runtime Scheduler unit test\n";
   TestRecomputeSingleRequest();

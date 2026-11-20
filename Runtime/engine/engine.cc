@@ -695,12 +695,20 @@ Status Engine::ExecuteStep(StepStats* stats) {
     }
     auto result_it = result_by_id.find(entry.request_id);
     if (result_it == result_by_id.end()) {
+      // 纯 Prefill chunk 不产生 token（output_slot<0），Executor 不返回结果。
+      if (entry.output_slot < 0) {
+        continue;
+      }
       fail_request(entry.request_id, ErrorCode::kInternal);
       continue;
     }
     const RequestStepResult& result = *result_it->second;
     if (!result.ok) {
       fail_request(result.request_id, result.error);
+      continue;
+    }
+    if (entry.output_slot < 0) {
+      // 该 entry 不产出 token，忽略 Executor 可能返回的占位 token。
       continue;
     }
     Response response;

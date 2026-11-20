@@ -374,9 +374,10 @@ Status SchedulerImpl::Merge(const Request& request, U64* request_id) {
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "Scheduler::Merge: prompt is too long");
   }
-  if (prompt_size > context_length_) {
-    return MakeStatus(ErrorCode::kInvalidArgument,
-                      "Scheduler::Merge: prompt exceeds context_length");
+  if (prompt_size >= context_length_) {
+    return MakeStatus(
+        ErrorCode::kInvalidArgument,
+        "Scheduler::Merge: prompt leaves no room in context_length");
   }
   if (recompute_attention_ && prompt_size >= max_num_tokens_) {
     return MakeStatus(
@@ -402,8 +403,17 @@ Status SchedulerImpl::Merge(const Request& request, U64* request_id) {
 
   U64 assigned_id = request.request_id;
   if (assigned_id == 0) {
+    const U64 kMaxRequestId = std::numeric_limits<U64>::max();
     while (requests_.find(next_request_id_) != requests_.end()) {
+      if (next_request_id_ == 0 || next_request_id_ == kMaxRequestId) {
+        return MakeStatus(ErrorCode::kDeviceOom,
+                          "Scheduler::Merge: request_id space exhausted");
+      }
       ++next_request_id_;
+    }
+    if (next_request_id_ == 0 || next_request_id_ == kMaxRequestId) {
+      return MakeStatus(ErrorCode::kDeviceOom,
+                        "Scheduler::Merge: request_id space exhausted");
     }
     assigned_id = next_request_id_++;
   } else if (assigned_id == std::numeric_limits<U64>::max()) {

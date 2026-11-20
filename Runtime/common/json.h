@@ -29,15 +29,7 @@ namespace mobilenet {
 namespace runtime {
 
 class JsonValue;
-
-// JSON 对象成员：键 + 值，保留解析时的插入顺序。
-struct JsonMember {
-  // 成员名；允许为空字符串（JSON 合法）。
-  std::string key;
-
-  // 成员值。
-  JsonValue value;
-};
+struct JsonMember;
 
 // 只读 JSON 值。
 //
@@ -153,6 +145,19 @@ class JsonValue {
   // 对象成员；JsonMember 在定义时包含完整 JsonValue，vector 允许不完整
   // 类型，特殊成员函数均在本文件内 JsonMember 完整定义之后实现。
   std::vector<JsonMember> object_value_;
+};
+
+// JSON 对象成员：键 + 值，保留解析时的插入顺序。
+//
+// 说明：
+//   JsonValue 内含 std::vector<JsonMember>，因此本结构必须在 JsonValue
+//   之后定义；JsonValue 的特殊成员函数在 json.cc 中此定义可见后实现。
+struct JsonMember {
+  // 成员名；允许为空字符串（JSON 合法）。
+  std::string key;
+
+  // 成员值。
+  JsonValue value;
 };
 
 // 解析严格 JSON 文本。

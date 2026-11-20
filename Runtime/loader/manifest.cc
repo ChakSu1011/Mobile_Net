@@ -539,7 +539,9 @@ Status ParseTensors(const JsonValue& value, const std::string& context,
       if (!status.ok()) {
         return status;
       }
-      if (meta.pitch.size() != meta.dims.size()) {
+      // 空 pitch 表示与 shape 相同（与 ToolChain MakeStorage 语义一致）。
+      if (!meta.pitch.empty() &&
+          meta.pitch.size() != meta.dims.size()) {
         return ManifestError(item_context +
                              ".pitch length must match shape");
       }
@@ -1463,7 +1465,8 @@ Status ParseManifest(const std::string& text, ModelManifest* manifest) {
     return status;
   }
   field = model->Find("config");
-  manifest->model_config = field != nullptr ? *field : JsonValue::MakeObject({});
+  manifest->model_config =
+      field != nullptr ? *field : JsonValue::MakeObject({});
   if (!manifest->model_config.IsObject()) {
     return ManifestError("manifest.model.config must be an object");
   }
@@ -1642,7 +1645,8 @@ Status ParseManifest(const std::string& text, ModelManifest* manifest) {
       manifest->optimization_config.Find("alignment");
   if (alignment_field != nullptr) {
     U64 config_alignment = 0;
-    status = ReadUint(*alignment_field, "manifest.optimization.config.alignment",
+    status = ReadUint(*alignment_field,
+                      "manifest.optimization.config.alignment",
                       &config_alignment);
     if (!status.ok()) {
       return status;

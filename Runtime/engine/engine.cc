@@ -173,6 +173,7 @@ Status BuildSchedulerConfig(const RuntimeConfig& runtime,
   config->max_prefill_chunk = max_num_tokens;
   config->context_length = model.context_length;
   config->stop_ids = model.stop_token_ids;
+  config->recompute_attention = runtime.recompute_attention;
   return Status::Ok();
 }
 

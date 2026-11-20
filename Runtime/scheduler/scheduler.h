@@ -56,6 +56,9 @@ struct SchedulerConfig {
 
   // 模型默认停止 token id。
   std::vector<I64> stop_ids;
+
+  // 是否每步重算完整序列（无 KV 的后端/调试用）。
+  Bool recompute_attention = false;
 };
 
 // 调度统计。

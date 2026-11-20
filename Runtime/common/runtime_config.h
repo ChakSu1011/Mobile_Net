@@ -68,6 +68,9 @@ struct RuntimeConfig {
 
   // 阶段三异步调度的在途 batch 数；v1 必须为 1。
   I32 max_concurrent_batches = 1;
+
+  // 是否每步重算完整序列（无 KV 的后端/调试用）；默认关闭。
+  Bool recompute_attention = false;
 };
 
 }  // namespace runtime

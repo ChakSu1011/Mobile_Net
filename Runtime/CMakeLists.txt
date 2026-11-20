@@ -158,5 +158,19 @@ if(MOBILENET_BUILD_E2E_TESTS)
       COMMAND ocl_kv_e2e_test
         "${MOBILENET_ROOT}/Models/Qwen3/artifacts/qwen3_0_6b_kv" mismatch)
     set_tests_properties(ocl_kv_mode_mismatch PROPERTIES SKIP_RETURN_CODE 77)
+
+    # 交互式 token REPL：终端输入 token id，输出自回归 token。
+    add_executable(ocl_token_repl
+      backend/ocl/tests/ocl_token_repl.cc)
+    target_link_libraries(
+      ocl_token_repl PRIVATE
+      "$<LINK_LIBRARY:WHOLE_ARCHIVE,mobilenet_runtime>"
+      "$<LINK_LIBRARY:WHOLE_ARCHIVE,runtime_backend>"
+      graph Threads::Threads)
+    if(MSVC)
+      target_compile_options(ocl_token_repl PRIVATE /W4)
+    else()
+      target_compile_options(ocl_token_repl PRIVATE -Wall -Wextra)
+    endif()
   endif()
 endif()

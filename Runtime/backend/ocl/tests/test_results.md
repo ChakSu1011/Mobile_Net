@@ -940,3 +940,64 @@ all ocl e2e checks passed
   `Runtime/scheduler/tests/scheduler_test.cc` 的 `TestKvPreemption` 覆盖；
 - Paged kernel 为“一 token 一 work-item”baseline，长上下文性能未调优；
 - Mali-G925 真机待重连。
+
+---
+
+# 13. 交互式 Token REPL（2026-11-21）
+
+## 13.1 程序与用法
+
+程序：`Runtime/backend/ocl/tests/ocl_token_repl.cc`，构建目标
+`ocl_token_repl`。
+
+```bash
+./Runtime/build/ocl_token_repl.exe \
+  --package Models/Qwen3/artifacts/qwen3_0_6b_kv \
+  --max-new 8
+```
+
+终端输入一行 token id（空格/逗号/方括号分隔），程序执行 prefill +
+decode 并逐 token 打印；支持多轮输入。
+
+## 13.2 实际输出
+
+输入：
+
+```text
+9707
+quit
+```
+
+输出：
+
+```text
+loading package Models/Qwen3/artifacts/qwen3_0_6b_kv on backend ocl...
+ready. enter token ids (e.g. 9707), or :help
+tokens> token 21806
+token 0
+token 358
+token 2776
+token 264
+token 2699
+token 21815
+token 911
+[done] status=stopped generated=8 tokens=21806 0 358 2776 264 2699 21815 911
+```
+
+第二组：
+
+```text
+tokens> 785, 6722, 315, 9625, 374
+token 12095
+token 13
+token 576
+token 6722
+```
+
+## 13.3 结论
+
+- REPL 在本地 Intel Arc GPU 上完成 prefill/decode 与自回归 token 输出；
+- 支持 `--max-new`、`--max-num-tokens`、`--kv-mb`、`--backend`、
+  `--recompute`、`--ignore-eos`、`--verbose`；
+- 只处理 token id，不做 tokenizer；文本输入/输出需外部 tokenizer；
+- 该程序是交互工具，不注册 CTest。

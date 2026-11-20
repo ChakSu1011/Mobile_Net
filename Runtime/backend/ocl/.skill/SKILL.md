@@ -324,3 +324,13 @@ P4.6 关键陷阱：
 - 两段 kernel 在同一 in-order 队列顺序入队；不要在中间 `clFinish`。
 - 调试数值时先检查 `KvLayerView.dtype` 与布局，再用小形状对比 Mock；
   FP16 位型不能用 `static_cast<float>`。
+
+## 交互式 Token REPL（2026-11-21）
+
+- 目标：`ocl_token_repl`；源码 `tests/ocl_token_repl.cc`。
+- 用法：`./Runtime/build/ocl_token_repl.exe --max-new 8`，输入一行
+  token id（空格/逗号分隔），输出逐 token。
+- 默认包 `Models/Qwen3/artifacts/qwen3_0_6b_kv`，默认 OCL；
+  旧 prefill 包加 `--recompute`。
+- 只处理 token id，不做 tokenizer；`--verbose` 打印每步 prefill/decode
+  统计。

@@ -652,11 +652,15 @@ class FakeLoader final : public ILoader {
 
 // 以下默认工厂桩只为本测试提供最小可用实现；真实模块落地后删除。
 std::unique_ptr<ILoader> CreateDefaultLoader() { return nullptr; }
+// 测试桩：默认 Scheduler 工厂返回空，验证 Engine 对缺失模块的处理。
 std::unique_ptr<IScheduler> CreateDefaultScheduler() { return nullptr; }
+// 测试桩：默认 Executor 工厂返回空。
 std::unique_ptr<IExecutor> CreateDefaultExecutor() { return nullptr; }
+// 测试桩：默认 KVCache 工厂返回空。
 std::unique_ptr<IKVCache> CreateDefaultKVCache() {
   return std::make_unique<FakeKVCache>();
 }
+// 测试桩：默认 Destroyer 工厂返回空。
 std::unique_ptr<IDestroyer> CreateDefaultDestroyer() { return nullptr; }
 
 }  // namespace runtime

@@ -31,10 +31,12 @@ constexpr C8 kWorkspacePrefix[] = "workspace.";
 
 }  // namespace
 
+// 保存 op/backend/spec 借用指针。
 KernelOpEnv::KernelOpEnv(runtime_graph::Op* op, Backend* backend,
                          const OpSpec* spec)
     : ExecOpEnv(op), backend_(backend), spec_(spec) {}
 
+// 加载期初始化：校验 spec、缓存输入输出 TensorView、创建 Kernel、登记 workspace。
 Status KernelOpEnv::Init(runtime_graph::GraphEnv* graph_env) {
   Status status = ExecOpEnv::Init(graph_env);
   if (!status.ok()) {
@@ -102,6 +104,7 @@ Status KernelOpEnv::Init(runtime_graph::GraphEnv* graph_env) {
   return Status::Ok();
 }
 
+// 执行节点：填充 KernelContext（含 AttentionContext/元数据），调用 Kernel::Execute。
 Status KernelOpEnv::Forward() {
   if (step_context_ == nullptr) {
     return MakeStatus(ErrorCode::kStateError,
@@ -207,10 +210,12 @@ Status KernelOpEnv::Forward() {
   return Status::Ok();
 }
 
+// 返回 spec 是否声明 workspace。
 Bool KernelOpEnv::NeedTempData() const {
   return spec_ != nullptr && spec_->need_workspace;
 }
 
+// 由 Storage 构造 Kernel 侧 TensorView；校验绑定/精度/布局。
 Status KernelOpEnv::BuildView(const runtime_graph::Tensor& tensor,
                               const C8* role,
                               runtime_graph::TensorView* view) const {

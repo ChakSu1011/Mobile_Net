@@ -27,6 +27,7 @@
 namespace mobilenet {
 namespace ocl {
 
+// 按 kernel_key 分发到具体 OCL Kernel 创建函数；未知 key 返回 kUnsupportedOp。
 Status CreateOclKernel(const KernelDesc& desc, OclContext* context,
                        OclProgramCache* programs,
                        std::unique_ptr<Kernel>* kernel) {

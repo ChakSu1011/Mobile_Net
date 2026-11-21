@@ -17,14 +17,17 @@
 namespace mobilenet {
 namespace mock {
 
+// 从视图取只读 MockBuffer 指针。
 const MockBuffer* GetBuffer(const runtime_graph::TensorView& view) {
   return static_cast<const MockBuffer*>(view.data);
 }
 
+// 从视图取可写 MockBuffer 指针。
 MockBuffer* GetMutableBuffer(const runtime_graph::TensorView& view) {
   return static_cast<MockBuffer*>(view.data);
 }
 
+// 返回 half 数据起始指针（含视图 offset）。
 const FP16* HalfData(const runtime_graph::TensorView& view) {
   const MockBuffer* buffer = GetBuffer(view);
   if (buffer == nullptr) {
@@ -34,6 +37,7 @@ const FP16* HalfData(const runtime_graph::TensorView& view) {
   return reinterpret_cast<const FP16*>(base + view.offset);
 }
 
+// 返回可写 half 数据起始指针。
 FP16* MutableHalfData(const runtime_graph::TensorView& view) {
   MockBuffer* buffer = GetMutableBuffer(view);
   if (buffer == nullptr) {
@@ -43,6 +47,7 @@ FP16* MutableHalfData(const runtime_graph::TensorView& view) {
   return reinterpret_cast<FP16*>(base + view.offset);
 }
 
+// 返回 int32 数据起始指针。
 const I32* Int32Data(const runtime_graph::TensorView& view) {
   const MockBuffer* buffer = GetBuffer(view);
   if (buffer == nullptr) {
@@ -52,6 +57,7 @@ const I32* Int32Data(const runtime_graph::TensorView& view) {
   return reinterpret_cast<const I32*>(base + view.offset);
 }
 
+// 返回 int64 数据起始指针。
 const I64* Int64Data(const runtime_graph::TensorView& view) {
   const MockBuffer* buffer = GetBuffer(view);
   if (buffer == nullptr) {
@@ -61,6 +67,7 @@ const I64* Int64Data(const runtime_graph::TensorView& view) {
   return reinterpret_cast<const I64*>(base + view.offset);
 }
 
+// 返回可写 int64 数据起始指针。
 I64* MutableInt64Data(const runtime_graph::TensorView& view) {
   MockBuffer* buffer = GetMutableBuffer(view);
   if (buffer == nullptr) {
@@ -70,6 +77,7 @@ I64* MutableInt64Data(const runtime_graph::TensorView& view) {
   return reinterpret_cast<I64*>(base + view.offset);
 }
 
+// 返回 Shape 的有效维度列表。
 std::vector<I64> Dims(const runtime_graph::Shape& shape) {
   if (shape.max_dim < 0 || shape.max_dim > runtime_graph::kMaxShapeDim) {
     return {};
@@ -82,6 +90,7 @@ std::vector<I64> Dims(const runtime_graph::Shape& shape) {
   return dims;
 }
 
+// 返回 Shape 的元素总数。
 I64 NumElements(const runtime_graph::Shape& shape) {
   const std::vector<I64> dims = Dims(shape);
   if (dims.empty()) {
@@ -94,6 +103,7 @@ I64 NumElements(const runtime_graph::Shape& shape) {
   return total;
 }
 
+// 读取 half 元素并转换为 FP32。
 FP32 ReadHalf(const runtime_graph::TensorView& view, U64 index) {
   const FP16* data = HalfData(view);
   if (data == nullptr) {
@@ -102,6 +112,7 @@ FP32 ReadHalf(const runtime_graph::TensorView& view, U64 index) {
   return HalfToFloat(data[index]);
 }
 
+// 把 FP32 以 half 舍入写入视图。
 void WriteHalf(const runtime_graph::TensorView& view, U64 index,
                FP32 value) {
   FP16* data = MutableHalfData(view);
@@ -111,6 +122,7 @@ void WriteHalf(const runtime_graph::TensorView& view, U64 index,
   data[index] = FloatToHalf(value);
 }
 
+// 校验 KernelContext 至少包含 count 个输入。
 Status RequireInputCount(const runtime_graph::KernelContext& context,
                          U32 count) {
   if (context.inputs == nullptr || context.input_count < count) {
@@ -120,6 +132,7 @@ Status RequireInputCount(const runtime_graph::KernelContext& context,
   return Status::Ok();
 }
 
+// 校验 KernelContext 至少包含 count 个输出。
 Status RequireOutputCount(const runtime_graph::KernelContext& context,
                           U32 count) {
   if (context.outputs == nullptr || context.output_count < count) {
@@ -129,6 +142,7 @@ Status RequireOutputCount(const runtime_graph::KernelContext& context,
   return Status::Ok();
 }
 
+// 校验 attrs 非空。
 Status RequireAttrs(const runtime_graph::KernelContext& context) {
   if (context.attrs == nullptr) {
     return MakeStatus(ErrorCode::kInvalidArgument,

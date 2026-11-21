@@ -218,6 +218,7 @@ Status BuildMegaAttentionDesc(const runtime_graph::Op& op,
 
 }  // namespace
 
+// MegaAttention OpSpec 实例：绑定校验函数与 KernelDesc 组装函数。
 const OpSpec kMegaAttentionSpec = {
     runtime_graph::OpType::kMegaAttention,
     "mega_attention",

@@ -426,6 +426,7 @@ void TestMissingAttr(I32* failures) {
 
 }  // namespace
 
+// 测试入口：运行 OpEnv 契约与执行链用例并返回失败数。
 I32 main() {
   I32 failures = 0;
   TestSpecRegistry(&failures);

@@ -20,6 +20,8 @@
 namespace mobilenet {
 namespace mock {
 
+// 按 kernel_key 分发到具体 Mock CPU Kernel 创建函数；未知 key 返回
+// kUnsupportedOp。
 Status CreateMockKernel(const KernelDesc& desc,
                         std::unique_ptr<Kernel>* kernel) {
   if (kernel == nullptr) {

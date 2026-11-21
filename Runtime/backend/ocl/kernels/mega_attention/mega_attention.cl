@@ -6,6 +6,8 @@
 
 #pragma OPENCL EXTENSION cl_khr_fp16 : enable
 
+// 全量 causal GQA：一个 work-item 处理一个 (batch, head, query)，
+// 对 key 0..last_key 做 FP32 online softmax。
 __kernel void mega_attention_causal(
     __global const half* q,
     const int q_offset,

@@ -338,14 +338,17 @@ Bool IsFatalError(ErrorCode code) {
 
 }  // namespace
 
+// 构造 Engine：创建空 ResourceStack，等待 SetModules/Load。
 Engine::Engine() : resource_stack_(std::make_unique<ResourceStack>()) {}
 
+// 析构：若未 Destroy 则执行受控释放。
 Engine::~Engine() {
   if (state() != EngineState::kDestroyed) {
     (void)Destroy();
   }
 }
 
+// 注入可替换模块；仅允许在 Load 前调用。
 Status Engine::SetModules(EngineModules modules) {
   std::lock_guard<std::mutex> lock(mutex_);
   if (state_ != EngineState::kCreated) {
@@ -367,6 +370,7 @@ Status Engine::SetModules(EngineModules modules) {
   return Status::Ok();
 }
 
+// 为缺失模块创建默认实现。
 Status Engine::EnsureModules() {
   if (!resource_stack_) {
     resource_stack_ = std::make_unique<ResourceStack>();
@@ -409,6 +413,7 @@ Status Engine::EnsureModules() {
   return Status::Ok();
 }
 
+// 加载编排：Loader→模式校验→Scheduler/KV/Executor Init→绑定 I/O；失败统一回滚。
 Status Engine::Load(const EngineConfig& config) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -562,6 +567,7 @@ Status Engine::Load(const EngineConfig& config) {
   return Status::Ok();
 }
 
+// 进入 RUNNING；threaded 模式启动唯一推理线程。
 Status Engine::Start() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (state_ != EngineState::kLoaded) {
@@ -581,6 +587,7 @@ Status Engine::Start() {
   return Status::Ok();
 }
 
+// 转发请求给 Scheduler；更新累计请求统计。
 Status Engine::AddRequest(const Request& request, U64* request_id) {
   if (request_id == nullptr) {
     return MakeStatus(ErrorCode::kInvalidArgument,
@@ -614,6 +621,7 @@ Status Engine::AddRequest(const Request& request, U64* request_id) {
   return status;
 }
 
+// 转发取消给 Scheduler，并唤醒推理线程。
 Status Engine::CancelRequest(U64 request_id) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -634,6 +642,7 @@ Status Engine::CancelRequest(U64 request_id) {
   return status;
 }
 
+// 回写自定义执行路径产生的 token，并在终态触发回调。
 Status Engine::Update(U64 request_id,
                       const std::vector<Token>& tokens,
                       Response* response) {
@@ -663,6 +672,7 @@ Status Engine::Update(U64 request_id,
   return Status::Ok();
 }
 
+// 单线程模式执行一步；threaded 模式拒绝。
 Status Engine::RunOnce(StepStats* stats) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -681,6 +691,7 @@ Status Engine::RunOnce(StepStats* stats) {
   return ExecuteStep(stats);
 }
 
+// 单步：Schedule→BuildView→Execute→逐请求 Update→回调→StepStats。
 Status Engine::ExecuteStep(StepStats* stats) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -825,6 +836,7 @@ Status Engine::ExecuteStep(StepStats* stats) {
   return Status::Ok();
 }
 
+// 推理线程主循环：等待请求、执行 ExecuteStep、处理停止信号。
 void Engine::InferenceLoop() {
   while (!stop_requested_.load()) {
     StepStats stats;
@@ -848,6 +860,7 @@ void Engine::InferenceLoop() {
   idle_cv_.notify_all();
 }
 
+// 驱动到无未结束请求；超时返回 kTimeout。
 Status Engine::RunUntilIdle(U32 timeout_ms) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -895,6 +908,7 @@ Status Engine::RunUntilIdle(U32 timeout_ms) {
   return Status::Ok();
 }
 
+// 停止线程并按 Destroyer 逆序释放全部资源；幂等。
 Status Engine::Destroy() {
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -949,11 +963,13 @@ Status Engine::Destroy() {
   return status;
 }
 
+// 设置流式响应回调。
 void Engine::SetResponseCallback(ResponseCallback callback) {
   std::lock_guard<std::mutex> lock(mutex_);
   response_callback_ = std::move(callback);
 }
 
+// 在锁外调用 ResponseCallback，避免回调重入死锁。
 void Engine::NotifyResponse(const Response& response) {
   ResponseCallback callback;
   {
@@ -970,6 +986,7 @@ void Engine::NotifyResponse(const Response& response) {
   }
 }
 
+// 绑定图输入主机 Storage 到 IoBinder。
 Status Engine::SetInput(const std::string& name,
                         const runtime_graph::Storage& host_storage) {
   {
@@ -994,6 +1011,7 @@ Status Engine::SetInput(const std::string& name,
   return it->second->SetAttr("storage", host_storage);
 }
 
+// 绑定图输出主机 Storage 到 IoBinder。
 Status Engine::SetOutput(const std::string& name,
                          const runtime_graph::Storage& host_storage) {
   {
@@ -1018,6 +1036,7 @@ Status Engine::SetOutput(const std::string& name,
   return it->second->SetAttr("storage", host_storage);
 }
 
+// 把输入/输出 op 的 attr["storage"] 绑定到 IoBinder。
 Status Engine::BindGraphIo() {
   if (!graph_) {
     return MakeStatus(ErrorCode::kStateError, "graph is not available");
@@ -1041,11 +1060,13 @@ Status Engine::BindGraphIo() {
   return Status::Ok();
 }
 
+// 返回当前生命周期状态。
 EngineState Engine::state() const {
   std::lock_guard<std::mutex> lock(mutex_);
   return state_;
 }
 
+// 返回累计统计快照。
 EngineStats Engine::stats() const {
   std::lock_guard<std::mutex> lock(mutex_);
   return stats_;

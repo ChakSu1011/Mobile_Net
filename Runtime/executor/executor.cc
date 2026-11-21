@@ -633,11 +633,13 @@ class ExecBackend final : public IExecutor {
   std::vector<HostIoSlot> output_slots_;
 };
 
+// 析构：调用 Deinit 释放 Backend 与全部缓冲，忽略返回值。
 ExecBackend::~ExecBackend() {
   const Status status = Deinit();
   (void)status;
 }
 
+// 初始化 Executor：校验图 I/O/Sample，预分配主机 I/O 槽，接管 Backend。
 Status ExecBackend::Init(std::unique_ptr<Backend> backend,
                          runtime_graph::Graph* graph,
                          IoBinder* io_binder) {
@@ -704,8 +706,10 @@ Status ExecBackend::Init(std::unique_ptr<Backend> backend,
   return Status::Ok();
 }
 
+// 返回借用的 Backend 指针；未初始化时为空。
 Backend* ExecBackend::backend() { return backend_.get(); }
 
+// 确保元数据缓冲容量；不足时按高水位重建并销毁旧缓冲。
 Status ExecBackend::EnsureMetadataCapacity(U64 bytes) {
   if (bytes == 0) {
     return Status::Ok();
@@ -747,6 +751,8 @@ Status ExecBackend::EnsureMetadataCapacity(U64 bytes) {
   return Status::Ok();
 }
 
+// 执行单步：校验 plan、打包 token/position、装配并上传 KV 元数据、
+// 逐 op Forward、回读 sample、填 StepResult。
 Status ExecBackend::Execute(const ExecutionPlan& plan,
                             const KvCacheView& kv_view,
                             StepResult* result) {
@@ -991,6 +997,7 @@ Status ExecBackend::Execute(const ExecutionPlan& plan,
   return Status::Ok();
 }
 
+// 释放元数据缓冲与 Backend；清空 I/O 槽；幂等。
 Status ExecBackend::Deinit() {
   Status status = Status::Ok();
   if (backend_ != nullptr) {
@@ -1018,6 +1025,7 @@ Status ExecBackend::Deinit() {
 
 }  // namespace
 
+// 创建默认 ExecBackend 实例。
 std::unique_ptr<IExecutor> CreateDefaultExecutor() {
   return std::make_unique<ExecBackend>();
 }

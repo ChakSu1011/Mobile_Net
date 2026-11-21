@@ -310,6 +310,7 @@ class SchedulerImpl final : public IScheduler {
   U64 next_step_id_ = 1;
 };
 
+// 初始化调度器：校验预算/上下文/模型字段，保存 KvAllocator 与停止配置。
 Status SchedulerImpl::Init(const SchedulerConfig& config,
                            KvAllocator* kv_allocator,
                            const ModelConfig& model) {
@@ -369,6 +370,7 @@ Status SchedulerImpl::Init(const SchedulerConfig& config,
   return Status::Ok();
 }
 
+// 请求入队：校验 prompt/采样/并发上限，分配 request_id，初始化 Sequence 状态。
 Status SchedulerImpl::Merge(const Request& request, U64* request_id) {
   if (request_id == nullptr) {
     return MakeStatus(ErrorCode::kInvalidArgument,
@@ -467,6 +469,7 @@ Status SchedulerImpl::Merge(const Request& request, U64* request_id) {
   return Status::Ok();
 }
 
+// 生成单步计划：按 recompute_attention 选择重算或 KV 模式。
 Status SchedulerImpl::Schedule(ExecutionPlan* plan) {
   if (plan == nullptr) {
     return MakeStatus(ErrorCode::kInvalidArgument,
@@ -492,6 +495,7 @@ Status SchedulerImpl::Schedule(ExecutionPlan* plan) {
   return status;
 }
 
+// 重算模式：每个请求提交完整 history，不分配 KV。
 Status SchedulerImpl::ScheduleRecompute(ExecutionPlan* plan) {
   I32 remaining = max_num_tokens_;
   I32 scheduled = 0;
@@ -547,6 +551,7 @@ Status SchedulerImpl::ScheduleRecompute(ExecutionPlan* plan) {
   return Status::Ok();
 }
 
+// KV 不足时选择一个 victim：按 priority/context/request_id 排序，释放其 KV 并置 kRecompute。
 Status SchedulerImpl::PreemptOne(
     U64 requester, const std::unordered_set<U64>& scheduled,
     Bool* preempted) {
@@ -592,6 +597,7 @@ Status SchedulerImpl::PreemptOne(
   return Status::Ok();
 }
 
+// KV 模式：Waiting/Recompute 走 chunked prefill，Running 走 decode；OOM 时抢占重试。
 Status SchedulerImpl::ScheduleWithKv(ExecutionPlan* plan) {
   std::vector<U64> waiting_ids;
   std::vector<U64> running_ids;
@@ -777,6 +783,7 @@ Status SchedulerImpl::ScheduleWithKv(ExecutionPlan* plan) {
   return Status::Ok();
 }
 
+// 回写本步 token：追加 history、更新 current_token/generated_count，判停并生成 Response。
 Status SchedulerImpl::Update(U64 request_id,
                              const std::vector<Token>& tokens,
                              Response* response) {
@@ -836,6 +843,7 @@ Status SchedulerImpl::Update(U64 request_id,
   return Status::Ok();
 }
 
+// 取消请求：置 kStopped、释放 KV、生成终态 Response。
 Status SchedulerImpl::Stop(U64 request_id, Response* response) {
   if (response == nullptr) {
     return MakeStatus(ErrorCode::kInvalidArgument,
@@ -860,6 +868,7 @@ Status SchedulerImpl::Stop(U64 request_id, Response* response) {
   return Status::Ok();
 }
 
+// 标记失败：置 kIllegal、释放 KV、生成终态 Response。
 Status SchedulerImpl::Fail(U64 request_id, ErrorCode code,
                            Response* response) {
   if (response == nullptr) {
@@ -889,6 +898,7 @@ Status SchedulerImpl::Fail(U64 request_id, ErrorCode code,
   return Status::Ok();
 }
 
+// 返回全部请求的状态快照。
 std::vector<RequestSnapshot> SchedulerImpl::Snapshot() const {
   std::lock_guard<std::mutex> lock(mutex_);
   std::vector<RequestSnapshot> snapshots;
@@ -906,6 +916,7 @@ std::vector<RequestSnapshot> SchedulerImpl::Snapshot() const {
   return snapshots;
 }
 
+// 汇总 waiting/running/累计抢占/KV 块统计。
 SchedulerStats SchedulerImpl::Stats() const {
   std::lock_guard<std::mutex> lock(mutex_);
   SchedulerStats stats;
@@ -929,6 +940,7 @@ SchedulerStats SchedulerImpl::Stats() const {
   return stats;
 }
 
+// 返回是否存在未结束请求。
 Bool SchedulerImpl::HasRequests() const {
   std::lock_guard<std::mutex> lock(mutex_);
   for (const auto& entry : requests_) {
@@ -939,6 +951,7 @@ Bool SchedulerImpl::HasRequests() const {
   return false;
 }
 
+// 计算请求的有效生成上限：max_tokens/context/recompute 预算取小。
 I64 SchedulerImpl::EffectiveMaxTokens(const RequestState& state) const {
   I64 limit = state.sample_param.max_tokens > 0
                   ? static_cast<I64>(state.sample_param.max_tokens)
@@ -960,6 +973,7 @@ I64 SchedulerImpl::EffectiveMaxTokens(const RequestState& state) const {
   return limit;
 }
 
+// 判断停止条件：生成上限、上下文、recompute 预算、min_tokens 后的停止 token。
 Bool SchedulerImpl::ShouldStop(const RequestState& state) const {
   const I64 generated =
       static_cast<I64>(state.sequence.generated_count);
@@ -990,6 +1004,7 @@ Bool SchedulerImpl::ShouldStop(const RequestState& state) const {
   return false;
 }
 
+// 若请求仍持有 KV 则释放，并清除 kv_reserved。
 void SchedulerImpl::ReleaseIfReserved(RequestState* state) {
   if (!state->kv_reserved || kv_allocator_ == nullptr) {
     return;
@@ -998,6 +1013,7 @@ void SchedulerImpl::ReleaseIfReserved(RequestState* state) {
   state->kv_reserved = false;
 }
 
+// 统计未结束（active）请求数。
 I32 SchedulerImpl::ActiveRequestCount() const {
   I32 count = 0;
   for (const auto& entry : requests_) {
@@ -1010,6 +1026,7 @@ I32 SchedulerImpl::ActiveRequestCount() const {
 
 }  // namespace
 
+// 创建默认 SchedulerImpl。
 std::unique_ptr<IScheduler> CreateDefaultScheduler() {
   return std::make_unique<SchedulerImpl>();
 }

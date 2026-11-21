@@ -35,6 +35,8 @@ namespace {
 // CPU 参考 GQA Attention Kernel。
 class MegaAttentionKernel final : public Kernel {
  public:
+  // 执行全量 causal GQA：校验形状/attr，逐 batch/query/head 计算 online
+  // softmax 并写回。
   Status Execute(const runtime_graph::KernelContext& context) override {
     Status status = RequireInputCount(context, 3);
     if (!status.ok()) {
@@ -186,6 +188,8 @@ class MegaAttentionKernel final : public Kernel {
 //   - 不分配设备内存，不修改元数据。
 class MegaAttentionPagedKernel final : public Kernel {
  public:
+  // 执行 Paged attention：校验元数据/KV 视图，先按 slot 写本步 K/V，
+  // 再逐 token/head 按 block table 计算 online softmax。
   Status Execute(const runtime_graph::KernelContext& context) override {
     Status status = RequireInputCount(context, 3);
     if (!status.ok()) {
@@ -441,6 +445,7 @@ class MegaAttentionPagedKernel final : public Kernel {
 
 }  // namespace
 
+// 创建 Mock 全量 attention reference kernel。
 Status CreateMegaAttentionKernel(std::unique_ptr<Kernel>* kernel) {
   if (kernel == nullptr) {
     return MakeStatus(
@@ -451,6 +456,7 @@ Status CreateMegaAttentionKernel(std::unique_ptr<Kernel>* kernel) {
   return Status::Ok();
 }
 
+// 创建 Mock Paged Attention reference kernel。
 Status CreateMegaAttentionPagedKernel(std::unique_ptr<Kernel>* kernel) {
   if (kernel == nullptr) {
     return MakeStatus(

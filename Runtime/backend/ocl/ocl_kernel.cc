@@ -24,14 +24,17 @@
 namespace mobilenet {
 namespace ocl {
 
+// 保存 Context/ProgramCache 与 kernel_key。
 OclKernel::OclKernel(OclContext* context, OclProgramCache* programs,
                      std::string kernel_key)
     : context_(context),
       programs_(programs),
       kernel_key_(std::move(kernel_key)) {}
 
+// 析构：释放主 cl_kernel。
 OclKernel::~OclKernel() { ReleaseKernel(); }
 
+// 首次调用先 Prepare，之后只执行 ExecuteImpl。
 Status OclKernel::Execute(const runtime_graph::KernelContext& context) {
   if (!prepared_) {
     const Status status = Prepare(context);
@@ -43,6 +46,7 @@ Status OclKernel::Execute(const runtime_graph::KernelContext& context) {
   return ExecuteImpl(context);
 }
 
+// 按 kernel_key 取源码并编译/创建主 kernel。
 Status OclKernel::Compile(const char* entry,
                           const std::string& options) {
   const char* source = GetOclSource(kernel_key_.c_str());
@@ -54,6 +58,7 @@ Status OclKernel::Compile(const char* entry,
   return Compile(source, entry, options);
 }
 
+// 用显式源码编译/获取 Program 并创建 cl_kernel。
 Status OclKernel::Compile(const char* source, const char* entry,
                           const std::string& options) {
   if (kernel_ != nullptr) {
@@ -79,6 +84,7 @@ Status OclKernel::Compile(const char* source, const char* entry,
   return Status::Ok();
 }
 
+// 用同一 kernel_key 源码创建额外 entry 的 cl_kernel。
 Status OclKernel::CompileExtra(const char* entry,
                                const std::string& options,
                                cl_kernel* kernel) {
@@ -107,6 +113,7 @@ Status OclKernel::CompileExtra(const char* entry,
   return Status::Ok();
 }
 
+// 为指定 kernel 绑定 cl_mem 参数。
 Status OclKernel::SetMemArg(cl_kernel kernel, U32 index,
                             const runtime_graph::TensorView& view) {
   if (kernel == nullptr) {
@@ -124,11 +131,13 @@ Status OclKernel::SetMemArg(cl_kernel kernel, U32 index,
   return CheckCl(error, "SetKernelArg", "mem arg");
 }
 
+// 为主 kernel 绑定 cl_mem 参数。
 Status OclKernel::SetMemArg(U32 index,
                             const runtime_graph::TensorView& view) {
   return SetMemArg(kernel_, index, view);
 }
 
+// 为指定 kernel 绑定 int 参数。
 Status OclKernel::SetIntArg(cl_kernel kernel, U32 index, I32 value) {
   if (kernel == nullptr) {
     return MakeStatus(ErrorCode::kStateError,
@@ -139,10 +148,12 @@ Status OclKernel::SetIntArg(cl_kernel kernel, U32 index, I32 value) {
   return CheckCl(error, "SetKernelArg", "int arg");
 }
 
+// 为主 kernel 绑定 int 参数。
 Status OclKernel::SetIntArg(U32 index, I32 value) {
   return SetIntArg(kernel_, index, value);
 }
 
+// 为指定 kernel 绑定 64 位整数参数。
 Status OclKernel::SetLongArg(cl_kernel kernel, U32 index, I64 value) {
   if (kernel == nullptr) {
     return MakeStatus(ErrorCode::kStateError,
@@ -153,6 +164,7 @@ Status OclKernel::SetLongArg(cl_kernel kernel, U32 index, I64 value) {
   return CheckCl(error, "SetKernelArg", "long arg");
 }
 
+// 为指定 kernel 绑定 float 参数。
 Status OclKernel::SetFloatArg(cl_kernel kernel, U32 index, float value) {
   if (kernel == nullptr) {
     return MakeStatus(ErrorCode::kStateError,
@@ -163,10 +175,12 @@ Status OclKernel::SetFloatArg(cl_kernel kernel, U32 index, float value) {
   return CheckCl(error, "SetKernelArg", "float arg");
 }
 
+// 为主 kernel 绑定 float 参数。
 Status OclKernel::SetFloatArg(U32 index, float value) {
   return SetFloatArg(kernel_, index, value);
 }
 
+// 为指定 kernel 下发一维 NDRange 并 flush。
 Status OclKernel::Enqueue1D(cl_kernel kernel, Usize global, Usize local) {
   if (kernel == nullptr) {
     return MakeStatus(ErrorCode::kStateError,
@@ -188,10 +202,12 @@ Status OclKernel::Enqueue1D(cl_kernel kernel, Usize global, Usize local) {
   return CheckCl(error, "Flush", kernel_key_);
 }
 
+// 为主 kernel 下发一维 NDRange 并 flush。
 Status OclKernel::Enqueue1D(Usize global, Usize local) {
   return Enqueue1D(kernel_, global, local);
 }
 
+// 释放额外 cl_kernel；幂等。
 void OclKernel::ReleaseExtraKernel(cl_kernel* kernel) {
   if (kernel != nullptr && *kernel != nullptr && context_ != nullptr &&
       context_->functions() != nullptr &&
@@ -201,6 +217,7 @@ void OclKernel::ReleaseExtraKernel(cl_kernel* kernel) {
   }
 }
 
+// 校验视图非空、精度/布局/设备一致、shape 与 bytes 匹配。
 Status OclKernel::ValidateView(const runtime_graph::TensorView& view,
                                DataType dtype, const char* role) const {
   if (view.data == nullptr) {
@@ -236,6 +253,7 @@ Status OclKernel::ValidateView(const runtime_graph::TensorView& view,
   return Status::Ok();
 }
 
+// 把字节 offset 转为元素 offset，并检查整除与 int32 范围。
 Status OclKernel::ElementOffset(const runtime_graph::TensorView& view,
                                 DataType dtype, I32* offset) const {
   if (offset == nullptr) {
@@ -257,10 +275,12 @@ Status OclKernel::ElementOffset(const runtime_graph::TensorView& view,
   return Status::Ok();
 }
 
+// 返回视图的逻辑元素数。
 I64 OclKernel::ElementCount(const runtime_graph::TensorView& view) {
   return view.shape.GetShapeSize();
 }
 
+// 在 packed_tokens/batch==1 时把静态行数截断到本步 token 数。
 I64 OclKernel::EffectiveRows(const runtime_graph::KernelContext& context,
                              I64 static_rows) const {
   if (static_rows <= 0 || !context.packed_tokens || context.batch != 1 ||
@@ -271,6 +291,7 @@ I64 OclKernel::EffectiveRows(const runtime_graph::KernelContext& context,
   return tokens < static_rows ? tokens : static_rows;
 }
 
+// 释放主 cl_kernel；幂等。
 void OclKernel::ReleaseKernel() {
   if (kernel_ != nullptr && context_ != nullptr &&
       context_->functions() != nullptr &&

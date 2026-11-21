@@ -949,6 +949,7 @@ void TestSingleInputPipeline(I32* failures) {
 
 }  // namespace
 
+// 测试入口：运行 Executor 全部用例并返回失败数。
 I32 main() {
   I32 failures = 0;
   TestInitErrorPaths(&failures);

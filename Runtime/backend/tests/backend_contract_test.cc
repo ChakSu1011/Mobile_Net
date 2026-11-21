@@ -712,6 +712,7 @@ void TestKernels(I32* failures) {
 
 }  // namespace
 
+// 测试入口：运行 Backend 契约用例并返回失败数。
 I32 main() {
   I32 failures = 0;
   TestHalfUtils(&failures);

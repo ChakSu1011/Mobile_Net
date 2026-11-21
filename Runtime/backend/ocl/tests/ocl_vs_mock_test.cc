@@ -309,6 +309,7 @@ HostTensor HalfTensor(std::vector<I64> dims, U32 seed) {
 
 }  // namespace
 
+// 测试入口：逐算子比较 OCL 与 Mock 输出并返回失败数。
 int main() {
   int failures = 0;
   std::unique_ptr<Backend> mock;

@@ -179,6 +179,7 @@ class DefaultKVCache final : public IKVCache {
   std::map<U64, RequestEntry> tables_;
 };
 
+// 初始化 KV 池：校验规格/布局/精度，计算块数，分配每层 K/V 缓冲并登记 ResourceStack。
 Status DefaultKVCache::Init(Backend* backend, const KvCacheSpec& spec,
                             U64 kv_budget_bytes,
                             ResourceStack* resource_stack) {
@@ -364,6 +365,7 @@ Status DefaultKVCache::Init(Backend* backend, const KvCacheSpec& spec,
   return Status::Ok();
 }
 
+// 构建只读视图：输出每层 Buffer*、块步长、块数、头数/维度/精度与容量。
 Status DefaultKVCache::BuildView(KvCacheView* view) const {
   if (view == nullptr) {
     return MakeStatus(ErrorCode::kInvalidArgument,
@@ -389,6 +391,7 @@ Status DefaultKVCache::BuildView(KvCacheView* view) const {
   return Status::Ok();
 }
 
+// 返回 KV 统计快照。
 KvCacheStats DefaultKVCache::Stats() const {
   KvCacheStats stats;
   if (!initialized_) {
@@ -401,6 +404,7 @@ KvCacheStats DefaultKVCache::Stats() const {
   return stats;
 }
 
+// 为请求追加 token 容量；不足时返回 OOM 且不改动空闲池/块表。
 Status DefaultKVCache::Reserve(U64 request_id, I64 new_tokens) {
   if (!initialized_) {
     return MakeStatus(ErrorCode::kStateError,
@@ -446,6 +450,7 @@ Status DefaultKVCache::Reserve(U64 request_id, I64 new_tokens) {
   return Status::Ok();
 }
 
+// 逆序归还请求全部物理块并删除块表；幂等。
 void DefaultKVCache::Release(U64 request_id) {
   auto iterator = tables_.find(request_id);
   if (iterator == tables_.end()) {
@@ -459,14 +464,18 @@ void DefaultKVCache::Release(U64 request_id) {
   tables_.erase(iterator);
 }
 
+// 返回空闲块数。
 I64 DefaultKVCache::FreeBlocks() const {
   return static_cast<I64>(free_blocks_.size());
 }
 
+// 返回每块 token 数。
 I32 DefaultKVCache::BlockSize() const { return block_size_; }
 
+// 返回 KV 池最大 token 容量。
 I64 DefaultKVCache::MaxTotalTokens() const { return max_total_tokens_; }
 
+// 拷贝请求的逻辑块→物理块表。
 Status DefaultKVCache::GetBlockTable(U64 request_id,
                                      std::vector<I32>* table) const {
   if (table == nullptr) {
@@ -486,6 +495,7 @@ Status DefaultKVCache::GetBlockTable(U64 request_id,
   return Status::Ok();
 }
 
+// 计算 [first_token, first_token+count) 的扁平 slot：block*block_size+offset。
 Status DefaultKVCache::GetSlots(U64 request_id, I64 first_token, I64 count,
                                 std::vector<I64>* slots) const {
   if (slots == nullptr) {
@@ -526,6 +536,7 @@ Status DefaultKVCache::GetSlots(U64 request_id, I64 first_token, I64 count,
 
 }  // namespace
 
+// 创建默认 KVCache 管理器。
 std::unique_ptr<IKVCache> CreateDefaultKVCache() {
   return std::make_unique<DefaultKVCache>();
 }

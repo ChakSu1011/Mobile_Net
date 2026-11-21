@@ -26,6 +26,7 @@
 namespace mobilenet {
 namespace ocl {
 
+// 按 kernel_key 返回构建期嵌入的 OpenCL C 源码；未知 key 返回 nullptr。
 const C8* GetOclSource(const C8* key) {
   if (key == nullptr) {
     return nullptr;

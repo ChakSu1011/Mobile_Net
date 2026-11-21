@@ -29,10 +29,12 @@ constexpr I64 kAttentionMaxHeadDim = 128;
 
 }  // namespace
 
+// 保存 Context/ProgramCache 与 kernel_key。
 MegaAttentionOclKernel::MegaAttentionOclKernel(
     OclContext* context, OclProgramCache* programs, std::string kernel_key)
     : OclKernel(context, programs, std::move(kernel_key)) {}
 
+// 校验 q/k/v/out 形状与 attention attr；编译 mega_attention_causal。
 Status MegaAttentionOclKernel::Prepare(
     const runtime_graph::KernelContext& context) {
   if (context.input_count < 3 || context.output_count < 1 ||
@@ -114,6 +116,7 @@ Status MegaAttentionOclKernel::Prepare(
   return Compile("mega_attention_causal", "-cl-mad-enable");
 }
 
+// 绑定 q/k/v/out 与标量参数，按有效 token 数下发 causal GQA kernel。
 Status MegaAttentionOclKernel::ExecuteImpl(
     const runtime_graph::KernelContext& context) {
   if (context.input_count < 3 || context.output_count < 1 ||
@@ -257,15 +260,18 @@ Status MegaAttentionOclKernel::ExecuteImpl(
   return Enqueue1D(work, 1);
 }
 
+// 保存 Context/ProgramCache 与 kernel_key。
 MegaAttentionPagedOclKernel::MegaAttentionPagedOclKernel(
     OclContext* context, OclProgramCache* programs, std::string kernel_key)
     : OclKernel(context, programs, std::move(kernel_key)) {}
 
+// 释放 paged_kv_store / mega_attention_paged 两个 cl_kernel。
 MegaAttentionPagedOclKernel::~MegaAttentionPagedOclKernel() {
   ReleaseExtraKernel(&store_kernel_);
   ReleaseExtraKernel(&attention_kernel_);
 }
 
+// 校验张量/attr/KV 视图，编译两个 paged kernel entry。
 Status MegaAttentionPagedOclKernel::Prepare(
     const runtime_graph::KernelContext& context) {
   if (context.input_count < 3 || context.output_count < 1 ||
@@ -353,6 +359,7 @@ Status MegaAttentionPagedOclKernel::Prepare(
   return Status::Ok();
 }
 
+// 校验 KV 池/元数据，先 paged_kv_store 再 mega_attention_paged。
 Status MegaAttentionPagedOclKernel::ExecuteImpl(
     const runtime_graph::KernelContext& context) {
   if (store_kernel_ == nullptr || attention_kernel_ == nullptr ||
@@ -583,6 +590,7 @@ Status MegaAttentionPagedOclKernel::ExecuteImpl(
   return Enqueue1D(attention_kernel_, attention_work, 1);
 }
 
+// 创建全量 prefill 的 MegaAttention OCL Kernel。
 Status CreateMegaAttentionOclKernel(OclContext* context,
                                     OclProgramCache* programs,
                                     const std::string& kernel_key,
@@ -597,6 +605,7 @@ Status CreateMegaAttentionOclKernel(OclContext* context,
   return Status::Ok();
 }
 
+// 创建 Paged MegaAttention OCL Kernel。
 Status CreateMegaAttentionPagedOclKernel(
     OclContext* context, OclProgramCache* programs,
     const std::string& kernel_key, std::unique_ptr<Kernel>* kernel) {

@@ -1,0 +1,35 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8080,
+    "max_body_bytes": 1048576,
+    "max_connections": 32,
+    "request_timeout_ms": 120000,
+    "read_timeout_ms": 30000
+  },
+  "model": {
+    "name": "qwen3_0_6b",
+    "model_dir": "Models/Qwen3",
+    "package_dir": "Models/Qwen3/artifacts/qwen3_0_6b_kv"
+  },
+  "engine": {
+    "backend": "ocl",
+    "device_id": 0,
+    "kv_cache_bytes": 67108864,
+    "max_num_tokens": 256,
+    "max_concurrent_requests": 1,
+    "verify_weights_sha256": true,
+    "recompute_attention": false
+  },
+  "generation": {
+    "default_max_tokens": 128,
+    "enable_thinking": false
+  },
+  "session": {
+    "max_sessions": 64,
+    "idle_timeout_s": 3600
+  },
+  "logging": {
+    "level": "info"
+  }
+}

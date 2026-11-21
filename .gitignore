@@ -12,6 +12,7 @@ Graph/build/
 Runtime/build/
 Runtime/backend/build/
 Runtime/backend/build-android/
+Service/build/
 mobilenet_ocl_cache/
 ToolChain/*.log
 

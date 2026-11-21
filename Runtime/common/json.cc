@@ -18,6 +18,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <string>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -185,6 +186,9 @@ class Parser {
   Status ParseObject(JsonValue* out, Usize depth) {
     Consume('{');
     std::vector<JsonMember> members;
+    // 重复键检测使用哈希集合，避免大对象（如 tokenizer 词表）的 O(n²)
+    // 扫描；错误语义与逐项比较一致。
+    std::unordered_set<std::string> keys;
     SkipWhitespace();
     if (Consume('}')) {
       *out = JsonValue::MakeObject(std::move(members));
@@ -200,10 +204,8 @@ class Parser {
       if (!status.ok()) {
         return status;
       }
-      for (const JsonMember& member : members) {
-        if (member.key == key) {
-          return Error("duplicate object key: " + key);
-        }
+      if (!keys.insert(key).second) {
+        return Error("duplicate object key: " + key);
       }
       SkipWhitespace();
       if (!Consume(':')) {

@@ -170,6 +170,21 @@ struct KernelContext {
   // 采样参数；仅 Sample op 使用，首期允许为空。
   const runtime::SampleParams* sampling = nullptr;
 
+  // 是否启用 sample_rows 行选择。Executor 生产执行时置 true；单算子
+  // 测试保持 false，Kernel 按全部有效行处理。
+  Bool sample_rows_enabled = false;
+
+  // 本步需要计算/采样的行下标（主机视图）；启用时可为空（本步无输出）。
+  // 用于 LM Head/Sample 只计算 output_slot 对应的行，跳过 prefill 的
+  // 非输出行。
+  const I32* sample_rows = nullptr;
+
+  // sample_rows 元素数。
+  I32 sample_row_count = 0;
+
+  // sample_rows 的设备视图（OCL 使用）；主机后端可直接用 sample_rows。
+  TensorView sample_rows_view;
+
   // 临时工作区；无 workspace 时 data 为空、bytes 为 0。
   TensorView workspace;
 

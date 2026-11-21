@@ -33,11 +33,18 @@ Usize RoundUp(Usize value, Usize local) {
 
 }  // namespace
 
+// 保存 Context/ProgramCache 与 kernel_key。
 LinearOclKernel::LinearOclKernel(OclContext* context,
                                  OclProgramCache* programs,
                                  std::string kernel_key)
     : OclKernel(context, programs, std::move(kernel_key)) {}
 
+// 释放备用 4×4 entry。
+LinearOclKernel::~LinearOclKernel() {
+  ReleaseExtraKernel(&alt_kernel_);
+}
+
+// 加载期：校验形状，编译 4×8 主 entry 与 4×4 备用 entry。
 Status LinearOclKernel::Prepare(
     const runtime_graph::KernelContext& context) {
   if (context.input_count < 2 || context.output_count < 1 ||
@@ -75,9 +82,28 @@ Status LinearOclKernel::Prepare(
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "LinearOclKernel: invalid shape");
   }
-  return Compile("linear_nt_4x4", "-cl-mad-enable");
+  sample_rows_mode_ = false;
+  if (context.attrs != nullptr &&
+      context.attrs->find("sample_rows") != context.attrs->end()) {
+    const auto* value = std::get_if<Bool>(
+        &context.attrs->at("sample_rows"));
+    if (value != nullptr) {
+      sample_rows_mode_ = *value;
+    }
+  }
+  if (sample_rows_mode_) {
+    return Compile("linear_nt_rows", "-cl-mad-enable");
+  }
+  // 主 entry 为 4×8；备用 4×4 用于 decode（M<8）或超大 N。
+  Status compile_status = Compile("linear_nt_4x8", "-cl-mad-enable");
+  if (!compile_status.ok()) {
+    return compile_status;
+  }
+  return CompileExtra("linear_nt_4x4", "-cl-mad-enable",
+                      &alt_kernel_);
 }
 
+// 执行：LM Head 行选择 / prefill 4×8 / decode 4×4 三条路径。
 Status LinearOclKernel::ExecuteImpl(
     const runtime_graph::KernelContext& context) {
   if (context.input_count < 2 || context.output_count < 1) {
@@ -117,47 +143,96 @@ Status LinearOclKernel::ExecuteImpl(
     return status;
   }
 
-  status = SetMemArg(0, a);
-  if (!status.ok()) {
-    return status;
-  }
-  status = SetIntArg(1, a_offset);
-  if (!status.ok()) {
-    return status;
-  }
-  status = SetMemArg(2, b);
-  if (!status.ok()) {
-    return status;
-  }
-  status = SetIntArg(3, b_offset);
-  if (!status.ok()) {
-    return status;
-  }
-  status = SetMemArg(4, c);
-  if (!status.ok()) {
-    return status;
-  }
-  status = SetIntArg(5, c_offset);
-  if (!status.ok()) {
-    return status;
-  }
-  status = SetIntArg(6, static_cast<I32>(valid_m));
-  if (!status.ok()) {
-    return status;
-  }
-  status = SetIntArg(7, static_cast<I32>(n));
-  if (!status.ok()) {
-    return status;
-  }
-  status = SetIntArg(8, static_cast<I32>(k));
-  if (!status.ok()) {
-    return status;
+  if (sample_rows_mode_) {
+    if (!context.sample_rows_enabled) {
+      return MakeStatus(
+          ErrorCode::kStateError,
+          "LinearOclKernel: sample_rows attr requires enabled row list");
+    }
+    if (context.sample_row_count <= 0) {
+      // 本步没有请求产生 token（partial prefill chunk），无需计算 LM Head。
+      return Status::Ok();
+    }
+    if (context.sample_rows_view.data == nullptr) {
+      return MakeStatus(ErrorCode::kInvalidArgument,
+                        "LinearOclKernel: missing sample rows view");
+    }
+    status = ValidateView(context.sample_rows_view, DataType::kInt32,
+                          "sample_rows");
+    if (!status.ok()) {
+      return status;
+    }
+    I32 rows_offset = 0;
+    status = ElementOffset(context.sample_rows_view, DataType::kInt32,
+                           &rows_offset);
+    if (!status.ok()) {
+      return status;
+    }
+    status = SetMemArg(0, a);
+    if (!status.ok()) return status;
+    status = SetIntArg(1, a_offset);
+    if (!status.ok()) return status;
+    status = SetMemArg(2, b);
+    if (!status.ok()) return status;
+    status = SetIntArg(3, b_offset);
+    if (!status.ok()) return status;
+    status = SetMemArg(4, c);
+    if (!status.ok()) return status;
+    status = SetIntArg(5, c_offset);
+    if (!status.ok()) return status;
+    status = SetMemArg(6, context.sample_rows_view);
+    if (!status.ok()) return status;
+    status = SetIntArg(7, rows_offset);
+    if (!status.ok()) return status;
+    status = SetIntArg(8, context.sample_row_count);
+    if (!status.ok()) return status;
+    status = SetIntArg(9, static_cast<I32>(n));
+    if (!status.ok()) return status;
+    status = SetIntArg(10, static_cast<I32>(k));
+    if (!status.ok()) return status;
+    const I64 tiles_n = (n + kLinearTile - 1) / kLinearTile;
+    const I64 groups =
+        (static_cast<I64>(context.sample_row_count) + kLinearTile - 1) /
+        kLinearTile;
+    const Usize work =
+        static_cast<Usize>(groups) * static_cast<Usize>(tiles_n);
+    return Enqueue1D(work, 1);
   }
 
-  const I64 tiles_n = (n + kLinearTile - 1) / kLinearTile;
+  // Prefill 使用 4×8（N 方向加倍）；decode 或超大 N 回退 4×4。
+  const Bool use_4x8 = valid_m >= 8 && n < 16384 &&
+                       alt_kernel_ != nullptr;
+  cl_kernel active = use_4x8 ? kernel_ : alt_kernel_;
+  if (active == nullptr) {
+    return MakeStatus(ErrorCode::kStateError,
+                      "LinearOclKernel: no active kernel");
+  }
+  const I32 n_tile = use_4x8 ? 8 : 4;
+  status = SetMemArg(active, 0, a);
+  if (!status.ok()) return status;
+  status = SetIntArg(active, 1, a_offset);
+  if (!status.ok()) return status;
+  status = SetMemArg(active, 2, b);
+  if (!status.ok()) return status;
+  status = SetIntArg(active, 3, b_offset);
+  if (!status.ok()) return status;
+  status = SetMemArg(active, 4, c);
+  if (!status.ok()) return status;
+  status = SetIntArg(active, 5, c_offset);
+  if (!status.ok()) return status;
+  status = SetIntArg(active, 6, static_cast<I32>(valid_m));
+  if (!status.ok()) return status;
+  status = SetIntArg(active, 7, static_cast<I32>(n));
+  if (!status.ok()) return status;
+  status = SetIntArg(active, 8, static_cast<I32>(k));
+  if (!status.ok()) return status;
+
+  const I64 tiles_n =
+      (n + static_cast<I64>(n_tile) - 1) / static_cast<I64>(n_tile);
   const I64 tiles_m = (valid_m + kLinearTile - 1) / kLinearTile;
   const Usize tiles = static_cast<Usize>(tiles_m * tiles_n);
-  return Enqueue1D(RoundUp(tiles, kLinearLocalSize), kLinearLocalSize);
+  return Enqueue1D(active, RoundUp(tiles, kLinearLocalSize),
+                   kLinearLocalSize);
 }
 
 Status CreateLinearOclKernel(OclContext* context,

@@ -27,11 +27,18 @@ constexpr Usize kSampleLocalSize = 256;
 
 }  // namespace
 
+// 保存 Context/ProgramCache 与 kernel_key。
 SampleOclKernel::SampleOclKernel(OclContext* context,
                                  OclProgramCache* programs,
                                  std::string kernel_key)
     : OclKernel(context, programs, std::move(kernel_key)) {}
 
+// 释放 sample_argmax_rows 额外 kernel。
+SampleOclKernel::~SampleOclKernel() {
+  ReleaseExtraKernel(&rows_kernel_);
+}
+
+// 加载期：校验 logits/输出，编译全行与行选择两个 entry。
 Status SampleOclKernel::Prepare(
     const runtime_graph::KernelContext& context) {
   if (context.input_count < 1 || context.output_count < 1 ||
@@ -63,9 +70,16 @@ Status SampleOclKernel::Prepare(
     return MakeStatus(ErrorCode::kInvalidArgument,
                       "SampleOclKernel: invalid shape");
   }
-  return Compile("sample_argmax", "-cl-mad-enable");
+  Status compile_status =
+      Compile("sample_argmax", "-cl-mad-enable");
+  if (!compile_status.ok()) {
+    return compile_status;
+  }
+  return CompileExtra("sample_argmax_rows", "-cl-mad-enable",
+                      &rows_kernel_);
 }
 
+// 执行：按 sample_rows 选择行做 argmax，未启用时处理全部有效行。
 Status SampleOclKernel::ExecuteImpl(
     const runtime_graph::KernelContext& context) {
   if (context.input_count < 1 || context.output_count < 1) {
@@ -100,6 +114,49 @@ Status SampleOclKernel::ExecuteImpl(
   status = ElementOffset(out, DataType::kInt64, &out_offset);
   if (!status.ok()) {
     return status;
+  }
+
+  if (context.sample_rows_enabled) {
+    if (context.sample_row_count <= 0) {
+      // 本步没有请求产生 token，跳过采样。
+      return Status::Ok();
+    }
+    if (rows_kernel_ == nullptr ||
+        context.sample_rows_view.data == nullptr) {
+      return MakeStatus(ErrorCode::kStateError,
+                        "SampleOclKernel: missing sample rows kernel/view");
+    }
+    status = ValidateView(context.sample_rows_view, DataType::kInt32,
+                          "sample_rows");
+    if (!status.ok()) {
+      return status;
+    }
+    I32 rows_offset = 0;
+    status = ElementOffset(context.sample_rows_view, DataType::kInt32,
+                           &rows_offset);
+    if (!status.ok()) {
+      return status;
+    }
+    status = SetMemArg(rows_kernel_, 0, logits);
+    if (!status.ok()) return status;
+    status = SetIntArg(rows_kernel_, 1, logits_offset);
+    if (!status.ok()) return status;
+    status = SetMemArg(rows_kernel_, 2, out);
+    if (!status.ok()) return status;
+    status = SetIntArg(rows_kernel_, 3, out_offset);
+    if (!status.ok()) return status;
+    status = SetMemArg(rows_kernel_, 4, context.sample_rows_view);
+    if (!status.ok()) return status;
+    status = SetIntArg(rows_kernel_, 5, rows_offset);
+    if (!status.ok()) return status;
+    status = SetIntArg(rows_kernel_, 6, context.sample_row_count);
+    if (!status.ok()) return status;
+    status = SetIntArg(rows_kernel_, 7, static_cast<I32>(vocab));
+    if (!status.ok()) return status;
+    return Enqueue1D(
+        rows_kernel_,
+        static_cast<Usize>(context.sample_row_count) * kSampleLocalSize,
+        kSampleLocalSize);
   }
 
   status = SetMemArg(0, logits);

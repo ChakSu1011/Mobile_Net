@@ -547,3 +547,12 @@ python -m ziglang c++ -std=c++17 -Wall -Wextra -I "d:/Mobile_Net" \
   `Buffer::DevicePtr()`，偏移单独传入），避免对 `cl_mem` 句柄做指针加法。
 - 3.5 的调用链要求 Executor 是唯一遍历 `GetOrderlyOPList()` 并调用
   `Forward()` 的对象；本实现满足。
+
+## 10. 2026-11-21 补充：sample_rows 缓冲
+
+- `Execute` 从 `PlanEntry.output_slot>=0` 构建 `std::vector<I32> sample_rows`；
+- 通过 Executor 私有高水位 Buffer 一次 H2D 上传，填入
+  `StepContext.sample_rows_view`；
+- `Deinit` 在 `Backend::Deinit` 前释放该缓冲；
+- partial prefill（无 output_slot）时行数为 0，LM Head/Sample 跳过计算；
+- 单算子测试未启用行选择，Kernel 按全部有效行处理。

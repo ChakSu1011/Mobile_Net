@@ -57,3 +57,9 @@ Mali-G925 已断开，真机数据待重连后补测。
 - 当前主测试环境为本机 Intel Arc；手机已断开，性能/P4.6 待重连后补测；
 - 下一步：与 Mock/torch 的完整精度对比（P4.3）、性能调优（P4.5）；
 - P4.5：接入 `packed_tokens` 有效 token 截断。
+
+## sample_rows 行选择（2026-11-21）
+
+- `sample_argmax_rows` 只处理 `sample_rows` 指定的行，结果写回原始行号。
+- `sample_rows_enabled` 为 true 且行数为 0 时直接返回，不启动 kernel。
+- 未启用行选择时走全行 `sample_argmax`，保证单算子测试语义不变。

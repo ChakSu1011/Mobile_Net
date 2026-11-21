@@ -180,6 +180,27 @@ Status KernelOpEnv::Forward() {
     context.attention = &attention;
   }
 
+  // Sample 始终只处理 output_slot 行；Linear 在 attr sample_rows=true 时
+  // 同样只计算这些行（LM Head 优化）。
+  Bool use_sample_rows =
+      op_->Type() == runtime_graph::OpType::kSample;
+  if (op_->Type() == runtime_graph::OpType::kLinear &&
+      HasAttr(op_->Attrs(), "sample_rows")) {
+    Bool sample_rows = false;
+    const Status attr_status =
+        GetBoolAttr(op_->Attrs(), "sample_rows", &sample_rows);
+    if (!attr_status.ok()) {
+      return PrefixStatus(attr_status, "op=" + op_->Name());
+    }
+    use_sample_rows = sample_rows;
+  }
+  if (use_sample_rows) {
+    context.sample_rows_enabled = step_context_->sample_rows_enabled;
+    context.sample_rows = step_context_->sample_rows;
+    context.sample_row_count = step_context_->sample_row_count;
+    context.sample_rows_view = step_context_->sample_rows_view;
+  }
+
   if (spec_->need_workspace) {
     if (graph_env_ == nullptr) {
       return MakeStatus(ErrorCode::kStateError,

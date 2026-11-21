@@ -28,7 +28,7 @@ class SampleOclKernel final : public OclKernel {
   SampleOclKernel(OclContext* context, OclProgramCache* programs,
                   std::string kernel_key);
 
-  ~SampleOclKernel() override = default;
+  ~SampleOclKernel() override;
 
   SampleOclKernel(const SampleOclKernel&) = delete;
   SampleOclKernel& operator=(const SampleOclKernel&) = delete;
@@ -36,6 +36,9 @@ class SampleOclKernel final : public OclKernel {
  private:
   Status Prepare(const runtime_graph::KernelContext& context) override;
   Status ExecuteImpl(const runtime_graph::KernelContext& context) override;
+
+  // 只处理 sample_rows 指定行的 argmax entry。
+  cl_kernel rows_kernel_ = nullptr;
 };
 
 // 创建 Sample OCL Kernel。

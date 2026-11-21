@@ -96,3 +96,12 @@ decode 或混合 batch。
 5. 不要用全局 `is_prefill` 判断；混合 batch 由每请求的
    `query_lens/context_lens` 表达。
 6. 静态 `S` 仍是行跨度上限；`token_count` 才是有效行数。
+
+## Paged 性能优化（2026-11-21）
+
+- prefill（token_count≥8）使用 64 work-item workgroup，按 token/head
+  分组，利用 L1 复用相邻 head（GQA pair）的 K/V；decode 保持 local=1，
+  避免 4 个 token 被压到一个 CU。
+- 显式一个 work-item 处理两个 Q head 的版本会因 2×128 累加器导致私有
+  内存/占用率下降，decode 明显回退，不要默认启用。
+- 当前 4×256 prompt 基准：prefill 约 110 token/s，decode 约 12.3 token/s。

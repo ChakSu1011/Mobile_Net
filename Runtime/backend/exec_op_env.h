@@ -59,6 +59,18 @@ struct StepContext {
   // 逐请求/逐 token Attention 元数据；KV 模式必填。
   runtime_graph::AttentionMetadataView attention_meta;
 
+  // 是否启用 sample_rows 行选择（生产执行 true，单算子测试 false）。
+  Bool sample_rows_enabled = false;
+
+  // 本步需要计算/采样的行下标（output_slot）；启用时可为空。
+  const I32* sample_rows = nullptr;
+
+  // sample_rows 元素数。
+  I32 sample_row_count = 0;
+
+  // sample_rows 的设备视图（OCL 使用）。
+  runtime_graph::TensorView sample_rows_view;
+
   // batch 行数。
   I32 batch = 1;
 

@@ -345,3 +345,13 @@ P4.6 关键陷阱：
   prefill 首 token 计入 TTFT，decode 步数不含 prefill 产生的首 token。
 - 多请求 decode 必须确认 `EffectiveRows` 按 `packed_tokens` 截断，而不是
   按 `batch==1`；否则会按静态 256 行计算，decode 慢一个数量级。
+
+## 2026-11-21 四项优化结果
+
+- LM Head/Sample 行选择：prefill 只算 output_slot 行；Executor 上传
+  sample_rows，OCL 用 `linear_nt_rows` / `sample_argmax_rows`。
+- Linear 4×8 N 分块；decode（M<8）或 N≥16384 回退 4×4。
+- Paged attention prefill 使用 64 work-item query tile（L1 K/V 复用）；
+  decode local=1。显式 GQA head pair 因私有内存翻倍回退。
+- 4 并发 × 256 prompt：prefill 约 110 token/s，decode 约 12.3 token/s；
+  512/128/32 MiB KV 对比未发现 512 MiB 带宽降级。

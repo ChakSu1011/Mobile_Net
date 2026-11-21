@@ -63,7 +63,20 @@ class LinearKernel final : public Kernel {
     }
 
     const I64 rows = NumElements(context.inputs[0].shape) / in_features;
-    for (I64 row = 0; row < rows; ++row) {
+    const Bool selected = context.sample_rows_enabled;
+    if (selected && context.sample_row_count <= 0) {
+      // 本步没有输出行，LM Head 不需要计算。
+      return Status::Ok();
+    }
+    const I64 count = selected
+                          ? static_cast<I64>(context.sample_row_count)
+                          : rows;
+    for (I64 index = 0; index < count; ++index) {
+      const I64 row = selected ? context.sample_rows[index] : index;
+      if (row < 0 || row >= rows) {
+        return MakeStatus(ErrorCode::kInvalidArgument,
+                          "LinearKernel: sample row out of range");
+      }
       const I64 input_base = row * in_features;
       for (I64 out = 0; out < out_features; ++out) {
         const I64 weight_base = out * in_features;
@@ -81,6 +94,7 @@ class LinearKernel final : public Kernel {
 
 }  // namespace
 
+// 创建 Mock Linear CPU Kernel。
 Status CreateLinearKernel(std::unique_ptr<Kernel>* kernel) {
   if (kernel == nullptr) {
     return MakeStatus(

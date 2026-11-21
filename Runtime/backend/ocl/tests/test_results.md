@@ -833,8 +833,8 @@ ops 312
 constants 310
 weights_available 310
 weights_total_bytes 1192099840
-ir_sha256 07f8136982de22293ee07df2c2d40a784586e58a0e7d30429d99c33f557af28c
-manifest_sha256 44f660b20c609c5baeb86cfc3d3931e32067834be9da6856becb5d202ebb9be2
+ir_sha256 dd077df5fec0418d34956f59951cabbfef4fea34b11931634e5e855f004d1f3b
+manifest_sha256 921fbe0b356dec09b7ca8b02880a6934350fde6db8982de7b9a554a1143d6125
 package d:\Mobile_Net\Models\Qwen3\artifacts\qwen3_0_6b_kv
 ```
 
@@ -1108,3 +1108,69 @@ Prefill 每步仍约 3.2 s，因为该阶段每步只有一个请求（batch=1�
 - 当前实测：prefill 约 **79 token/s**，decode 约 **11.8 token/s**（聚合）；
 - 多请求 decode 的 `EffectiveRows` 截断缺陷已修复，decode 提升约 7.3×；
 - Prefill 的 `lm_head` 全行计算是下一轮最明确的优化点。
+
+---
+
+# 15. 四项优化后的复测（2026-11-21）
+
+## 15.1 优化项
+
+1. **LM Head/Sample 行选择**：`StepContext.sample_rows` 只包含
+   `output_slot>=0` 的行；LM Head 的 `sample_rows=true` 属性使 Linear
+   只计算这些行，Sample 只对同一批行做 argmax。
+2. **GEMM N 方向分块**：常规 Linear 使用 4×8 块（N 方向加倍，B 列向量
+   供 4 个 A 行复用）；decode（M<8）或 N≥16384 回退 4×4。
+3. **Paged Attention query tile / K/V 复用**：prefill（token_count≥8）
+   使用 64 work-item 的 workgroup，让相邻 token/head（含 GQA head pair）
+   共享 L1 中的 K/V 行；decode 保持 local=1 以分散到更多 CU。
+4. **小 KV 复测**：对比 512/128/32 MiB KV 预算，确认 512 MiB 是否引起
+   共享内存带宽降级。
+
+## 15.2 优化后结果（3 次中位数）
+
+| 阶段 | 优化前 | 优化后 | 变化 |
+| --- | --- | --- | --- |
+| Prefill | 3.24 s / 256 token；79.1 token/s | **2.32 s / 256 token；110.4 token/s** | 时间 -28%，吞吐 +39% |
+| Decode | 0.339 s / 4 token；11.8 token/s | **0.324 s / 4 token；12.3 token/s** | 时间 -4%，吞吐 +4% |
+
+一次完整运行（节选）：
+
+```text
+[prefill] steps=4 tokens=1024 total_wall_ms=9340.23 avg_step_ms=2335.06 wall_tok_per_s=109.63 exec_tok_per_s=109.64
+[decode]  steps=8 tokens=32 total_wall_ms=2509.39 avg_step_ms=313.67 per_token_ms=78.42 wall_tok_per_s=12.75 exec_tok_per_s=12.75
+[ttft]    request 1 (id=2) = 2360.12 ms
+[ttft]    request 2 (id=3) = 4886.93 ms
+[ttft]    request 3 (id=4) = 7110.90 ms
+[ttft]    request 4 (id=5) = 9340.15 ms
+[ttft]    avg=5924.52 ms
+[total]   wall_ms=11849.66
+```
+
+## 15.3 小 KV 预算对比
+
+| 场景 | KV 预算 | Prefill | Decode |
+| --- | --- | --- | --- |
+| 4 并发 × 256 | 512 MiB | 2.351 s / 256 token | 0.376 s / 4 token |
+| 4 并发 × 256 | 128 MiB | 2.327 s / 256 token | 0.387 s / 4 token |
+| 1 × 256 | 512 MiB | 2.260 s / 256 token | 0.299 s / token |
+| 1 × 256 | 32 MiB | 2.340 s / 256 token | 0.307 s / token |
+
+差异在运行波动范围内；**未观察到 512 MiB KV 导致的共享内存带宽降级**。
+
+## 15.4 GQA head pair 显式复用实验
+
+尝试过“一个 work-item 同时处理一对 Q head、共享 K/V 读取”的版本；
+由于每项需要 2×128 FP32 累加器，私有内存/占用率上升，decode 从
+0.34 s/step 退化到 0.73–0.81 s/step，因此**未启用**并回退到单 head
+work-item。当前通过 prefill 的 64 work-item query tile 让相邻 GQA
+head 在 L1 中复用 K/V，避免私有内存翻倍。
+
+## 15.5 结论
+
+- 四项优化中：行选择、4×8 GEMM、query tile 已启用并取得 prefill
+  +39% 吞吐；小 KV 复测排除 512 MiB 带宽降级；显式 GQA head pair 因
+  资源压力回退。
+- 当前 4 并发 × 256 prompt × 8 decode：prefill 约 **110 token/s**，
+  decode 约 **12.3 token/s**（聚合）；TTFT 约 **2.36/4.89/7.11/9.34 s**。
+- 剩余瓶颈仍是 prefill 的 28 层 GEMM/MLP/RoPE 与 lm_head；下一步可做
+  swiglu 的 N 分块、RoPE 向量化与 LM Head 的进一步 GEMV 优化。

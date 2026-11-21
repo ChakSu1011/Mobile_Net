@@ -153,3 +153,10 @@ python -m ziglang c++ -std=c++17 -Wall -Wextra -I "d:/Mobile_Net" \
   Mock 与 OCL 共用同一契约。
 - 常见陷阱：`slots.size()` 必须等于 `token_count`；块表必须覆盖
   `ceil(seq_lens/block_size)`；packed 区间不得重叠。
+
+## sample_rows 行选择（2026-11-21）
+
+- Executor 从 `output_slot>=0` 生成行下标，上传后填入 StepContext；
+  partial prefill 行为空，LM Head/Sample 跳过。
+- 行下标写回 `sample.out[row]`，保持与 output_slot 对齐。
+- 单算子测试不启用行选择；Kernel 按全部有效行处理。

@@ -193,3 +193,18 @@ int m, int n, int k
   2.689→1.622（Mock 833.3）；256×1024×3072 13.583→5.297（Mock 2597.5）；
   lm_head 256×1024×151936 918.614→372.242（Mock 过慢未测）；
 - Mali-G925 真机数据待重连后补测。
+
+## 8. 2026-11-21 优化（LM Head 行选择 + 4×8 N 分块）
+
+- 新增 `linear_nt_rows`：只计算 `sample_rows` 指定行的 NT GEMM，供
+  LM Head 在 prefill 只算 `output_slot` 行；`row_count==1` 走单行路径，
+  4 行以内按组复用 B 的 4 个列向量。
+- 常规 Linear 主 entry 改为 `linear_nt_4x8`（N 方向 8 列，B 列向量供
+  4 个 A 行复用）；decode（M<8）或 N≥16384 时切换到备用
+  `linear_nt_4x4`，避免私有内存/占用率回退。
+- 实测（Intel Arc 130T）：
+  - `linear_256x1024x1024`：2.33 ms → 1.39 ms；
+  - `linear_256x1024x3072`：5.83 ms → 3.65–4.59 ms；
+  - `lm_head_256x1024x151936`（无 sample_rows 的基准）：约 359–382 ms，
+    与 4×4 基线持平。
+- 全模型 4 并发 × 256 prompt：prefill 3.24 s → 2.32 s / 256 token。

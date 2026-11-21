@@ -610,6 +610,14 @@ class ExecBackend final : public IExecutor {
   //   成功返回 kOk；CreateBuffer 失败透传 kBufferError/kDeviceOom。
   Status EnsureMetadataCapacity(U64 bytes);
 
+  // 确保 sample_rows 缓冲容量不小于 bytes；必要时重建。
+  //
+  // 参数：
+  //   bytes：本步需要的字节数。
+  // 返回：
+  //   成功返回 kOk；CreateBuffer 失败透传 kBufferError/kDeviceOom。
+  Status EnsureSampleRowsCapacity(U64 bytes);
+
   // 拥有的后端；非空表示已 Init。
   std::unique_ptr<Backend> backend_;
 
@@ -618,6 +626,12 @@ class ExecBackend final : public IExecutor {
 
   // 元数据缓冲当前容量（字节）。
   U64 metadata_capacity_ = 0;
+
+  // LM Head/Sample 行下标设备缓冲；高水位复用。
+  std::unique_ptr<Buffer> sample_rows_buffer_;
+
+  // sample_rows 缓冲当前容量（字节）。
+  U64 sample_rows_capacity_ = 0;
 
   // 图借用指针；Init 成功后非空。
   runtime_graph::Graph* graph_ = nullptr;
@@ -710,6 +724,50 @@ Status ExecBackend::Init(std::unique_ptr<Backend> backend,
 Backend* ExecBackend::backend() { return backend_.get(); }
 
 // 确保元数据缓冲容量；不足时按高水位重建并销毁旧缓冲。
+// 确保 sample_rows 缓冲容量；不足时按高水位重建。
+Status ExecBackend::EnsureSampleRowsCapacity(U64 bytes) {
+  if (bytes == 0) {
+    return Status::Ok();
+  }
+  if (sample_rows_buffer_ != nullptr &&
+      sample_rows_capacity_ >= bytes) {
+    return Status::Ok();
+  }
+  U64 capacity = bytes;
+  if (sample_rows_capacity_ > 0 &&
+      sample_rows_capacity_ <= std::numeric_limits<U64>::max() / 2) {
+    capacity = std::max(capacity, sample_rows_capacity_ * 2);
+  }
+  constexpr U64 kMinCapacity = 4096;
+  capacity = std::max(capacity, kMinCapacity);
+
+  BufferDesc desc;
+  desc.bytes = capacity;
+  desc.alignment = 16;
+  desc.usage = BufferUsage::kIo;
+  std::unique_ptr<Buffer> buffer;
+  Status status = backend_->CreateBuffer(desc, &buffer);
+  if (!status.ok()) {
+    return PrefixStatus(status, "Executor::EnsureSampleRowsCapacity");
+  }
+  if (buffer == nullptr) {
+    return MakeStatus(ErrorCode::kInternal,
+                      "Executor: backend returned null sample rows buffer");
+  }
+  if (sample_rows_buffer_ != nullptr) {
+    const Status destroy_status =
+        backend_->DestroyBuffer(std::move(sample_rows_buffer_));
+    if (!destroy_status.ok()) {
+      return PrefixStatus(destroy_status,
+                          "Executor::EnsureSampleRowsCapacity(destroy)");
+    }
+  }
+  sample_rows_buffer_ = std::move(buffer);
+  sample_rows_capacity_ = capacity;
+  return Status::Ok();
+}
+
+// 确保 Attention 元数据缓冲容量；不足时按高水位重建。
 Status ExecBackend::EnsureMetadataCapacity(U64 bytes) {
   if (bytes == 0) {
     return Status::Ok();
@@ -819,6 +877,40 @@ Status ExecBackend::Execute(const ExecutionPlan& plan,
     }
   }
 
+  // 本步需要采样/计算 logits 的行：只包含 output_slot>=0 的 entry。
+  std::vector<I32> sample_rows;
+  for (const PlanEntry& entry : plan.entries) {
+    if (entry.output_slot < 0) {
+      continue;
+    }
+    if (entry.output_slot >= total) {
+      return MakeStatus(
+          ErrorCode::kInvalidArgument,
+          "Executor::Execute: request " +
+              std::to_string(entry.request_id) +
+              " output_slot exceeds packed token count");
+    }
+    sample_rows.push_back(entry.output_slot);
+  }
+  std::vector<U8> sample_rows_staging;
+  if (!sample_rows.empty()) {
+    const U64 bytes =
+        static_cast<U64>(sample_rows.size()) * sizeof(I32);
+    status = EnsureSampleRowsCapacity(bytes);
+    if (!status.ok()) {
+      return status;
+    }
+    sample_rows_staging.resize(static_cast<Usize>(bytes));
+    std::memcpy(sample_rows_staging.data(), sample_rows.data(),
+                static_cast<Usize>(bytes));
+    status = backend_->UploadAt(
+        sample_rows_buffer_->DevicePtr(), 0,
+        sample_rows_staging.data(), sample_rows_staging.size(), nullptr);
+    if (!status.ok()) {
+      return PrefixStatus(status, "Executor::Upload(sample_rows)");
+    }
+  }
+
   // KV 模式：装配逐请求/逐 token 元数据，一次上传到 Executor 私有缓冲。
   const Bool kv_mode = PlanUsesKv(plan);
   MetadataLayout metadata_layout;
@@ -854,6 +946,17 @@ Status ExecBackend::Execute(const ExecutionPlan& plan,
   context.kv_view = &kv_view;
   context.batch = static_cast<I32>(plan.entries.size());
   context.packed_tokens = static_cast<I32>(total);
+  context.sample_rows_enabled = true;
+  context.sample_rows =
+      sample_rows.empty() ? nullptr : sample_rows.data();
+  context.sample_row_count = static_cast<I32>(sample_rows.size());
+  if (!sample_rows.empty()) {
+    const U64 bytes =
+        static_cast<U64>(sample_rows.size()) * sizeof(I32);
+    context.sample_rows_view = MakeMetadataView(
+        sample_rows_buffer_.get(), 0, bytes,
+        static_cast<I64>(sample_rows.size()), DataType::kInt32);
+  }
   if (kv_mode) {
     const Usize batch = plan.entries.size();
     const I32 stride = metadata_layout.block_table_stride;
@@ -1001,6 +1104,15 @@ Status ExecBackend::Execute(const ExecutionPlan& plan,
 Status ExecBackend::Deinit() {
   Status status = Status::Ok();
   if (backend_ != nullptr) {
+    if (sample_rows_buffer_ != nullptr) {
+      const Status destroy_status =
+          backend_->DestroyBuffer(std::move(sample_rows_buffer_));
+      if (!destroy_status.ok() && status.ok()) {
+        status = PrefixStatus(destroy_status,
+                              "Executor::DestroyBuffer(sample_rows)");
+      }
+      sample_rows_capacity_ = 0;
+    }
     if (metadata_buffer_ != nullptr) {
       const Status destroy_status =
           backend_->DestroyBuffer(std::move(metadata_buffer_));

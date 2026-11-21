@@ -153,3 +153,11 @@ Token 100%、性能数据、文档/skill/结果齐全。
 - 半精度向量路径（如适用）与标量路径均已测试；
 - vs Mock 性能见 `ocl/tests/test_results.md` 11.5；端到端 Token 见 11.3–11.4；
 - P4.5：接入 `packed_tokens` 有效 token 截断，padding 行不参与 argmax。
+
+## 8. 2026-11-21 优化（sample_rows）
+
+- 新增 `sample_argmax_rows`：只对 Executor 提供的 `sample_rows` 行做
+  argmax，输出写回原始行号 `sample.out[row]`。
+- `Prepare` 同时编译全行 `sample_argmax` 与行选择 entry；Execute 在
+  `sample_rows_enabled` 时走行选择路径，行数为 0 直接跳过。
+- 单算子测试不启用行选择，保持全行语义。

@@ -28,7 +28,7 @@ class LinearOclKernel final : public OclKernel {
   LinearOclKernel(OclContext* context, OclProgramCache* programs,
                   std::string kernel_key);
 
-  ~LinearOclKernel() override = default;
+  ~LinearOclKernel() override;
 
   LinearOclKernel(const LinearOclKernel&) = delete;
   LinearOclKernel& operator=(const LinearOclKernel&) = delete;
@@ -36,6 +36,12 @@ class LinearOclKernel final : public OclKernel {
  private:
   Status Prepare(const runtime_graph::KernelContext& context) override;
   Status ExecuteImpl(const runtime_graph::KernelContext& context) override;
+
+  // true 表示该 Linear 是 LM Head，只计算 sample_rows 指定的行。
+  Bool sample_rows_mode_ = false;
+
+  // 与主 entry 并存的备用 tile（主为 4×8 时备用 4×4）。
+  cl_kernel alt_kernel_ = nullptr;
 };
 
 // 创建 Linear OCL Kernel。

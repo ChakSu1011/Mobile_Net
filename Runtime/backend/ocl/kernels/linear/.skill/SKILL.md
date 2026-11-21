@@ -71,3 +71,12 @@ Mali-G925 已断开，真机数据待重连后补测。
 - 有效 token 截断（`packed_tokens`）减少 padding 行计算；基准不设该标志，
   仍按静态 M 测量；真实形状性能见上方“性能数据”与
   `ocl/tests/test_results.md` 11.5。
+
+## LM Head 行选择与 4×8 分块（2026-11-21）
+
+- LM Head Linear 带 `sample_rows=true`，使用 `linear_nt_rows` 只算
+  `output_slot` 行；`row_count==1` 走单行路径，≤4 行按组复用 B。
+- 常规 Linear 使用 `linear_nt_4x8`；decode（M<8）或 N≥16384 切换到
+  `linear_nt_4x4` 备用 entry。
+- 常见陷阱：rows kernel 的输出写回原始行号 `c[row*n+col]`，不要压缩行；
+  `sample_rows` 未启用时仍走全量 4×4/4×8 路径。

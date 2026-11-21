@@ -62,7 +62,19 @@ class SampleKernel final : public Kernel {
       return MakeStatus(ErrorCode::kInvalidArgument,
                         "SampleKernel: null output data");
     }
-    for (I64 row = 0; row < rows; ++row) {
+    const Bool selected = context.sample_rows_enabled;
+    if (selected && context.sample_row_count <= 0) {
+      return Status::Ok();
+    }
+    const I64 count = selected
+                          ? static_cast<I64>(context.sample_row_count)
+                          : rows;
+    for (I64 index = 0; index < count; ++index) {
+      const I64 row = selected ? context.sample_rows[index] : index;
+      if (row < 0 || row >= rows) {
+        return MakeStatus(ErrorCode::kInvalidArgument,
+                          "SampleKernel: sample row out of range");
+      }
       const I64 base = row * vocab;
       FP32 best = ReadHalf(context.inputs[0], static_cast<U64>(base));
       I64 best_index = 0;
@@ -82,6 +94,7 @@ class SampleKernel final : public Kernel {
 
 }  // namespace
 
+// 创建 Mock Argmax Sample CPU Kernel。
 Status CreateSampleKernel(std::unique_ptr<Kernel>* kernel) {
   if (kernel == nullptr) {
     return MakeStatus(

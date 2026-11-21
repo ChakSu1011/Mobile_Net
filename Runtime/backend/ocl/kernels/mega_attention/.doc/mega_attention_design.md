@@ -332,3 +332,17 @@ out[t,h] = acc / l
 - P4.8（Paged）已实现：`paged_kv_store` + `mega_attention_paged`；
   4 个 prompt 单请求/4 并发生成 8 token 与 PyTorch 金标准一致，详见
   `Runtime/backend/ocl/tests/test_results.md` 第 12 节；性能 baseline 待补。
+
+## 8. 2026-11-21 优化（query tile / K/V 复用）
+
+- Paged prefill（`token_count>=8`）使用 **64 work-item workgroup**：相邻
+  token/head（含 GQA head pair）在 L1 中共享 K/V 行；decode 保持
+  `local=1`，把 64 个 work-item 分散到更多 CU。
+- 实测（4 并发 × 256 prompt × 8 decode）：
+  - prefill 3.24 s → **2.32 s / 256 token**（79.1 → 110.4 token/s）；
+  - decode 0.339 s → **0.324 s / 4 token**（11.8 → 12.3 token/s）。
+- 显式 GQA head pair（一个 work-item 处理 2 个 Q head、共享 K/V 读取）
+  曾实现并实测：因 2×128 FP32 私有累加器导致占用率下降，decode
+  退化到 0.73–0.81 s/step，已回退，不作为默认实现。
+- 当前 query tile 通过 workgroup 分组复用 L1 K/V，不增加每 work-item
+  私有内存；后续可进一步做 workgroup-local K/V tile + barrier 的显式复用。

@@ -817,3 +817,16 @@ gather/add 的标量与 half8 路径、sample argmax、Program 编译/二进制�
 | mega_attention | `kernels/mega_attention/.doc/mega_attention_design.md` | `mega_attention.cl` | `tests/test_plan.md` |
 | add | `kernels/add/.doc/add_design.md` | `add.cl` | `tests/test_plan.md` |
 | sample | `kernels/sample/.doc/sample_design.md` | `sample.cl` | `tests/test_plan.md` |
+
+## 附录 D：2026-11-21 优化补充
+
+- **LM Head/Sample 行选择**：`linear_nt_rows` 只计算 `sample_rows` 行；
+  `sample_argmax_rows` 只对这些行做 argmax。Executor 每步上传行下标，
+  prefill 的 partial chunk 行数为 0 时直接跳过。
+- **Linear 4×8 N 分块**：常规 Linear 主 entry 为 `linear_nt_4x8`；
+  decode（M<8）或 N≥16384 时切换到备用 `linear_nt_4x4`。
+- **Paged Attention query tile**：prefill（token_count≥8）使用
+  64 work-item workgroup，相邻 token/head 共享 L1 K/V；decode 保持
+  local=1。显式 GQA head pair 因私有内存翻倍导致 decode 回退，未启用。
+- **结果**：4 并发 × 256 prompt，prefill 79.1→110.4 token/s，
+  decode 11.8→12.3 token/s；512/128/32 MiB KV 对比无带宽降级。

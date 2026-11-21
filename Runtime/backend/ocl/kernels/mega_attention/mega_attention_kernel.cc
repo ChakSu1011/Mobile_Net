@@ -585,9 +585,15 @@ Status MegaAttentionPagedOclKernel::ExecuteImpl(
   if (!status.ok()) return status;
   status = SetIntArg(attention_kernel_, 27, causal ? 1 : 0);
   if (!status.ok()) return status;
+  // Prefill 的 token 多，使用 64 个 work-item 的 query tile，让相邻
+  // token/head 共享 L1 中的 K/V 行；decode token 少，保留 local=1 以
+  // 分散到更多 CU。
   const Usize attention_work =
       static_cast<Usize>(token_count) * static_cast<Usize>(num_heads);
-  return Enqueue1D(attention_kernel_, attention_work, 1);
+  const Usize local = token_count >= 8 ? 64 : 1;
+  const Usize global_work =
+      (attention_work + local - 1) / local * local;
+  return Enqueue1D(attention_kernel_, global_work, local);
 }
 
 // 创建全量 prefill 的 MegaAttention OCL Kernel。

@@ -53,3 +53,59 @@ __kernel void sample_argmax(
     out[out_offset + row] = (long)best_indices[0];
   }
 }
+
+// 只对 sample_rows 指定行做 argmax；输出写回原始行号。
+__kernel void sample_argmax_rows(
+    __global const half* logits,
+    const int logits_offset,
+    __global long* out,
+    const int out_offset,
+    __global const int* rows,
+    const int rows_offset,
+    const int row_count,
+    const int vocab) {
+  const int local_size = get_local_size(0);
+  const int index = get_global_id(0) / local_size;
+  const int tid = get_local_id(0);
+  if (index >= row_count) {
+    return;
+  }
+  const int row = rows[rows_offset + index];
+  if (row < 0) {
+    return;
+  }
+  const int base = logits_offset + row * vocab;
+  float best = -INFINITY;
+  int best_index = 0;
+  for (int i = tid; i < vocab; i += local_size) {
+    const float value = (float)logits[base + i];
+    if (value > best) {
+      best = value;
+      best_index = i;
+    }
+  }
+
+  __local float best_values[256];
+  __local int best_indices[256];
+  best_values[tid] = best;
+  best_indices[tid] = best_index;
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  for (int stride = local_size >> 1; stride > 0; stride >>= 1) {
+    if (tid < stride) {
+      const float other_value = best_values[tid + stride];
+      const int other_index = best_indices[tid + stride];
+      if (other_value > best_values[tid] ||
+          (other_value == best_values[tid] &&
+           other_index < best_indices[tid])) {
+        best_values[tid] = other_value;
+        best_indices[tid] = other_index;
+      }
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+  }
+
+  if (tid == 0) {
+    out[out_offset + row] = (long)best_indices[0];
+  }
+}

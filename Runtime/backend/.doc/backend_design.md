@@ -1357,3 +1357,13 @@ PYTHONUTF8=1 python Runtime/backend/ops/tests/compare.py \
 | IoOpEnv | Input/Output 边界 op 的 H2D/D2H 执行环境 |
 | Program 缓存 | OCL 编译产物缓存，键含源码/选项/驱动/设备 |
 | 算子精度测试 | 单融合算子 vs torch 散算子组合的 CPU 参考对比 |
+
+## 附录 D：2026-11-21 补充：sample_rows 行选择
+
+- `KernelContext/StepContext` 增加 `sample_rows_enabled`、`sample_rows`、
+  `sample_row_count`、`sample_rows_view`。
+- Executor 由 `PlanEntry.output_slot>=0` 生成行下标并上传；`kSample` 始终
+  只处理这些行；`kLinear` 仅在 attr `sample_rows=true`（LM Head）时使用。
+- 行选择未启用（单算子测试）时，Kernel 按全部有效行处理。
+- LM Head 输出仍写回静态 `[1,S,V]` 的原始行号；Sample 输出写回
+  `sample.out[row]`，与 Executor 的 `output_slot` 对齐。

@@ -283,7 +283,10 @@ I64 OclKernel::ElementCount(const runtime_graph::TensorView& view) {
 // 在 packed_tokens/batch==1 时把静态行数截断到本步 token 数。
 I64 OclKernel::EffectiveRows(const runtime_graph::KernelContext& context,
                              I64 static_rows) const {
-  if (static_rows <= 0 || !context.packed_tokens || context.batch != 1 ||
+  // packed_tokens=true 时 token_count 是本步所有请求的 packed token 总数；
+  // 静态图的行维仍按最大值分配，因此只计算前 token_count 行。不能再用
+  // batch==1 判断：KV 模式下 batch 是请求数，多请求 decode 也需要截断。
+  if (static_rows <= 0 || !context.packed_tokens ||
       context.token_count <= 0) {
     return static_rows;
   }

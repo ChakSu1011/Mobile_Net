@@ -189,9 +189,9 @@ struct KernelContext {
   I32 seq_len = 0;
 
   // 张量行是否按 packed token 紧凑排布（Executor 执行时为 true）。
-  // 为 true 且 batch==1 时，Kernel 可把有效行数截断到 token_count，
-  // 跳过静态 padding 行；直接调用 Kernel 的测试/基准保持 false，按静态
-  // shape 全量计算。
+  // 为 true 时，Kernel 可把有效行数截断到 token_count（所有请求的
+  // packed token 总数），跳过静态 padding 行；直接调用 Kernel 的测试/
+  // 基准保持 false，按静态 shape 全量计算。
   Bool packed_tokens = false;
 };
 

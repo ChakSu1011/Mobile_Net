@@ -611,16 +611,17 @@ struct KernelContext {
 5. `attention`/`sampling` 只在对应 op 需要时非空；其余 op 为 `nullptr`。
 6. `batch/token_count/seq_len` 由 StepContext 填充；单算子测试直接用测试值。
 7. `packed_tokens=true` 表示本步张量行按 packed token 紧凑排布（KernelOpEnv 在生产执行时设置）；
-   Kernel 可在 `batch==1` 时据此把有效行数截断到 `token_count`；直接调用 Kernel 的测试/基准保持
-   `false`，按静态 shape 全量计算。
+   Kernel 可据此把有效行数截断到 `token_count`（所有请求的 packed token 总数）；
+   直接调用 Kernel 的测试/基准保持 `false`，按静态 shape 全量计算。
 8. `AttentionMetadataView` 的每个 `TensorView` 使用与普通张量相同的约定：设备侧
    `data=Buffer*`、`offset` 为字节偏移；数组位于同一元数据缓冲的不同 offset。
 9. `OclKernel::SetMemArg` 不使用 `TensorView.offset`，因此 paged Kernel 必须把
    每个元数据数组的 offset 作为显式 `int` 参数传入；KV 池内偏移用 64 位。
 10. `block_table` 的物理块 ID 为 `I32`，未使用的尾部补 0；Kernel 只读到
     `ceil(seq_lens[r]/kv_block_size)`。`slots` 长度必须等于 `token_count`。
-11. `batch` 可大于 1，`packed_tokens` 截断只适用于 `batch==1` 的现有全量算子；
-    paged attention 逐 token 读取 `request_indices`，不依赖该截断。
+11. `batch` 是请求数，`token_count` 是 packed token 总数；全量算子统一按
+    `packed_tokens` 截断，不依赖 `batch==1`。paged attention 逐 token 读取
+    `request_indices`，不依赖该截断。
 
 #### 4.2.3 StepContext 与动态数据注入
 

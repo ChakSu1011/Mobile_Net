@@ -458,8 +458,9 @@ kernels/<op>/
 
 **契约**：`KernelContext.packed_tokens`（`kernel_context.h`）由 `KernelOpEnv`
 在 Executor 执行时置 true；`token_count` 是本步有效 token 总数。`OclKernel::
-EffectiveRows(context, static_rows)` 在 `packed_tokens && batch==1 &&
-token_count>0` 时返回 `min(token_count, static_rows)`，否则返回静态行数。
+EffectiveRows(context, static_rows)` 在 `packed_tokens && token_count>0`
+时返回 `min(token_count, static_rows)`，否则返回静态行数。`batch` 是请求数，
+不再作为截断条件。
 直接调用 Kernel 的测试/基准（`packed_tokens=false`）保持全量计算，保证
 单元测试与性能基准语义不变。
 
@@ -476,8 +477,9 @@ token_count>0` 时返回 `min(token_count, static_rows)`，否则返回静态行
 | mega_attention | seq | 新增 `seq_stride` 参数：`seq` 为有效长度，`seq_stride` 为静态行跨度；q/k/v/out 的地址必须用 `seq_stride` |
 | sample | rows | 只对有效行 argmax；Executor 的 `output_slot` 落在有效行内 |
 
-**边界**：仅在 `batch==1` 启用；多 batch 的 packed 布局与静态 `[B,S]` 行跨度
-不同，沿用静态全量计算，待多 batch 布局契约明确后再优化。
+**边界**：`packed_tokens=true` 时启用；`batch` 表示请求数，`token_count`
+表示所有请求的 packed token 总数。静态图行维仍按最大值分配，Kernel 只计算
+前 `token_count` 行。
 
 **Paged attention 例外**：paged kernel 不使用 `EffectiveRows` 截断。有效
 token 由 `AttentionContext.token_count` 与 `request_indices/positions` 逐

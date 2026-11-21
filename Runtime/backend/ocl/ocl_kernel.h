@@ -129,9 +129,9 @@ class OclKernel : public Kernel {
   // 计算本步有效行数。
   //
   // 功能：
-  //   Executor 执行（`packed_tokens=true`）且 batch==1 时，把按静态 shape
-  //   计算的行数截断到本步有效 token 数，跳过 padding 行；直接调用 Kernel
-  //   的测试/基准（`packed_tokens=false`）保持全量计算。
+  //   Executor 执行（`packed_tokens=true`）时，把按静态 shape 计算的行数
+  //   截断到本步 packed token 总数，跳过 padding 行；直接调用 Kernel 的
+  //   测试/基准（`packed_tokens=false`）保持全量计算。
   //
   // 参数：
   //   context：节点执行上下文；

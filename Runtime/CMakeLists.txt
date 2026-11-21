@@ -172,5 +172,19 @@ if(MOBILENET_BUILD_E2E_TESTS)
     else()
       target_compile_options(ocl_token_repl PRIVATE -Wall -Wextra)
     endif()
+
+    # KV 调度性能测试：N 并发 prefill + decode。
+    add_executable(ocl_kv_benchmark
+      backend/ocl/tests/ocl_kv_benchmark.cc)
+    target_link_libraries(
+      ocl_kv_benchmark PRIVATE
+      "$<LINK_LIBRARY:WHOLE_ARCHIVE,mobilenet_runtime>"
+      "$<LINK_LIBRARY:WHOLE_ARCHIVE,runtime_backend>"
+      graph Threads::Threads)
+    if(MSVC)
+      target_compile_options(ocl_kv_benchmark PRIVATE /W4)
+    else()
+      target_compile_options(ocl_kv_benchmark PRIVATE -Wall -Wextra)
+    endif()
   endif()
 endif()

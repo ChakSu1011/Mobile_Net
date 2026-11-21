@@ -222,6 +222,22 @@ void CheckErrorPaths(const mobilenet::service::Tokenizer& tokenizer) {
          "TokenToId(<|im_start|>) mismatch");
   Expect(tokenizer.IdToToken(151644) == "<|im_start|>",
          "IdToToken(151644) mismatch");
+  // 单字节非法 token：严格 Decode 报错，流式解码替换为 U+FFFD。
+  mobilenet::service::DecodeOptions strict_options;
+  strict_options.skip_unknown_tokens = false;
+  status = tokenizer.Decode({94}, strict_options, &text);
+  Expect(!status.ok(), "invalid byte token should fail strict Decode");
+  std::unique_ptr<mobilenet::service::StreamDecoder> stream =
+      tokenizer.CreateStreamDecoder(mobilenet::service::DecodeOptions{});
+  Expect(stream != nullptr, "stream decoder is null");
+  if (stream != nullptr) {
+    std::string delta;
+    status = stream->Push(94, &delta);
+    Expect(status.ok(), "stream invalid byte should not fail");
+    Expect(delta == "\xEF\xBF\xBD",
+           "stream invalid byte should be U+FFFD");
+  }
+
   Expect(tokenizer.bos_token_id() == 151643, "bos id mismatch");
   Expect(tokenizer.eos_token_ids() == std::vector<I64>({151645, 151643}),
          "eos ids mismatch");
@@ -382,6 +398,23 @@ I32 main(I32 argc, C8** argv) {
               static_cast<long long>(tokenizer->vocab_size()),
               tokenizer->eos_token_ids().size(),
               tokenizer->supports_chat_template() ? 1 : 0);
+
+  // 校验金标准与本地 tokenizer.json 的来源一致。
+  const mobilenet::runtime::JsonValue* meta = golden.Find("meta");
+  const mobilenet::runtime::JsonValue* golden_sha =
+      meta != nullptr ? meta->Find("tokenizer_json_sha256") : nullptr;
+  if (golden_sha != nullptr && golden_sha->IsString()) {
+    std::string actual_sha;
+    const mobilenet::Status hash_status =
+        mobilenet::runtime::HashFileSha256(
+            model_dir + "/tokenizer.json", 0, &actual_sha);
+    Expect(hash_status.ok(),
+           "tokenizer.json hash failed: " + hash_status.message());
+    Expect(actual_sha == golden_sha->AsString(),
+           "tokenizer.json hash does not match golden data");
+  } else {
+    Expect(false, "golden meta tokenizer_json_sha256 missing");
+  }
 
   const mobilenet::runtime::JsonValue* encode_cases =
       golden.Find("encode_cases");

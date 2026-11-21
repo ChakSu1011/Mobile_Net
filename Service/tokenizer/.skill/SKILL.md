@@ -119,6 +119,6 @@
 
 - 82 条 Encode 金标准（含 60 条确定性随机语料）全部通过。
 - Decode/流式/keep-special 与 HF 一致。
-- 8 条 Chat 模板用例与 HF `apply_chat_template` 逐字节一致。
+- 9 条 Chat 模板用例与 HF `apply_chat_template` 逐字节一致。
 - 4 线程并发 Encode/Decode 通过。
-- 实测：加载约 0.2–0.7 s；1 KB 文本 Encode 约 0.2–0.5 ms。
+- 实测：加载亚秒级；1 KB 文本 Encode 亚毫秒级（随文件缓存波动）。

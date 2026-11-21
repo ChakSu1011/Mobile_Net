@@ -80,7 +80,7 @@ Service/session（HttpServer → Router → OpenAI/原生 handler）
 | --- | --- | --- | --- |
 | SVC-NF-01 | 并发 | 默认 `max_concurrent_requests=1`（匹配 `[1,256]` 模型包），可配置；HTTP 支持多连接 | TC-SVC-10 |
 | SVC-NF-02 | 回调安全 | Engine 回调只入队，不阻塞、不重入 Engine；队列有界 | TC-SVC-04、TC-SVC-10 |
-| SVC-NF-03 | 资源上限 | 默认体 1 MiB、连接 32、请求超时 120 s、会话 64 | TC-SVC-07 |
+| SVC-NF-03 | 资源上限 | 默认体 1 MiB、连接 32、请求超时 120 s、会话 64、历史 64 条 | TC-SVC-07 |
 | SVC-NF-04 | 可移植性 | Windows（Winsock）/ Linux / Android（POSIX）；离线运行 | 构建检查 |
 | SVC-NF-05 | 可观测性 | 请求日志含 request id、session id、token 数、耗时；`/health` 统计 | TC-SVC-02 |
 | SVC-NF-06 | 工程规范 | Google C++ Style；模块/类/函数级中文注释 | 代码审查 |
@@ -244,6 +244,7 @@ struct ServerConfig {
   ThinkingMode thinking = ThinkingMode::kDisabled;
   U32 max_sessions = 64;
   U32 session_idle_timeout_s = 3600;
+  U32 max_history_messages = 64;  // 最小 4
   std::string log_level = "info";
 };
 ```
@@ -266,6 +267,7 @@ struct ServerConfig {
 - 头部大小上限 16 KiB；头部名按小写匹配。
 - 请求体只支持 `Content-Length`；缺失视为空体；超过 `max_body_bytes`
   返回 413；`Transfer-Encoding: chunked` 返回 400。
+- 支持 `Expect: 100-continue`：先回写 `HTTP/1.1 100 Continue` 再读 body。
 - 不支持 keep-alive：响应统一 `Connection: close`，一个连接处理一个请求。
 - 读取/写入超时通过 socket 选项设置；超时返回 408/关闭连接。
 
@@ -407,7 +409,10 @@ struct PendingRequest {
 
 输入：`messages`、请求参数、会话默认采样。
 
-1. 校验角色与内容（OpenAI 层已完成大部分）。
+1. 校验角色与内容（OpenAI 层已完成大部分）；按消息总字节数做快速
+   上限检查（`max_num_tokens * 64`），明显超限时直接返回
+   `context_length_exceeded`，避免对超长文本执行完整 BPE。接近上限的
+   文本仍会完整编码；预算内提前终止是后续优化项。
 2. `Tokenizer::ApplyChatTemplate` 生成 prompt 文本。
 3. `Tokenizer::Encode` 生成 `prompt_ids`。
 4. 计算 `max_tokens`：
@@ -522,8 +527,11 @@ class SessionManager {
   - 失败/取消则回滚 user 消息，保持历史一致。
 - 空闲淘汰：后台清扫线程（或每次访问时惰性清理）删除超过
   `session_idle_timeout_s` 且非 busy 的会话；基础版采用惰性清理。
-- 上下文预算：不修改已保存历史；每轮构造 prompt 时按 §4.6.1 截断。
-  `GET /v1/sessions/{id}` 返回完整历史条数，便于调试。
+- 历史上限：每轮成功后按 `max_history_messages` 裁剪，保留首条 system
+  与最近消息，避免长会话内存无界增长；详细 prompt 截断仍由 §4.6.1 负责。
+- 上下文预算：每轮构造 prompt 时按 §4.6.1 截断；成功后按
+  `max_history_messages` 裁剪存储历史。`GET /v1/sessions/{id}` 返回当前
+  保留的消息条数。
 
 ### 4.9 OpenAI 协议映射
 
@@ -578,7 +586,7 @@ class SessionManager {
 4. `data: [DONE]`。
 
 错误在流开始前以普通 JSON 返回；流开始后发生错误，发送
-`data: {"error":{...}}` 并结束。
+`data: {"error":{...}}`、`data: [DONE]`，然后结束 SSE。
 
 #### 4.9.4 原生会话接口
 
@@ -677,6 +685,9 @@ Server::Stop
 
 - 默认只绑定 `127.0.0.1`；绑定 `0.0.0.0` 时启动日志告警。
 - 无鉴权、无 TLS；基础版仅用于本机/受信局域网。
+- 对话内容中的 `<|im_start|>`、`<|im_end|>` 等字面串会被 Tokenizer
+  识别为 added token，与 HF 行为一致；这些串可能被用于 prompt injection。
+  公网或不受信输入场景必须在接入层转义/拒绝。
 - 请求体、头部、连接数、会话数、stop 数量均有上限。
 - 不访问网络；不执行用户提供的模板/代码。
 
@@ -757,8 +768,9 @@ ctest --test-dir Service/build --output-on-failure
 - HttpServer::Start 增加 `max_body_bytes` 参数，请求体超限返回 413。
 - ChatService::Stream 支持可选 ChatOutcome，供 SessionManager 保存流式
   助手文本。
-- FakeEngine 集成测试覆盖非流式/流式/多轮/隔离/stop/错误/忙/超时/OpenAPI；
-  真实 OCL 模型冒烟结果见 `tests/test_results.md`。
+- FakeEngine 集成测试覆盖非流式/流式/多轮/隔离/stop/错误/忙/超时/
+  多连接并发/客户端断开/OpenAPI；真实 OCL 单轮、流式与两轮会话冒烟结果
+  见 `tests/test_results.md`。
 
 ### 6.7 未覆盖项与风险
 

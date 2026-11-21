@@ -237,6 +237,8 @@ Status LoadServerConfig(const std::string& path, ServerConfig* config) {
       ReadInt(session, "max_sessions", parsed.max_sessions);
   const I64 idle_timeout = ReadInt(session, "idle_timeout_s",
                                    parsed.session_idle_timeout_s);
+  const I64 max_history =
+      ReadInt(session, "max_history_messages", parsed.max_history_messages);
   status = CheckRange(max_sessions, 1, 65536, "session.max_sessions",
                       &checked);
   if (!status.ok()) {
@@ -249,6 +251,12 @@ Status LoadServerConfig(const std::string& path, ServerConfig* config) {
     return status;
   }
   parsed.session_idle_timeout_s = static_cast<U32>(checked);
+  status = CheckRange(max_history, 4, 65536,
+                      "session.max_history_messages", &checked);
+  if (!status.ok()) {
+    return status;
+  }
+  parsed.max_history_messages = static_cast<U32>(checked);
 
   parsed.log_level = ReadString(logging, "level", parsed.log_level);
 

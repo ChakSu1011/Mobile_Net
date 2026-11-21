@@ -138,6 +138,16 @@ CHAT_CASES = [
         "enable_thinking": "default",
     },
     {
+        "name": "non_first_system",
+        "messages": [
+            {"role": "user", "content": "Hi"},
+            {"role": "system", "content": "Be brief."},
+            {"role": "user", "content": "Hello"},
+        ],
+        "add_generation_prompt": True,
+        "enable_thinking": "default",
+    },
+    {
         "name": "last_assistant_reasoning",
         "messages": [
             {"role": "user", "content": "Solve."},

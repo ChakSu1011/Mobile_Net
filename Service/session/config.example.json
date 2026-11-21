@@ -27,7 +27,8 @@
   },
   "session": {
     "max_sessions": 64,
-    "idle_timeout_s": 3600
+    "idle_timeout_s": 3600,
+    "max_history_messages": 64
   },
   "logging": {
     "level": "info"

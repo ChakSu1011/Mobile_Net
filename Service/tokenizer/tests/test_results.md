@@ -54,11 +54,11 @@ python Service/tokenizer/tests/gen_golden.py \
 实际输出：
 
 ```text
-wrote Service\tokenizer\tests\data\golden.json (82 encode, 8 chat)
+wrote Service\tokenizer\tests\data\golden.json (82 encode, 9 chat)
 ```
 
 金标准包含 22 条固定语料 + 60 条确定性随机语料（种子 20261121），
-以及 8 条 Chat 模板用例。
+以及 9 条 Chat 模板用例。
 
 ## 5. 测试命令与实际输出
 
@@ -73,12 +73,12 @@ wrote Service\tokenizer\tests\data\golden.json (82 encode, 8 chat)
 
 ```text
 INFO: vocab=151669 eos=2 chat=1
-PERF: json_large_keys=20000 parse=5.04 ms
-PERF: load=198.59 ms, encode_1KB_avg=0.172 ms, tokens=231
+PERF: json_large_keys=20000 parse=4.78 ms
+PERF: load=163.81 ms, encode_1KB_avg=0.160 ms, tokens=231
 all tokenizer checks passed
 ```
 
-退出码：`0`。
+退出码：`0`。性能数值随文件缓存波动，以上为一次实测。
 
 ### 5.2 CTest
 
@@ -91,13 +91,13 @@ ctest --test-dir Service/build --output-on-failure
 ```text
 Test project D:/Mobile_Net/Service/build
     Start 1: tokenizer_test
-1/2 Test #1: tokenizer_test ...................   Passed    0.27 sec
+1/2 Test #1: tokenizer_test ...................   Passed    0.32 sec
     Start 2: session_test
-2/2 Test #2: session_test .....................   Passed    2.95 sec
+2/2 Test #2: session_test .....................   Passed    3.88 sec
 
 100% tests passed out of 2
 
-Total Test time (real) =   3.26 sec
+Total Test time (real) =   4.41 sec
 ```
 
 ## 6. 用例与结论
@@ -128,6 +128,7 @@ Total Test time (real) =   3.26 sec
 | Decode | 上述 ids | 与 HF `decode(skip_special_tokens=true)` 一致 | 通过 |
 | Decode keep-special | 上述 ids | 与 HF `skip_special_tokens=false` 一致 | 通过 |
 | 流式切分 | 每个用例逐 token Push | 拼接结果与整段 Decode 逐字节一致 | 通过 |
+| 流式非法字节 | 单字节 token id 94 | 输出 U+FFFD，不中断 | 通过 |
 | Chat 单轮 | user `Hello` | 与 HF 模板一致 | 通过 |
 | Chat system+user | system + user | 与 HF 模板一致 | 通过 |
 | Chat 多轮 | system/user/assistant/user | 与 HF 模板一致 | 通过 |
@@ -135,13 +136,14 @@ Total Test time (real) =   3.26 sec
 | Chat 历史 reasoning | assistant 含 `</think>` | 与 HF 模板一致 | 通过 |
 | Chat 末尾 assistant | user/assistant，无生成提示 | 与 HF thinking 分支一致 | 通过 |
 | Chat 末尾 reasoning | 末尾 assistant 含 `</think>` | 与 HF 模板一致 | 通过 |
+| 非首条 system | user/system/user | 角色名保持 `system`，与 HF 一致 | 通过 |
 | 非法 UTF-8 | `"\xFF"` | `kInvalidArgument` | 通过 |
 | 未知 id | 200000 | 默认跳过；关闭 skip 后报错 | 通过 |
 | 空 Chat 消息 | `{}` | `kInvalidArgument` | 通过 |
 | tool 角色 | `{"role":"tool"}` | `kUnsupportedOp` | 通过 |
 | 并发 | 4 线程 × 50 次 Encode/Decode | 结果一致，无崩溃 | 通过 |
-| 性能 | 1 KB 文本 50 次编码 | 记录基线 | 0.172 ms/次 |
-| 加载性能 | 加载 Qwen3 Tokenizer | 记录基线 | 198.59 ms（热缓存） |
+| 性能 | 1 KB 文本 50 次编码 | 记录基线 | 0.160 ms/次 |
+| 加载性能 | 加载 Qwen3 Tokenizer | 记录基线 | 163.81 ms（热缓存） |
 
 ## 7. Runtime JSON 解析器回归
 
@@ -187,7 +189,16 @@ Total Test time (real) =  28.48 sec
 
 Tokenizer 模块在 Qwen3-0.6B 上达到设计目标：
 
-- 82 条 Encode 金标准与 8 条 Chat 模板用例全部与 HF 一致；
+- 82 条 Encode 金标准与 9 条 Chat 模板用例全部与 HF 一致；
 - 流式解码与整段解码逐字节一致；
 - 错误路径、并发与 JSON 解析器回归通过；
 - 加载亚秒级、1 KB 编码亚毫秒级，满足基础版使用。
+
+## 10. Review 修复记录
+
+| 问题 | 修复 | 验证 |
+| --- | --- | --- |
+| 非首条 system 被写成 user 角色 | 保留 `message.role` | 新增 golden 用例 |
+| 生成 token 非法 UTF-8 导致流式失败 | StreamDecoder lossy U+FFFD | id 94 用例 |
+| tokenizer.json 加载 40+ 秒 | Runtime JSON 重复键哈希集合 | 20k 键 5 ms；加载亚秒级 |
+

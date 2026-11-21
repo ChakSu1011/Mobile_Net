@@ -118,6 +118,12 @@ void PendingRegistry::FailAll() {
   }
 }
 
+void PendingRegistry::Reset() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  pending_.clear();
+  shutting_down_.store(false);
+}
+
 Usize PendingRegistry::size() const {
   std::lock_guard<std::mutex> lock(mutex_);
   return pending_.size();

@@ -229,12 +229,16 @@ Status ParseChatCompletionRequest(const runtime::JsonValue& body,
     }
   }
 
-  // max_completion_tokens 优先于 max_tokens。
+  // max_completion_tokens 非 null 时优先，否则回退到 max_tokens。
   const runtime::JsonValue* max_completion =
       body.Find("max_completion_tokens");
   const runtime::JsonValue* max_tokens = body.Find("max_tokens");
-  const runtime::JsonValue* chosen =
-      max_completion != nullptr ? max_completion : max_tokens;
+  const runtime::JsonValue* chosen = nullptr;
+  if (max_completion != nullptr && !max_completion->IsNull()) {
+    chosen = max_completion;
+  } else if (max_tokens != nullptr && !max_tokens->IsNull()) {
+    chosen = max_tokens;
+  }
   if (chosen != nullptr && !chosen->IsNull()) {
     if (!chosen->IsInteger() || chosen->AsInt64() <= 0 ||
         chosen->AsInt64() > (1 << 20)) {

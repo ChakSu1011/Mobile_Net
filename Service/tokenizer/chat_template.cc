@@ -120,7 +120,10 @@ Status FormatQwen3Chat(const std::vector<ChatMessage>& messages,
       prompt->append("<|im_end|>\n");
     } else if (message.role == "user" ||
                (message.role == "system" && index != 0)) {
-      prompt->append("<|im_start|>user\n");
+      // Qwen3 模板在非首条 system 时仍使用 message.role 作为角色名。
+      prompt->append("<|im_start|>");
+      prompt->append(message.role);
+      prompt->append("\n");
       prompt->append(message.content);
       prompt->append("<|im_end|>\n");
     } else if (message.role == "assistant") {

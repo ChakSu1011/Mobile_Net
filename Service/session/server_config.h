@@ -85,6 +85,9 @@ struct ServerConfig {
   // 会话空闲超时（秒）。
   U32 session_idle_timeout_s = 3600;
 
+  // 单会话保留的最大消息条数；超出后丢弃最旧的非 system 消息。
+  U32 max_history_messages = 64;
+
   // 日志级别：error/warn/info/debug。
   std::string log_level = "info";
 };

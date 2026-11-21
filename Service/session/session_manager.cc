@@ -92,6 +92,31 @@ void SessionManager::PruneLocked() {
   }
 }
 
+void SessionManager::TrimHistory(Session* session) const {
+  if (session == nullptr || config_ == nullptr) {
+    return;
+  }
+  const Usize limit = config_->max_history_messages;
+  if (limit == 0 || session->messages.size() <= limit) {
+    return;
+  }
+  std::vector<ChatMessage> trimmed;
+  trimmed.reserve(limit);
+  Usize start = session->messages.size() - limit;
+  if (!session->messages.empty() &&
+      session->messages.front().role == "system") {
+    trimmed.push_back(session->messages.front());
+    start = session->messages.size() - (limit - 1);
+    if (start < 1) {
+      start = 1;
+    }
+  }
+  for (Usize index = start; index < session->messages.size(); ++index) {
+    trimmed.push_back(session->messages[index]);
+  }
+  session->messages.swap(trimmed);
+}
+
 void SessionManager::FillInfo(const Session& session, SessionInfo* info) {
   info->id = session.id;
   info->created_at = session.created_epoch;
@@ -205,6 +230,16 @@ Status SessionManager::Chat(const std::string& id,
   if (!session_lock.owns_lock() || session->busy.load()) {
     return MakeStatus(ErrorCode::kStateError, "session_busy");
   }
+  // 重新确认会话仍在注册表中：Prune/Delete 可能在 Chat 取得 shared_ptr
+  // 之后、session 锁之前将其移除。Map 锁在 session 锁之后获取；Delete/
+  // Prune 使用 try_lock，不会阻塞等待 session 锁，因此无死锁。
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const auto iterator = sessions_.find(id);
+    if (iterator == sessions_.end() || iterator->second != session) {
+      return MakeStatus(ErrorCode::kRequestNotFound, "session_not_found");
+    }
+  }
   session->busy.store(true);
   session->last_active_epoch.store(NowEpochSeconds());
 
@@ -225,6 +260,7 @@ Status SessionManager::Chat(const std::string& id,
     session->messages.push_back({"user", user_message});
     session->messages.push_back(
         {"assistant", target_outcome->text});
+    TrimHistory(session.get());
     session->message_count.store(session->messages.size());
   }
   session->last_active_epoch.store(NowEpochSeconds());

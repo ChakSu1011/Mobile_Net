@@ -104,11 +104,17 @@
    可并行，但 Engine 默认并发 1，实际排队。
 9. **stop 字符串**：在解码文本上检测，跨 token 通过尾部缓冲处理；
    最多 4 个、每个 256 字节。stop token ids 透传 Engine。
+9.1 **会话历史上限**：每轮成功后按 `max_history_messages`（默认 64，
+   最小 4）裁剪，保留 system 与最近消息；prompt 预算仍由 256 token 上限
+   控制。
 10. **测试不要加载真实模型**：`session_test` 用 FakeEngine；真实 OCL
     冒烟测试耗时数十秒，建议单独手动执行并记录。
 11. **错误映射依赖消息前缀**：`context_length_exceeded`、`session_busy`、
     `session_not_found` 等由 Status 消息前缀映射为 HTTP 错误码；修改
     这些字符串时必须同步 HTTP 映射与文档。
+12. **prompt injection**：消息 content 中的 `<|im_start|>`、`<|im_end|>`
+    等字面串会被 Tokenizer 当作 added token；基础版默认本机，公网或
+    不受信输入必须在接入层转义/拒绝。
 
 ## 验证基线
 

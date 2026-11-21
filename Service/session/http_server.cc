@@ -427,6 +427,12 @@ struct HttpServer::Impl {
   // 是否停止。
   std::atomic<Bool> stopping{false};
 
+  // 是否已经执行过停止流程（保证 Stop 幂等）。
+  Bool stopped_ = false;
+
+  // Windows WSAStartup 是否已成功且尚未 WSACleanup。
+  Bool wsa_started_ = false;
+
   // 实际端口。
   U16 port = 0;
 
@@ -459,6 +465,16 @@ struct HttpServer::Impl {
   std::vector<Worker> workers;
 
   // 启动监听。
+  // 释放 Winsock 引用；仅当成功 Startup 且尚未 Cleanup 时执行。
+  void CleanupWsa() {
+#if defined(_WIN32)
+    if (wsa_started_) {
+      WSACleanup();
+      wsa_started_ = false;
+    }
+#endif
+  }
+
   Status Start(const std::string& host, U16 requested_port,
                U32 max_conn, U32 body_limit, U32 timeout_ms,
                HttpHandler request_handler) {
@@ -466,12 +482,15 @@ struct HttpServer::Impl {
       return MakeStatus(ErrorCode::kStateError,
                         "HttpServer: already running");
     }
+    stopped_ = false;
 #if defined(_WIN32)
     WSADATA data;
     if (WSAStartup(MAKEWORD(2, 2), &data) != 0) {
+      stopped_ = true;
       return MakeStatus(ErrorCode::kIoError,
                         "HttpServer: WSAStartup failed");
     }
+    wsa_started_ = true;
 #else
     signal(SIGPIPE, SIG_IGN);
 #endif
@@ -484,6 +503,8 @@ struct HttpServer::Impl {
     const I32 resolve = getaddrinfo(host.empty() ? nullptr : host.c_str(),
                                     port_text.c_str(), &hints, &result);
     if (resolve != 0 || result == nullptr) {
+      CleanupWsa();
+      stopped_ = true;
       return MakeStatus(ErrorCode::kIoError,
                         "HttpServer: getaddrinfo failed");
     }
@@ -509,6 +530,8 @@ struct HttpServer::Impl {
     }
     freeaddrinfo(result);
     if (socket == kInvalidSocket) {
+      CleanupWsa();
+      stopped_ = true;
       return MakeStatus(ErrorCode::kIoError,
                         "HttpServer: bind/listen failed");
     }
@@ -545,6 +568,8 @@ struct HttpServer::Impl {
       listener = kInvalidSocket;
       running.store(false);
       stopping.store(true);
+      stopped_ = true;
+      CleanupWsa();
       return MakeStatus(ErrorCode::kInternal,
                         "HttpServer: cannot start accept thread");
     }
@@ -553,7 +578,13 @@ struct HttpServer::Impl {
 
   // 停止服务器。
   void Stop() {
+    if (stopped_) {
+      CleanupWsa();
+      return;
+    }
+    stopped_ = true;
     if (!running.load() && !stopping.load()) {
+      CleanupWsa();
       return;
     }
     stopping.store(true);
@@ -585,9 +616,7 @@ struct HttpServer::Impl {
       std::lock_guard<std::mutex> lock(mutex);
       connections.clear();
     }
-#if defined(_WIN32)
-    WSACleanup();
-#endif
+    CleanupWsa();
   }
 
   // accept 循环。
@@ -706,6 +735,10 @@ struct HttpServer::Impl {
       header_end = buffer.find("\r\n\r\n");
       if (header_end != std::string::npos) {
         header_end += 4;
+        if (header_end > kMaxHeaderBytes) {
+          *message = "header too large";
+          return ReadResult::kBadRequest;
+        }
         break;
       }
       if (buffer.size() > kMaxHeaderBytes) {
@@ -729,6 +762,7 @@ struct HttpServer::Impl {
     Bool first_line = true;
     U64 content_length = 0;
     Bool has_content_length = false;
+    Bool expect_continue = false;
     while (line_begin < header_block.size()) {
       const Usize line_end = header_block.find("\r\n", line_begin);
       const std::string line = header_block.substr(
@@ -777,6 +811,9 @@ struct HttpServer::Impl {
           } else if (name == "transfer-encoding") {
             *message = "chunked request body is not supported";
             return ReadResult::kBadRequest;
+          } else if (name == "expect") {
+            expect_continue =
+                Lowercase(value).find("100-continue") != std::string::npos;
           }
         }
       }
@@ -793,6 +830,12 @@ struct HttpServer::Impl {
     if (request->method.empty()) {
       *message = "empty method";
       return ReadResult::kBadRequest;
+    }
+    // 支持 curl 等客户端的 Expect: 100-continue，避免其等待 1 s 后才发 body。
+    if (expect_continue) {
+      if (!connection->Send("HTTP/1.1 100 Continue\r\n\r\n")) {
+        return ReadResult::kClosed;
+      }
     }
 
     std::string body = buffer.substr(header_end);

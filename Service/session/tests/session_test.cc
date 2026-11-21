@@ -373,6 +373,24 @@ std::string SseFinishReason(const std::vector<std::string>& events) {
   return reason;
 }
 
+// 读取 SSE 终 chunk 的 completion_tokens；无 usage 返回 -1。
+I64 SseCompletionTokens(const std::vector<std::string>& events) {
+  for (const std::string& event : events) {
+    if (event == "[DONE]") {
+      continue;
+    }
+    mobilenet::runtime::JsonValue root;
+    if (!ParseJsonText(event, &root)) {
+      continue;
+    }
+    const mobilenet::runtime::JsonValue* usage = root.Find("usage");
+    if (usage != nullptr) {
+      return GetInt(*usage, "completion_tokens");
+    }
+  }
+  return -1;
+}
+
 // FakeEngine：按固定 token 序列逐步回调。
 class FakeEngine final : public mobilenet::service::IEngine {
  public:
@@ -599,8 +617,23 @@ void TestBasicChat(U16 port) {
   Expect(ChoiceFinishReason(limited) == "length",
          "max_tokens finish_reason should be length");
 
+  // max_completion_tokens:null 时回退到 max_tokens。
   Expect(HttpCall(port, "POST", "/v1/chat/completions",
-                  ChatBody("Hi", "\"stream\":true"), &response),
+                  ChatBody("Hi", "\"max_completion_tokens\":null,"
+                                 "\"max_tokens\":1"),
+                  &response),
+         "max_completion null call failed");
+  mobilenet::runtime::JsonValue null_limited;
+  Expect(ParseJsonText(response.body, &null_limited),
+         "max_completion null JSON failed");
+  Expect(ChoiceFinishReason(null_limited) == "length",
+         "max_completion null should fall back to max_tokens");
+
+  Expect(HttpCall(port, "POST", "/v1/chat/completions",
+                  ChatBody("Hi",
+                           "\"stream\":true,\"stream_options\":"
+                           "{\"include_usage\":true}"),
+                  &response),
          "stream call failed");
   Expect(response.status == 200, "stream status != 200");
   const std::vector<std::string> events = ParseSse(response.body);
@@ -609,6 +642,7 @@ void TestBasicChat(U16 port) {
   Expect(SseContent(events) == "Hello world", "stream content mismatch");
   Expect(SseFinishReason(events) == "stop",
          "stream finish_reason mismatch");
+  Expect(SseCompletionTokens(events) > 0, "stream usage missing");
 
   // stop 字符串截断。
   Expect(HttpCall(port, "POST", "/v1/chat/completions",
@@ -619,6 +653,16 @@ void TestBasicChat(U16 port) {
   Expect(ParseJsonText(response.body, &stop_result), "stop JSON parse failed");
   Expect(ChoiceContent(stop_result) == "Hello ",
          "stop content mismatch");
+
+  // 跨 token 边界的 stop 字符串。
+  Expect(HttpCall(port, "POST", "/v1/chat/completions",
+                  ChatBody("Hi", "\"stop\":[\"lo wo\"]"), &response),
+         "cross-token stop call failed");
+  mobilenet::runtime::JsonValue cross_stop;
+  Expect(ParseJsonText(response.body, &cross_stop),
+         "cross-token stop JSON failed");
+  Expect(ChoiceContent(cross_stop) == "Hel",
+         "cross-token stop content mismatch");
 }
 
 // 检查会话端点。
@@ -742,6 +786,31 @@ void TestErrors(U16 port) {
          "missing session call failed");
   Expect(response.status == 404, "missing session status != 404");
 
+  Expect(HttpCall(port, "GET", "/v1/chat/completions", "", &response),
+         "method mismatch call failed");
+  Expect(response.status == 405, "method mismatch status != 405");
+
+  // 多条历史消息，丢弃旧消息后可成功生成。
+  std::string many_messages = "{\"model\":\"qwen3_0_6b\",\"messages\":[";
+  for (I32 index = 0; index < 5; ++index) {
+    if (index > 0) {
+      many_messages.push_back(',');
+    }
+    many_messages.append("{\"role\":\"user\",\"content\":\"");
+    many_messages.append(100, 'a');
+    many_messages.append("\"}");
+  }
+  many_messages.append("]}");
+  Expect(HttpCall(port, "POST", "/v1/chat/completions", many_messages,
+                  &response),
+         "truncation call failed");
+  Expect(response.status == 200, "truncation status != 200");
+  mobilenet::runtime::JsonValue truncated;
+  Expect(ParseJsonText(response.body, &truncated),
+         "truncation JSON failed");
+  Expect(ChoiceContent(truncated) == "Hello world",
+         "truncation content mismatch");
+
   std::string long_text(2000, 'a');
   Expect(HttpCall(port, "POST", "/v1/chat/completions",
                   ChatBody(long_text), &response),
@@ -767,6 +836,152 @@ void TestOpenApi(U16 port) {
   const mobilenet::runtime::JsonValue* paths = spec.Find("paths");
   Expect(paths != nullptr && paths->Find("/v1/chat/completions") != nullptr,
          "openapi path missing");
+}
+
+// 检查 EOS/stop token 不计入 completion_tokens。
+void TestStopTokenUsage(const std::string& model_dir,
+                        const std::vector<I64>& output_ids) {
+  std::vector<I64> with_eos = output_ids;
+  with_eos.push_back(151645);
+  mobilenet::service::ServerConfig config =
+      MakeConfig(model_dir, 5000, 16);
+  mobilenet::service::Server server;
+  auto engine = std::make_unique<FakeEngine>(
+      FakeEngine::Options{with_eos, 0});
+  mobilenet::Status status = server.Init(config, std::move(engine));
+  Expect(status.ok(), "stop token server init failed: " + status.message());
+  if (!status.ok()) {
+    return;
+  }
+  status = server.Start();
+  Expect(status.ok(), "stop token server start failed: " + status.message());
+  if (!status.ok()) {
+    (void)server.Stop();
+    return;
+  }
+  const U16 port = server.port();
+  HttpResponse response;
+  Expect(HttpCall(port, "POST", "/v1/chat/completions", ChatBody("Hi"),
+                  &response),
+         "stop token chat failed");
+  mobilenet::runtime::JsonValue chat;
+  Expect(ParseJsonText(response.body, &chat), "stop token JSON failed");
+  Expect(ChoiceContent(chat) == "Hello world",
+         "stop token content mismatch");
+  Expect(ChoiceFinishReason(chat) == "stop",
+         "stop token finish_reason mismatch");
+  const mobilenet::runtime::JsonValue* usage = chat.Find("usage");
+  Expect(usage != nullptr && GetInt(*usage, "completion_tokens") == 2,
+         "stop token should not be counted in usage");
+  (void)server.Stop();
+}
+
+// 检查会话历史上限。
+void TestHistoryCap(const std::string& model_dir,
+                    const std::vector<I64>& output_ids) {
+  mobilenet::service::ServerConfig config =
+      MakeConfig(model_dir, 5000, 16);
+  config.max_history_messages = 4;
+  mobilenet::service::Server server;
+  auto engine = std::make_unique<FakeEngine>(
+      FakeEngine::Options{output_ids, 0});
+  mobilenet::Status status = server.Init(config, std::move(engine));
+  Expect(status.ok(), "history cap server init failed: " + status.message());
+  if (!status.ok()) {
+    return;
+  }
+  status = server.Start();
+  Expect(status.ok(), "history cap server start failed: " + status.message());
+  if (!status.ok()) {
+    (void)server.Stop();
+    return;
+  }
+  const U16 port = server.port();
+  HttpResponse response;
+  Expect(HttpCall(port, "POST", "/v1/sessions", "{}", &response),
+         "history cap create failed");
+  mobilenet::runtime::JsonValue created;
+  Expect(ParseJsonText(response.body, &created), "history cap create JSON");
+  const std::string session_id = GetString(created, "session_id");
+  for (I32 turn = 0; turn < 3; ++turn) {
+    Expect(HttpCall(port, "POST", "/v1/sessions/" + session_id + "/chat",
+                    "{\"message\":\"Hi\"}", &response),
+           "history cap chat failed");
+    Expect(response.status == 200, "history cap chat status != 200");
+  }
+  Expect(HttpCall(port, "GET", "/v1/sessions/" + session_id, "", &response),
+         "history cap get failed");
+  mobilenet::runtime::JsonValue info;
+  Expect(ParseJsonText(response.body, &info), "history cap info JSON");
+  Expect(GetInt(info, "message_count") == 4,
+         "history cap message_count mismatch");
+  (void)server.Stop();
+}
+
+// 检查 Stop 后可重新 Init/Start。
+void TestRestart(const std::string& model_dir,
+                 const std::vector<I64>& output_ids) {
+  mobilenet::service::ServerConfig config =
+      MakeConfig(model_dir, 5000, 16);
+  mobilenet::service::Server server;
+  auto first_engine = std::make_unique<FakeEngine>(
+      FakeEngine::Options{output_ids, 0});
+  mobilenet::Status status = server.Init(config, std::move(first_engine));
+  Expect(status.ok(), "restart first init failed: " + status.message());
+  if (status.ok()) {
+    status = server.Start();
+    Expect(status.ok(), "restart first start failed: " + status.message());
+    (void)server.Stop();
+  }
+  auto second_engine = std::make_unique<FakeEngine>(
+      FakeEngine::Options{output_ids, 0});
+  status = server.Init(config, std::move(second_engine));
+  Expect(status.ok(), "restart second init failed: " + status.message());
+  if (!status.ok()) {
+    return;
+  }
+  status = server.Start();
+  Expect(status.ok(), "restart second start failed: " + status.message());
+  if (!status.ok()) {
+    (void)server.Stop();
+    return;
+  }
+  HttpResponse response;
+  Expect(HttpCall(server.port(), "POST", "/v1/chat/completions",
+                  ChatBody("Hi"), &response),
+         "restart chat failed");
+  Expect(response.status == 200, "restart chat status != 200");
+  (void)server.Stop();
+}
+
+// 检查请求体上限。
+void TestBodyLimit(const std::string& model_dir,
+                   const std::vector<I64>& output_ids) {
+  mobilenet::service::ServerConfig config =
+      MakeConfig(model_dir, 5000, 16);
+  config.max_body_bytes = 512;
+  mobilenet::service::Server server;
+  auto engine = std::make_unique<FakeEngine>(
+      FakeEngine::Options{output_ids, 0});
+  mobilenet::Status status = server.Init(config, std::move(engine));
+  Expect(status.ok(), "body limit init failed: " + status.message());
+  if (!status.ok()) {
+    return;
+  }
+  status = server.Start();
+  Expect(status.ok(), "body limit start failed: " + status.message());
+  if (!status.ok()) {
+    (void)server.Stop();
+    return;
+  }
+  const U16 port = server.port();
+  const std::string long_body = ChatBody(std::string(1000, 'a'));
+  HttpResponse response;
+  (void)HttpCall(port, "POST", "/v1/chat/completions", long_body,
+                 &response);
+  // 服务器可能在客户端仍在发送时关闭连接；以响应状态为准。
+  Expect(response.status == 413, "body limit status != 413");
+  (void)server.Stop();
 }
 
 // 检查会话忙。
@@ -817,6 +1032,52 @@ void TestSessionBusy(const std::string& model_dir,
     const mobilenet::runtime::JsonValue* error = busy_error.Find("error");
     Expect(error != nullptr && GetString(*error, "code") == "session_busy",
            "busy error code mismatch");
+  }
+  (void)server.Stop();
+}
+
+// 检查多连接并发聊天。
+void TestConcurrentChats(const std::string& model_dir,
+                         const std::vector<I64>& output_ids) {
+  mobilenet::service::ServerConfig config =
+      MakeConfig(model_dir, 5000, 16);
+  mobilenet::service::Server server;
+  auto engine = std::make_unique<FakeEngine>(
+      FakeEngine::Options{output_ids, 50});
+  mobilenet::Status status = server.Init(config, std::move(engine));
+  Expect(status.ok(), "concurrent server init failed: " + status.message());
+  if (!status.ok()) {
+    return;
+  }
+  status = server.Start();
+  Expect(status.ok(), "concurrent server start failed: " + status.message());
+  if (!status.ok()) {
+    (void)server.Stop();
+    return;
+  }
+  const U16 port = server.port();
+
+  constexpr I32 kThreads = 4;
+  std::vector<HttpResponse> responses(kThreads);
+  std::vector<std::thread> threads;
+  for (I32 index = 0; index < kThreads; ++index) {
+    threads.emplace_back([port, index, &responses]() {
+      (void)HttpCall(port, "POST", "/v1/chat/completions",
+                     ChatBody("Concurrent " + std::to_string(index)),
+                     &responses[static_cast<Usize>(index)]);
+    });
+  }
+  for (std::thread& thread : threads) {
+    thread.join();
+  }
+  for (I32 index = 0; index < kThreads; ++index) {
+    const HttpResponse& response = responses[static_cast<Usize>(index)];
+    Expect(response.status == 200, "concurrent chat status != 200");
+    mobilenet::runtime::JsonValue chat;
+    if (ParseJsonText(response.body, &chat)) {
+      Expect(ChoiceContent(chat) == "Hello world",
+             "concurrent chat content mismatch");
+    }
   }
   (void)server.Stop();
 }
@@ -928,7 +1189,12 @@ I32 main(I32 argc, C8** argv) {
     }
   }
 
+  TestStopTokenUsage(model_dir, output_ids);
+  TestHistoryCap(model_dir, output_ids);
+  TestRestart(model_dir, output_ids);
+  TestBodyLimit(model_dir, output_ids);
   TestSessionBusy(model_dir, output_ids);
+  TestConcurrentChats(model_dir, output_ids);
   TestClientDisconnect(model_dir, output_ids);
   TestTimeout(model_dir, output_ids);
 

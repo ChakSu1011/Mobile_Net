@@ -110,6 +110,12 @@ class PendingRegistry {
   // 标记所有等待者为失败并唤醒。
   void FailAll();
 
+  // 重置注册表，允许 Server Stop 后重新 Init。
+  //
+  // 说明：
+  //   仅在确认没有在途请求时调用（Server::Init 前 HTTP 未启动）。
+  void Reset();
+
   // 返回当前等待请求数。
   Usize size() const;
 

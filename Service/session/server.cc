@@ -242,6 +242,8 @@ Status Server::Init(const ServerConfig& config,
   }
   config_ = config;
   SetLogLevel(config_.log_level);
+  // 支持同一 Server 对象 Stop 后再次 Init；HTTP 尚未启动，无在途请求。
+  registry_.Reset();
 
   TokenizerConfig tokenizer_config;
   tokenizer_config.model_dir = config_.model_dir;
@@ -608,6 +610,8 @@ Bool Server::RunChat(HttpExchange* exchange, const ChatRequest& request,
     }
     if (exchange->client_connected()) {
       exchange->SendSseEvent(BuildErrorResponse(StatusToApiError(status)));
+      // 发送终止标记，避免严格 SSE 客户端一直等待。
+      exchange->SendSseEvent("[DONE]");
       exchange->EndSse();
     }
     return true;

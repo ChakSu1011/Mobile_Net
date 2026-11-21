@@ -4219,6 +4219,26 @@
       "prompt": "<|im_start|>user\nHi<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\nHello<|im_end|>\n"
     },
     {
+      "name": "non_first_system",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Hi"
+        },
+        {
+          "role": "system",
+          "content": "Be brief."
+        },
+        {
+          "role": "user",
+          "content": "Hello"
+        }
+      ],
+      "add_generation_prompt": true,
+      "enable_thinking": "default",
+      "prompt": "<|im_start|>user\nHi<|im_end|>\n<|im_start|>system\nBe brief.<|im_end|>\n<|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\n"
+    },
+    {
       "name": "last_assistant_reasoning",
       "messages": [
         {

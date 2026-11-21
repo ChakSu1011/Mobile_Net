@@ -197,6 +197,21 @@ Status ChatService::Prepare(const ChatRequest& request,
                       "ChatService::Prepare: registry is null");
   }
 
+  // 编码前做字节级快速预判，避免对明显超限的超长文本执行完整 BPE。
+  // 64 字节/token 是宽松上界；正常 Qwen3 prompt 远低于该值。
+  U64 estimated_bytes = 0;
+  for (const ChatMessage& message : request.messages) {
+    estimated_bytes += message.role.size() + message.content.size() + 32;
+  }
+  const U64 max_prompt_bytes =
+      static_cast<U64>(config_.max_num_tokens) * 64;
+  if (estimated_bytes > max_prompt_bytes) {
+    return MakeStatus(
+        ErrorCode::kInvalidArgument,
+        std::string(kContextLengthExceeded) +
+            ": prompt bytes exceed max_num_tokens budget");
+  }
+
   I64 requested = request.max_tokens > 0 ? request.max_tokens
                                          : config_.default_max_tokens;
   requested = std::max<I64>(1, requested);
@@ -328,10 +343,11 @@ Status ChatService::Run(const ChatRequest& request,
   };
 
   const I32 prompt_tokens = static_cast<I32>(prompt_ids.size());
-  I32 completion_tokens = 0;
+  I32 decoded_tokens = 0;
   I64 last_generated = 0;
   Bool stop_hit = false;
   Bool terminal_seen = false;
+  Bool terminal_stop_token = false;
   Status run_status = Status::Ok();
 
   const auto deadline = std::chrono::steady_clock::now() +
@@ -367,20 +383,30 @@ Status ChatService::Run(const ChatRequest& request,
     }
 
     for (const EngineEvent& event : batch) {
+      // kIllegal 是终态但没有新 token；先处理错误，避免把上一个
+      // 成功 token 再解码一次。
+      if (event.status == runtime::RequestStatus::kIllegal) {
+        run_status = MakeStatus(ErrorCode::kInternal,
+                                "engine_unavailable: request failed");
+        break;
+      }
       if (event.token_id >= 0) {
-        ++completion_tokens;
         last_generated = event.generated_count;
         const Bool terminal_token =
-            event.status == runtime::RequestStatus::kStopped ||
-            event.status == runtime::RequestStatus::kIllegal;
-        if (!(terminal_token &&
-              IsStopToken(event.token_id, request))) {
+            event.status == runtime::RequestStatus::kStopped;
+        const Bool stop_token =
+            terminal_token && IsStopToken(event.token_id, request);
+        if (stop_token) {
+          terminal_stop_token = true;
+        }
+        if (!stop_token) {
           std::string delta;
           Status push_status = decoder->Push(event.token_id, &delta);
           if (!push_status.ok()) {
             run_status = PrefixStatus(push_status, "ChatService::Run");
             break;
           }
+          ++decoded_tokens;
           Bool hit = false;
           Status feed_status = filter.Feed(delta, emit, &hit);
           if (!feed_status.ok()) {
@@ -392,11 +418,6 @@ Status ChatService::Run(const ChatRequest& request,
             break;
           }
         }
-      }
-      if (event.status == runtime::RequestStatus::kIllegal) {
-        run_status = MakeStatus(ErrorCode::kInternal,
-                                "engine_unavailable: request failed");
-        break;
       }
     }
     if (!run_status.ok() || stop_hit || terminal_seen) {
@@ -440,7 +461,8 @@ Status ChatService::Run(const ChatRequest& request,
       return feed_status;
     }
     finish_reason =
-        (tail_hit || last_generated < static_cast<I64>(max_tokens))
+        (tail_hit || terminal_stop_token ||
+         last_generated < static_cast<I64>(max_tokens))
             ? "stop"
             : "length";
   } else {
@@ -452,9 +474,7 @@ Status ChatService::Run(const ChatRequest& request,
 
   registry_->Remove(request_id);
 
-  const I32 used_completion =
-      last_generated > 0 ? static_cast<I32>(last_generated)
-                         : completion_tokens;
+  const I32 used_completion = decoded_tokens;
   if (sink != nullptr) {
     if (!sink->OnFinish(finish_reason, prompt_tokens, used_completion)) {
       return MakeStatus(ErrorCode::kCancelled,

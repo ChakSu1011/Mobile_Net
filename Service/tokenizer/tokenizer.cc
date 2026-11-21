@@ -267,28 +267,29 @@ Usize ExpectedUtf8Length(U8 lead) {
   return 0;
 }
 
-// 提取完整 UTF-8 前缀。
+// 提取可输出的 UTF-8 前缀；非法字节以 U+FFFD 替换。
+//
+// 说明：
+//   HF ByteLevel decoder 对非法字节是 lossy 替换，不会让整条生成失败。
+//   流式解码采用相同策略：非法序列替换后继续，不完整序列留到下一次。
 //
 // 参数：
 //   bytes：输入字节缓冲；
-//   prefix_length：输出参数，写入可输出的前缀字节数；
-//   incomplete：输出参数，true 表示剩余字节是不完整序列；
-// 返回：
-//   合法返回 kOk；遇到非法序列返回 kInvalidArgument。
-Status ExtractUtf8Prefix(const std::string& bytes, Usize* prefix_length,
-                         Bool* incomplete) {
-  *prefix_length = 0;
-  *incomplete = false;
+//   output：输出参数，写入可发送文本（含替换字符）；
+//   remainder：输出参数，写入不完整 UTF-8 尾部字节。
+void ExtractUtf8LossyPrefix(const std::string& bytes, std::string* output,
+                            std::string* remainder) {
+  output->clear();
   Usize cursor = 0;
   while (cursor < bytes.size()) {
     const Usize expected =
         ExpectedUtf8Length(static_cast<U8>(bytes[cursor]));
     if (expected == 0) {
-      return MakeStatus(ErrorCode::kInvalidArgument,
-                        "StreamDecoder: invalid UTF-8 lead byte");
+      output->append("\xEF\xBF\xBD");
+      ++cursor;
+      continue;
     }
     if (bytes.size() - cursor < expected) {
-      *incomplete = true;
       break;
     }
     utf8proc_int32_t value = 0;
@@ -296,13 +297,14 @@ Status ExtractUtf8Prefix(const std::string& bytes, Usize* prefix_length,
         reinterpret_cast<const utf8proc_uint8_t*>(bytes.data()) + cursor,
         static_cast<utf8proc_ssize_t>(expected), &value);
     if (length <= 0) {
-      return MakeStatus(ErrorCode::kInvalidArgument,
-                        "StreamDecoder: invalid UTF-8 sequence");
+      output->append("\xEF\xBF\xBD");
+      ++cursor;
+      continue;
     }
+    output->append(bytes, cursor, static_cast<Usize>(length));
     cursor += static_cast<Usize>(length);
   }
-  *prefix_length = cursor;
-  return Status::Ok();
+  *remainder = bytes.substr(cursor);
 }
 
 }  // namespace
@@ -489,16 +491,12 @@ Status StreamDecoder::Push(I64 token_id, std::string* delta) {
     return status;
   }
   pending_bytes_.append(bytes);
-  Usize prefix_length = 0;
-  Bool incomplete = false;
-  status =
-      tokenizer_internal::ExtractUtf8Prefix(pending_bytes_, &prefix_length,
-                                            &incomplete);
-  if (!status.ok()) {
-    return status;
-  }
-  delta->assign(pending_bytes_, 0, prefix_length);
-  pending_bytes_.erase(0, prefix_length);
+  std::string prefix;
+  std::string remainder;
+  tokenizer_internal::ExtractUtf8LossyPrefix(pending_bytes_, &prefix,
+                                             &remainder);
+  pending_bytes_ = std::move(remainder);
+  *delta = std::move(prefix);
   return Status::Ok();
 }
 

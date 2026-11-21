@@ -280,9 +280,11 @@ class Tokenizer {
 - `Load` 成功返回后对象不可变；所有 const 方法线程安全。
 - `StreamDecoder` 持有 `Impl` 的共享指针，可安全存活到 Tokenizer 析构之后；
   但不得跨线程并发使用同一个 `StreamDecoder`。
-- `Push/Finish` 在 `skip_unknown_tokens=false` 时对未知 id 返回
-  `kInvalidArgument`；默认跳过未知 id（与 HF decode 一致）。非法字节始终
-  返回 `kInvalidArgument`；`kUnsupportedOp` 表示配置不支持。
+- `Push` 在 `skip_unknown_tokens=false` 时对未知 id 返回
+  `kInvalidArgument`；默认跳过未知 id（与 HF decode 一致）。流式解码遇到
+  非法 UTF-8 字节时以 U+FFFD 替换并继续（与 HF lossy 行为一致）；
+  `Finish` 若仍有不完整尾部返回 `kInvalidArgument`，Session 层以 U+FFFD
+  兜底。`kUnsupportedOp` 表示配置不支持。
 - `ApplyChatTemplate` 只做文本格式化，不做分词；Session 随后调用 `Encode`。
 
 ### 4.2 配置与数据加载
@@ -462,7 +464,8 @@ class Tokenizer {
 1. 消息角色：`system`、`user`、`assistant`；其他角色（含 `tool`）
    返回 `kUnsupportedOp`。
 2. 首条 `system`：`<|im_start|>system\n{content}<|im_end|>\n`。
-3. 非首条 `system`：按模板视为 `user` 格式。
+3. 非首条 `system`：按模板使用 `<|im_start|>system` 角色名（与 user
+   分支相同，但角色名保持 `system`）。
 4. `user`：`<|im_start|>user\n{content}<|im_end|>\n`。
 5. `assistant`：
    - 若 content 含 `</think>`，按模板拆分 reasoning/content；
@@ -498,10 +501,12 @@ Hello<|im_end|>
   2. 从头部提取最长完整 UTF-8 前缀：
      - 逐字节判断 lead byte 与期望长度；
      - 若剩余字节不足一个完整序列，停止（保留）；
-     - 若 continuation/lead 非法，返回 `kInvalidArgument`。
+     - 若 continuation/lead 非法，输出 U+FFFD 并前进一个字节；
+     - 不完整序列保留到下一次 `Push`。
   3. 将完整前缀写入 `delta`（可为空），从 `pending_bytes_` 删除。
 - `Finish`：若 `pending_bytes_` 非空，返回 `kInvalidArgument`
-  （消息为“流结束时仍有不完整 UTF-8 字节”）；否则返回空串。
+  （消息为“流结束时仍有不完整 UTF-8 字节”）；否则返回空串。Session 在
+  终态捕获该错误并追加 U+FFFD，避免整条响应失败。
 - `Reset` 清空缓冲。
 - 跳过特殊 token 时不产生字节；`spaces_between_special_tokens` 不在基础版
   提供。
@@ -571,7 +576,7 @@ Hello<|im_end|>
 | Python | 3.13.3 |
 | 金标准库 | `tokenizers 0.22.2`、`transformers 5.9.0` |
 | 模型资产 | `Models/Qwen3/tokenizer.json`（11.4 MB） |
-| 实测 | 加载约 0.2–0.7 s；1 KB 文本 Encode 约 0.2–0.5 ms；82 条 Encode 金标准全部通过 |
+| 实测 | 加载亚秒级；1 KB 文本 Encode 亚毫秒级；82 条 Encode 金标准全部通过 |
 
 ### 6.3 用例设计
 

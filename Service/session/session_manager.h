@@ -134,6 +134,9 @@ class SessionManager {
   // 清理空闲会话；调用方持有 mutex_。
   void PruneLocked();
 
+  // 按 max_history_messages 裁剪会话历史；调用方持有会话锁。
+  void TrimHistory(Session* session) const;
+
   // 填充信息快照。
   static void FillInfo(const Session& session, SessionInfo* info);
 

@@ -1130,20 +1130,29 @@ Prefill 每步仍约 3.2 s，因为该阶段每步只有一个请求（batch=1�
 
 | 阶段 | 优化前 | 优化后 | 变化 |
 | --- | --- | --- | --- |
-| Prefill | 3.24 s / 256 token；79.1 token/s | **2.32 s / 256 token；110.4 token/s** | 时间 -28%，吞吐 +39% |
-| Decode | 0.339 s / 4 token；11.8 token/s | **0.324 s / 4 token；12.3 token/s** | 时间 -4%，吞吐 +4% |
+| Prefill | 3.24 s / 256 token；79.1 token/s | **2.28 s / 256 token；112.2 token/s** | 时间 -30%，吞吐 +42% |
+| Decode | 0.339 s / 4 token；11.8 token/s | **0.321 s / 4 token；12.5 token/s** | 时间 -5%，吞吐 +6% |
+
+三次运行：
+
+| 运行 | Prefill 每 256 token | Decode 每 4 token |
+| --- | --- | --- |
+| 1 | 2.721 s | 0.325 s |
+| 2 | 2.283 s | 0.321 s |
+| 3 | 2.249 s | 0.307 s |
+| 中位数 | **2.283 s** | **0.321 s** |
 
 一次完整运行（节选）：
 
 ```text
-[prefill] steps=4 tokens=1024 total_wall_ms=9340.23 avg_step_ms=2335.06 wall_tok_per_s=109.63 exec_tok_per_s=109.64
-[decode]  steps=8 tokens=32 total_wall_ms=2509.39 avg_step_ms=313.67 per_token_ms=78.42 wall_tok_per_s=12.75 exec_tok_per_s=12.75
-[ttft]    request 1 (id=2) = 2360.12 ms
-[ttft]    request 2 (id=3) = 4886.93 ms
-[ttft]    request 3 (id=4) = 7110.90 ms
-[ttft]    request 4 (id=5) = 9340.15 ms
-[ttft]    avg=5924.52 ms
-[total]   wall_ms=11849.66
+[prefill] steps=4 tokens=1024 total_wall_ms=9130.91 avg_step_ms=2282.73 wall_tok_per_s=112.15 exec_tok_per_s=112.15
+[decode]  steps=8 tokens=32 total_wall_ms=2566.74 avg_step_ms=320.84 per_token_ms=80.21 wall_tok_per_s=12.47 exec_tok_per_s=12.47
+[ttft]    request 1 (id=2) = 2253.24 ms
+[ttft]    request 2 (id=3) = 4548.24 ms
+[ttft]    request 3 (id=4) = 6860.59 ms
+[ttft]    request 4 (id=5) = 9130.96 ms
+[ttft]    avg=5698.26 ms
+[total]   wall_ms=11697.71
 ```
 
 ## 15.3 小 KV 预算对比
@@ -1170,7 +1179,7 @@ head 在 L1 中复用 K/V，避免私有内存翻倍。
 - 四项优化中：行选择、4×8 GEMM、query tile 已启用并取得 prefill
   +39% 吞吐；小 KV 复测排除 512 MiB 带宽降级；显式 GQA head pair 因
   资源压力回退。
-- 当前 4 并发 × 256 prompt × 8 decode：prefill 约 **110 token/s**，
-  decode 约 **12.3 token/s**（聚合）；TTFT 约 **2.36/4.89/7.11/9.34 s**。
+- 当前 4 并发 × 256 prompt × 8 decode：prefill 约 **112.2 token/s**，
+  decode 约 **12.5 token/s**（聚合）；TTFT 约 **2.25/4.55/6.86/9.13 s**。
 - 剩余瓶颈仍是 prefill 的 28 层 GEMM/MLP/RoPE 与 lm_head；下一步可做
   swiglu 的 N 分块、RoPE 向量化与 LM Head 的进一步 GEMV 优化。

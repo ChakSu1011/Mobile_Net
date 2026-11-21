@@ -104,4 +104,4 @@ decode 或混合 batch。
   避免 4 个 token 被压到一个 CU。
 - 显式一个 work-item 处理两个 Q head 的版本会因 2×128 累加器导致私有
   内存/占用率下降，decode 明显回退，不要默认启用。
-- 当前 4×256 prompt 基准：prefill 约 110 token/s，decode 约 12.3 token/s。
+- 当前 4×256 prompt 基准：prefill 约 112 token/s，decode 约 12.5 token/s。

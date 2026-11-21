@@ -213,6 +213,7 @@ void PrintStep(I32 step, const StepSample& sample) {
 // 汇总并打印性能结果。
 void PrintSummary(const std::vector<StepSample>& samples,
                   const std::map<U64, RequestTiming>& timings,
+                  const std::vector<U64>& request_ids,
                   FP64 total_wall_ms) {
   FP64 prefill_wall = 0.0;
   FP64 prefill_execute = 0.0;
@@ -272,13 +273,16 @@ void PrintSummary(const std::vector<StepSample>& samples,
   }
   FP64 ttft_sum = 0.0;
   I32 ttft_count = 0;
-  for (const auto& entry : timings) {
-    if (entry.second.first_token) {
-      std::cout << "[ttft]    request " << entry.first
-                << " = " << entry.second.ttft_ms << " ms\n";
-      ttft_sum += entry.second.ttft_ms;
-      ++ttft_count;
+  for (Usize index = 0; index < request_ids.size(); ++index) {
+    const auto iterator = timings.find(request_ids[index]);
+    if (iterator == timings.end() || !iterator->second.first_token) {
+      continue;
     }
+    std::cout << "[ttft]    request " << index + 1
+              << " (id=" << request_ids[index]
+              << ") = " << iterator->second.ttft_ms << " ms\n";
+    ttft_sum += iterator->second.ttft_ms;
+    ++ttft_count;
   }
   if (ttft_count > 0) {
     std::cout << "[ttft]    avg=" << ttft_sum / ttft_count << " ms\n";
@@ -471,7 +475,7 @@ I32 main(I32 argc, C8** argv) {
   if (!all_done) {
     std::cerr << "warning: not all requests finished within max steps\n";
   }
-  PrintSummary(samples, timings, total_wall_ms);
+  PrintSummary(samples, timings, request_ids, total_wall_ms);
 
   const mobilenet::Status destroy_status = engine.Destroy();
   if (!destroy_status.ok()) {

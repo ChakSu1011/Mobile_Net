@@ -1001,3 +1001,110 @@ token 6722
   `--recompute`、`--ignore-eos`、`--verbose`；
 - 只处理 token id，不做 tokenizer；文本输入/输出需外部 tokenizer；
 - 该程序是交互工具，不注册 CTest。
+
+---
+
+# 14. KV 调度性能：4 并发 × Prompt 256 × Decode 8（2026-11-21）
+
+## 14.1 环境
+
+| 项目 | 内容 |
+| --- | --- |
+| 主机 | Windows 11，Intel Arc 130T（OpenCL 3.0 NEO，driver 32.0.101.8801） |
+| GPU | 112 CU，2200 MHz，64 KiB local，16.4 GiB 共享内存 |
+| CPU/内存 | Core Ultra 5 225H，32 GB DDR5-5600 双通道 |
+| 模型包 | `Models/Qwen3/artifacts/qwen3_0_6b_kv` |
+| 调度配置 | 4 并发，prompt=256，decode=8，max_num_tokens=256，KV=512 MiB |
+| 采样 | 贪心，`ignore_eos=true`；prefill 首 token + 8 次 decode |
+
+## 14.2 方法
+
+- 程序：[ocl_kv_benchmark.cc](ocl_kv_benchmark.cc)，目标 `ocl_kv_benchmark`；
+- 先运行一次小 prompt 预热（编译 kernel），再提交 4 个 256-token prompt；
+- 每个 `RunOnce` 记录墙钟时间与 `StepStats.execute_ns`；
+- prefill 阶段因 `max_num_tokens=256` 被切成 4 步，每步 256 token；
+- decode 阶段每步 4 token（4 个请求各 1 token）；
+- 连续运行 3 次，取中位数。
+
+命令：
+
+```bash
+./Runtime/build/ocl_kv_benchmark.exe \
+  --concurrency 4 --prompt-len 256 --decode-steps 8 \
+  --max-num-tokens 256 --kv-mb 512
+```
+
+## 14.3 结果（3 次中位数）
+
+| 阶段 | 步数 | token 数 | 总墙钟 | 平均每步 | 吞吐 |
+| --- | --- | --- | --- | --- | --- |
+| Prefill | 4 | 1024 | 12.95 s | 3.24 s / 256 token | **79.1 token/s** |
+| Decode | 8 | 32 | 2.71 s | 0.339 s / 4 token | **11.8 token/s** |
+| 合计 | 12 | — | 15.66 s | — | — |
+
+单次 TTFT（含排队等待前面的 prefill chunk）：
+
+```text
+request 1 = 3.51 s
+request 2 = 6.65 s
+request 3 = 9.79 s
+request 4 = 12.87 s
+avg       = 8.20 s
+```
+
+一次完整输出（节选）：
+
+```text
+[load]    10843.3 ms
+[warmup]  done
+[prefill] steps=4 tokens=1024 total_wall_ms=12873.94 avg_step_ms=3218.49 wall_tok_per_s=79.54 exec_tok_per_s=79.54
+[decode]  steps=8 tokens=32 total_wall_ms=2663.99 avg_step_ms=333.00 per_token_ms=83.25 wall_tok_per_s=12.01 exec_tok_per_s=12.01
+[ttft]    request 1 (id=2) = 3508.29 ms
+[ttft]    request 2 (id=3) = 6650.64 ms
+[ttft]    request 3 (id=4) = 9786.73 ms
+[ttft]    request 4 (id=5) = 12873.94 ms
+[ttft]    avg=8204.90 ms
+[total]   wall_ms=15537.95
+```
+
+## 14.4 关键发现：多请求 decode 的 EffectiveRows 截断
+
+首次测量时 4 并发 decode 每步约 **2.47 s**（1.6 token/s），而单请求
+decode 约 46 ms。原因是 `OclKernel::EffectiveRows` 只在 `batch==1` 时
+截断静态 256 行；KV 模式下 `batch` 是请求数，4 并发 decode 因此仍计算
+256 行。
+
+已修复为：`packed_tokens=true && token_count>0` 时统一截断到
+`token_count`，不再要求 `batch==1`。修复后：
+
+| 指标 | 修复前 | 修复后 |
+| --- | --- | --- |
+| Decode 每步（4 token） | 2.47 s | **0.339 s** |
+| Decode 吞吐 | 1.6 token/s | **11.8 token/s** |
+| 提升 | — | **约 7.3×** |
+
+Prefill 每步仍约 3.2 s，因为该阶段每步只有一个请求（batch=1），截断
+行为不变。
+
+## 14.5 分析与后续优化
+
+- **Prefill 是当前瓶颈**：每 256 token 约 3.2 s，聚合 79 token/s；
+  `lm_head` 对全部 256 行计算 logits（只有最后一行被采样），单次
+  `lm_head_256` 约 344 ms；28 层 GEMM/MLP/Attention 占主要时间。
+- **Decode**：4 并发每步约 0.333 s，折合每 token 83 ms（聚合 12 token/s）；
+  单请求约 46 ms/token，4 并发理想值约 184 ms/step，当前 333 ms，
+  批处理效率约 55%。
+- 可选优化：
+  1. Prefill 只对最后一个 token 计算 `lm_head`/Sample，跳过其余 255 行；
+  2. GEMM 的 N 方向分块/多 workgroup，提升 256-token prefill；
+  3. Paged attention 增加 query tile / GQA K/V 复用；
+  4. 检查 512 MiB KV 下 GPU 是否发生共享内存带宽降级（可用更小 KV 复测）。
+- 未覆盖：GPU 频率/功耗/温度采样、长时间稳定性、Mali 真机、不同
+  batch/prompt 组合的曲线。
+
+## 14.6 结论
+
+- OCL 在 4 并发、prompt 256、decode 8 的调度场景下可完成 prefill/decode；
+- 当前实测：prefill 约 **79 token/s**，decode 约 **11.8 token/s**（聚合）；
+- 多请求 decode 的 `EffectiveRows` 截断缺陷已修复，decode 提升约 7.3×；
+- Prefill 的 `lm_head` 全行计算是下一轮最明确的优化点。

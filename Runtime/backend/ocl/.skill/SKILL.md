@@ -334,3 +334,14 @@ P4.6 关键陷阱：
   旧 prefill 包加 `--recompute`。
 - 只处理 token id，不做 tokenizer；`--verbose` 打印每步 prefill/decode
   统计。
+
+## KV 调度性能基准（2026-11-21）
+
+- 目标：`ocl_kv_benchmark`；源码 `tests/ocl_kv_benchmark.cc`。
+- 典型命令：
+  `./Runtime/build/ocl_kv_benchmark.exe --concurrency 4 --prompt-len 256 --decode-steps 8`
+- 统计：prefill/decode 的步数、token 数、墙钟/execute 时间、吞吐与 TTFT。
+- 注意：`max_num_tokens` 小于并发 prompt 总量时，prefill 会被切成多步；
+  prefill 首 token 计入 TTFT，decode 步数不含 prefill 产生的首 token。
+- 多请求 decode 必须确认 `EffectiveRows` 按 `packed_tokens` 截断，而不是
+  按 `batch==1`；否则会按静态 256 行计算，decode 慢一个数量级。

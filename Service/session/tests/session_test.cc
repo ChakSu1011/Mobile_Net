@@ -954,6 +954,42 @@ void TestRestart(const std::string& model_dir,
   (void)server.Stop();
 }
 
+// 检查同一端口不能被两个实例同时绑定。
+void TestExclusiveBind(const std::string& model_dir,
+                       const std::vector<I64>& output_ids) {
+  mobilenet::service::ServerConfig config =
+      MakeConfig(model_dir, 5000, 16);
+  mobilenet::service::Server first;
+  auto first_engine = std::make_unique<FakeEngine>(
+      FakeEngine::Options{output_ids, 0});
+  mobilenet::Status status = first.Init(config, std::move(first_engine));
+  Expect(status.ok(), "exclusive bind first init failed: " + status.message());
+  if (!status.ok()) {
+    return;
+  }
+  status = first.Start();
+  Expect(status.ok(), "exclusive bind first start failed: " + status.message());
+  if (!status.ok()) {
+    (void)first.Stop();
+    return;
+  }
+  const U16 port = first.port();
+
+  mobilenet::service::ServerConfig second_config = config;
+  second_config.port = port;
+  mobilenet::service::Server second;
+  auto second_engine = std::make_unique<FakeEngine>(
+      FakeEngine::Options{output_ids, 0});
+  status = second.Init(second_config, std::move(second_engine));
+  Expect(status.ok(), "exclusive bind second init failed: " + status.message());
+  if (status.ok()) {
+    status = second.Start();
+    Expect(!status.ok(), "second server should fail to bind same port");
+    (void)second.Stop();
+  }
+  (void)first.Stop();
+}
+
 // 检查请求体上限。
 void TestBodyLimit(const std::string& model_dir,
                    const std::vector<I64>& output_ids) {
@@ -1192,6 +1228,7 @@ I32 main(I32 argc, C8** argv) {
   TestStopTokenUsage(model_dir, output_ids);
   TestHistoryCap(model_dir, output_ids);
   TestRestart(model_dir, output_ids);
+  TestExclusiveBind(model_dir, output_ids);
   TestBodyLimit(model_dir, output_ids);
   TestSessionBusy(model_dir, output_ids);
   TestConcurrentChats(model_dir, output_ids);

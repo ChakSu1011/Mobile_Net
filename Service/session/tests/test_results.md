@@ -80,6 +80,7 @@ all session checks passed
 | 会话隔离 | 新建第二会话 | message_count=0 | 通过 |
 | 历史上限 | max_history_messages=4；三轮对话 | message_count 裁剪为 4 | 通过 |
 | Stop 后重启 | Stop → Init → Start → chat | 聊天 200 | 通过 |
+| 端口独占 | 两个 Server 绑定同一端口 | 第二个 Start 失败 | 通过 |
 | 删除会话 | DELETE | 200；再次 GET 返回 404 | 通过 |
 | 非法 JSON | `not-json` | 400；error 信封 | 通过 |
 | 模型不匹配 | model=`other` | 404 model_not_found | 通过 |

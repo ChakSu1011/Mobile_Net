@@ -517,9 +517,18 @@ struct HttpServer::Impl {
       if (socket == kInvalidSocket) {
         continue;
       }
+#if defined(_WIN32)
+      // Windows 的 SO_REUSEADDR 允许其它进程绑定同一端口；使用
+      // SO_EXCLUSIVEADDRUSE 保证第二次启动明确失败。
+      I32 exclusive = 1;
+      setsockopt(socket, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
+                 reinterpret_cast<const C8*>(&exclusive), sizeof(exclusive));
+#else
+      // POSIX 使用 SO_REUSEADDR 以便快速重启；TIME_WAIT 不阻止 bind。
       I32 reuse = 1;
       setsockopt(socket, SOL_SOCKET, SO_REUSEADDR,
                  reinterpret_cast<const C8*>(&reuse), sizeof(reuse));
+#endif
       if (::bind(socket, entry->ai_addr,
                  static_cast<I32>(entry->ai_addrlen)) == 0 &&
           ::listen(socket, 32) == 0) {

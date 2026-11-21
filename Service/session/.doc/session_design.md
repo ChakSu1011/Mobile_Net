@@ -269,6 +269,8 @@ struct ServerConfig {
   返回 413；`Transfer-Encoding: chunked` 返回 400。
 - 支持 `Expect: 100-continue`：先回写 `HTTP/1.1 100 Continue` 再读 body。
 - 不支持 keep-alive：响应统一 `Connection: close`，一个连接处理一个请求。
+- Windows 使用 `SO_EXCLUSIVEADDRUSE`，同一端口第二次启动会明确失败；
+  POSIX 使用 `SO_REUSEADDR` 以便快速重启。
 - 读取/写入超时通过 socket 选项设置；超时返回 408/关闭连接。
 
 #### 4.2.2 响应

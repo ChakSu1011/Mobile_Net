@@ -66,7 +66,15 @@
    curl -s http://127.0.0.1:8080/v1/sessions/<id>
    curl -s -X DELETE http://127.0.0.1:8080/v1/sessions/<id>
    ```
-7. 测试：
+7. 交互式客户端（另一个终端）：
+   ```bash
+   chcp 65001
+   python Service/session/tools/chat_cli.py --base-url http://127.0.0.1:18080
+   ```
+   输入文字回车即得回复；服务端保存多轮历史。`/reset` 新会话，
+   `/stream` 切换流式，`/exit` 退出；`--no-stream` 关闭流式，
+   `--max-tokens` 控制单轮长度。
+8. 测试：
    ```bash
    ctest --test-dir Service/build --output-on-failure
    ```

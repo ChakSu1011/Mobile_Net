@@ -243,7 +243,8 @@ struct ServerConfig {
   Bool recompute_attention = false;
 
   // 生成与会话。
-  I32 default_max_tokens = 128;
+  U32 max_context_tokens = 256;   // prompt + 生成总预算
+  I32 default_max_tokens = 0;     // 0 表示由剩余上下文控制
   ThinkingMode thinking = ThinkingMode::kDisabled;
   U32 max_sessions = 64;
   U32 session_idle_timeout_s = 3600;
@@ -257,7 +258,9 @@ struct ServerConfig {
 
 - `port` 允许 0（测试用临时端口），否则 1–65535；
 - `model_dir`、`package_dir` 非空；
-- `max_num_tokens > 0`、`default_max_tokens > 0`；
+- `max_num_tokens > 0`；
+- `max_context_tokens >= max_num_tokens`；
+- `default_max_tokens >= 0`（0 表示由剩余上下文控制）；
 - `max_connections`、`max_body_bytes`、`request_timeout_ms` 非零；
 - 未知字段警告但不失败。
 
@@ -421,8 +424,9 @@ struct PendingRequest {
 2. `Tokenizer::ApplyChatTemplate` 生成 prompt 文本。
 3. `Tokenizer::Encode` 生成 `prompt_ids`。
 4. 计算 `max_tokens`：
-   - `requested = request.max_tokens > 0 ? request.max_tokens
-                                        : config.default_max_tokens`；
+   - 若 `request.max_tokens > 0`，`requested = request.max_tokens`；
+   - 否则若 `config.default_max_tokens > 0`，使用该回退值；
+   - 否则 `requested = config.max_context_tokens`（由剩余上下文控制）；
    - `budget = config.max_context_tokens - prompt_ids.size()`；
    - 若 `budget <= 0` → `context_length_exceeded`；
    - `max_tokens = min(requested, budget)`。

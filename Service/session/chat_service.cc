@@ -212,8 +212,15 @@ Status ChatService::Prepare(const ChatRequest& request,
             ": prompt bytes exceed max_num_tokens budget");
   }
 
-  I64 requested = request.max_tokens > 0 ? request.max_tokens
-                                         : config_.default_max_tokens;
+  I64 requested = 0;
+  if (request.max_tokens > 0) {
+    requested = request.max_tokens;
+  } else if (config_.default_max_tokens > 0) {
+    requested = config_.default_max_tokens;
+  } else {
+    // 请求未指定且未配置回退值时，生成到剩余上下文用尽或 EOS。
+    requested = static_cast<I64>(config_.max_context_tokens);
+  }
   requested = std::max<I64>(1, requested);
 
   std::vector<ChatMessage> working = request.messages;

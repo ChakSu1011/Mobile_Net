@@ -91,13 +91,13 @@ ctest --test-dir Service/build --output-on-failure
 ```text
 Test project D:/Mobile_Net/Service/build
     Start 1: tokenizer_test
-1/2 Test #1: tokenizer_test ...................   Passed    0.39 sec
+1/2 Test #1: tokenizer_test ...................   Passed    0.29 sec
     Start 2: session_test
-2/2 Test #2: session_test .....................   Passed    4.62 sec
+2/2 Test #2: session_test .....................   Passed    4.95 sec
 
 100% tests passed out of 2
 
-Total Test time (real) =   5.14 sec
+Total Test time (real) =   5.33 sec
 ```
 
 ## 6. 用例与结论

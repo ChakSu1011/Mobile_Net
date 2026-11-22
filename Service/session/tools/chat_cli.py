@@ -78,11 +78,11 @@ def create_session(base_url: str, system_prompt: str, timeout: float) -> str:
 def chat_non_stream(base_url: str, session_id: str, message: str,
                     model: str, max_tokens: int, timeout: float) -> None:
     """发送一轮对话并打印完整回复。"""
+    payload = {"model": model, "message": message}
+    if max_tokens is not None and max_tokens > 0:
+        payload["max_tokens"] = max_tokens
     data = _post_json(
-        f"{base_url}/v1/sessions/{session_id}/chat",
-        {"model": model, "message": message, "max_tokens": max_tokens},
-        timeout,
-    )
+        f"{base_url}/v1/sessions/{session_id}/chat", payload, timeout)
     choice = data["choices"][0]
     print(choice["message"]["content"])
     usage = data.get("usage")
@@ -100,10 +100,11 @@ def chat_stream(base_url: str, session_id: str, message: str,
     payload = {
         "model": model,
         "message": message,
-        "max_tokens": max_tokens,
         "stream": True,
         "stream_options": {"include_usage": True},
     }
+    if max_tokens is not None and max_tokens > 0:
+        payload["max_tokens"] = max_tokens
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(
         f"{base_url}/v1/sessions/{session_id}/chat",
@@ -152,8 +153,8 @@ def main() -> int:
     parser.add_argument("--model", default="qwen3_0_6b", help="模型名")
     parser.add_argument("--system", default="You are a helpful assistant.",
                         help="system prompt；传空字符串表示不设置")
-    parser.add_argument("--max-tokens", type=int, default=512,
-                        help="单轮最大生成 token 数，默认 512；"
+    parser.add_argument("--max-tokens", type=int, default=None,
+                        help="单轮最大生成 token 数；不设置则由剩余上下文控制；"
                              "可用 /max <n> 在会话中调整")
     parser.add_argument("--no-stream", action="store_true",
                         help="关闭流式输出，等待完整回复")
@@ -176,12 +177,13 @@ def main() -> int:
         return 1
 
     stream = not args.no_stream
-    max_tokens = args.max_tokens
+    max_tokens = args.max_tokens if args.max_tokens not in (None, 0) else None
     print("MobileNet Session 聊天客户端")
     print(f"服务: {args.base_url}  模型: {args.model}  会话: {session_id}")
-    print(f"单轮生成上限: {max_tokens}")
+    print(f"单轮生成上限: "
+          f"{max_tokens if max_tokens is not None else '由上下文控制'}")
     print("输入文字开始对话；/reset 新会话，/stream 切换流式，"
-          "/max <n> 调整生成长度，/exit 退出。")
+          "/max <n|auto> 调整生成长度，/exit 退出。")
     print("=" * 60)
 
     while True:
@@ -196,8 +198,8 @@ def main() -> int:
             print("再见。")
             return 0
         if text == "/help":
-            print("命令: /reset 新会话  /stream 切换流式  /max <n> 调整单轮"
-                  "生成上限  /session 显示会话 ID  /exit 退出")
+            print("命令: /reset 新会话  /stream 切换流式  /max <n|auto> "
+                  "调整单轮生成上限  /session 显示会话 ID  /exit 退出")
             continue
         if text == "/session":
             print(session_id)
@@ -207,14 +209,19 @@ def main() -> int:
             print(f"流式输出: {'开' if stream else '关'}")
             continue
         if text.startswith("/max "):
+            argument = text.split(maxsplit=1)[1].strip()
+            if argument.lower() in ("auto", "0"):
+                max_tokens = None
+                print("单轮生成上限已改为：由上下文控制")
+                continue
             try:
-                value = int(text.split(maxsplit=1)[1])
+                value = int(argument)
                 if value < 1 or value > 2048:
                     raise ValueError
                 max_tokens = value
                 print(f"单轮生成上限已设为 {max_tokens}")
-            except (ValueError, IndexError):
-                print("用法: /max <1-2048>")
+            except ValueError:
+                print("用法: /max <1-2048> 或 /max auto")
             continue
         if text == "/reset":
             try:

@@ -72,8 +72,9 @@
    python Service/session/tools/chat_cli.py --base-url http://127.0.0.1:18080
    ```
    输入文字回车即得回复；服务端保存多轮历史。`/reset` 新会话，
-   `/stream` 切换流式，`/max <n>` 调整单轮生成长度，`/exit` 退出；
-   `--no-stream` 关闭流式，`--max-tokens` 设置初始单轮长度（默认 512）。
+   `/stream` 切换流式，`/max <n|auto>` 调整单轮生成长度，`/exit` 退出；
+   `--no-stream` 关闭流式。默认不传 `max_tokens`，由剩余上下文控制；
+   `--max-tokens <n>` 可设置显式上限。
 8. 测试：
    ```bash
    ctest --test-dir Service/build --output-on-failure
@@ -118,6 +119,8 @@
 9.1 **会话历史上限**：每轮成功后按 `max_history_messages`（默认 64，
    最小 4）裁剪，保留 system 与最近消息；prompt 预算由
    `generation.max_context_tokens` 控制（默认 256，演示 2048）。
+   `generation.default_max_tokens=0` 表示请求未指定 `max_tokens` 时生成
+   到 EOS 或剩余上下文用尽。
 10. **测试不要加载真实模型**：`session_test` 用 FakeEngine；真实 OCL
     冒烟测试耗时数十秒，建议单独手动执行并记录。
 11. **错误映射依赖消息前缀**：`context_length_exceeded`、`session_busy`、

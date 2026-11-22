@@ -76,8 +76,8 @@ struct ServerConfig {
   // 单请求 prompt + 生成的总上下文预算。
   U32 max_context_tokens = 256;
 
-  // 默认最大生成 token 数。
-  I32 default_max_tokens = 128;
+  // 请求未指定 max_tokens 时的回退上限；0 表示使用剩余上下文预算。
+  I32 default_max_tokens = 0;
 
   // 默认思考模式。
   ThinkingMode thinking = ThinkingMode::kDisabled;

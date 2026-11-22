@@ -237,7 +237,7 @@ Status LoadServerConfig(const std::string& path, ServerConfig* config) {
         "LoadServerConfig: generation.max_context_tokens must be >= "
         "engine.max_num_tokens");
   }
-  status = CheckRange(default_max_tokens, 1, 1 << 20,
+  status = CheckRange(default_max_tokens, 0, 1 << 20,
                       "generation.default_max_tokens", &checked);
   if (!status.ok()) {
     return status;

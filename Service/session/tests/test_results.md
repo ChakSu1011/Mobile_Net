@@ -110,13 +110,13 @@ ctest --test-dir Service/build --output-on-failure
 ```text
 Test project D:/Mobile_Net/Service/build
     Start 1: tokenizer_test
-1/2 Test #1: tokenizer_test ...................   Passed    0.39 sec
+1/2 Test #1: tokenizer_test ...................   Passed    0.29 sec
     Start 2: session_test
-2/2 Test #2: session_test .....................   Passed    4.62 sec
+2/2 Test #2: session_test .....................   Passed    4.95 sec
 
 100% tests passed out of 2
 
-Total Test time (real) =   5.14 sec
+Total Test time (real) =   5.33 sec
 ```
 
 ## 5. OCL 真实模型冒烟
@@ -264,6 +264,36 @@ finish: stop usage: {'prompt_tokens': 1819, 'completion_tokens': 2, 'total_token
 - 2209 token 单条消息快速拒绝，未进入 BPE/Engine；
 - 长 prompt 的 prefill 时间为 12 s / 38 s（本机 Intel Arc 130T），明显高于短 prompt，属预期；
 - 2048 上下文下生成上限由 `max_tokens` 与剩余预算共同决定。
+
+### 5.7 客户端默认不传 max_tokens（由上下文控制）
+
+配置改为：
+
+```text
+generation.max_context_tokens = 2048
+generation.default_max_tokens = 0   # 0 = 由剩余上下文控制
+engine.max_num_tokens = 256
+engine.kv_cache_bytes = 268435456
+```
+
+客户端默认不再发送 `max_tokens`。实际输出：
+
+```text
+MobileNet Session 聊天客户端
+服务: http://127.0.0.1:18080  模型: qwen3_0_6b  会话: a1b69f73ddb36659
+单轮生成上限: 由上下文控制
+...
+你> 中国各个朝代分别有多少年
+（完整列出周、汉、唐、宋、元、明、清及时间范围）
+[usage] prompt=30 completion=189 finish=stop
+```
+
+结论：
+
+- 不再出现 `completion=128 finish=length` 的截断；
+- 模型自然输出 EOS 后结束（completion=189，finish=stop）；
+- 若模型持续生成，则最多用到 2048 - prompt 的剩余上下文，finish=length；
+- 客户端 `/max <n>` 可设显式上限，`/max auto` 恢复由上下文控制。
 
 ## 6. Runtime 依赖回归
 

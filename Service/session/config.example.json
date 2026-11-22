@@ -22,7 +22,7 @@
     "recompute_attention": false
   },
   "generation": {
-    "default_max_tokens": 256,
+    "default_max_tokens": 0,
     "enable_thinking": false,
     "max_context_tokens": 2048
   },

@@ -152,8 +152,9 @@ def main() -> int:
     parser.add_argument("--model", default="qwen3_0_6b", help="模型名")
     parser.add_argument("--system", default="You are a helpful assistant.",
                         help="system prompt；传空字符串表示不设置")
-    parser.add_argument("--max-tokens", type=int, default=128,
-                        help="单轮最大生成 token 数，默认 128")
+    parser.add_argument("--max-tokens", type=int, default=512,
+                        help="单轮最大生成 token 数，默认 512；"
+                             "可用 /max <n> 在会话中调整")
     parser.add_argument("--no-stream", action="store_true",
                         help="关闭流式输出，等待完整回复")
     parser.add_argument("--timeout", type=float, default=180.0,
@@ -175,10 +176,12 @@ def main() -> int:
         return 1
 
     stream = not args.no_stream
+    max_tokens = args.max_tokens
     print("MobileNet Session 聊天客户端")
     print(f"服务: {args.base_url}  模型: {args.model}  会话: {session_id}")
+    print(f"单轮生成上限: {max_tokens}")
     print("输入文字开始对话；/reset 新会话，/stream 切换流式，"
-          "/exit 退出。")
+          "/max <n> 调整生成长度，/exit 退出。")
     print("=" * 60)
 
     while True:
@@ -193,8 +196,8 @@ def main() -> int:
             print("再见。")
             return 0
         if text == "/help":
-            print("命令: /reset 新会话  /stream 切换流式  /session 显示会话 ID"
-                  "  /exit 退出")
+            print("命令: /reset 新会话  /stream 切换流式  /max <n> 调整单轮"
+                  "生成上限  /session 显示会话 ID  /exit 退出")
             continue
         if text == "/session":
             print(session_id)
@@ -202,6 +205,16 @@ def main() -> int:
         if text == "/stream":
             stream = not stream
             print(f"流式输出: {'开' if stream else '关'}")
+            continue
+        if text.startswith("/max "):
+            try:
+                value = int(text.split(maxsplit=1)[1])
+                if value < 1 or value > 2048:
+                    raise ValueError
+                max_tokens = value
+                print(f"单轮生成上限已设为 {max_tokens}")
+            except (ValueError, IndexError):
+                print("用法: /max <1-2048>")
             continue
         if text == "/reset":
             try:
@@ -220,10 +233,10 @@ def main() -> int:
         try:
             if stream:
                 chat_stream(args.base_url, session_id, text, args.model,
-                            args.max_tokens, args.timeout)
+                            max_tokens, args.timeout)
             else:
                 chat_non_stream(args.base_url, session_id, text, args.model,
-                                args.max_tokens, args.timeout)
+                                max_tokens, args.timeout)
         except urllib.error.HTTPError as error:
             print(_format_error(error))
             print("如果提示 session not found，服务可能已重启；输入 /reset"

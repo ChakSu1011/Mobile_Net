@@ -72,8 +72,8 @@
    python Service/session/tools/chat_cli.py --base-url http://127.0.0.1:18080
    ```
    输入文字回车即得回复；服务端保存多轮历史。`/reset` 新会话，
-   `/stream` 切换流式，`/exit` 退出；`--no-stream` 关闭流式，
-   `--max-tokens` 控制单轮长度。
+   `/stream` 切换流式，`/max <n>` 调整单轮生成长度，`/exit` 退出；
+   `--no-stream` 关闭流式，`--max-tokens` 设置初始单轮长度（默认 512）。
 8. 测试：
    ```bash
    ctest --test-dir Service/build --output-on-failure

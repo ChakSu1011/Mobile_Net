@@ -204,7 +204,7 @@ Status ChatService::Prepare(const ChatRequest& request,
     estimated_bytes += message.role.size() + message.content.size() + 32;
   }
   const U64 max_prompt_bytes =
-      static_cast<U64>(config_.max_num_tokens) * 64;
+      static_cast<U64>(config_.max_context_tokens) * 64;
   if (estimated_bytes > max_prompt_bytes) {
     return MakeStatus(
         ErrorCode::kInvalidArgument,
@@ -235,7 +235,7 @@ Status ChatService::Prepare(const ChatRequest& request,
       return PrefixStatus(status, "ChatService::Prepare");
     }
     const I64 budget =
-        static_cast<I64>(config_.max_num_tokens) -
+        static_cast<I64>(config_.max_context_tokens) -
         static_cast<I64>(ids.size());
     if (budget > 0) {
       if (dropped > 0) {
@@ -252,8 +252,8 @@ Status ChatService::Prepare(const ChatRequest& request,
       return MakeStatus(
           ErrorCode::kInvalidArgument,
           std::string(kContextLengthExceeded) +
-              ": prompt exceeds max_num_tokens=" +
-              std::to_string(config_.max_num_tokens));
+              ": prompt exceeds max_context_tokens=" +
+              std::to_string(config_.max_context_tokens));
     }
     ++dropped;
   }

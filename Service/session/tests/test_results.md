@@ -87,7 +87,9 @@ all session checks passed
 | tools 参数 | `tools: []` | 400 unsupported_parameter | 通过 |
 | n=2 | `n: 2` | 400 unsupported_parameter | 通过 |
 | 未知会话 | `/v1/sessions/missing/chat` | 404 session_not_found | 通过 |
-| 上下文超限 | 2000 个 `a` | 400 context_length_exceeded | 通过 |
+| 上下文超限 | 2000 个 `a`（预算 256） | 400 context_length_exceeded | 通过 |
+| 长上下文预算 | 预算 2048；500 token prompt | 200，正常生成 | 通过 |
+| 长上下文超限 | 预算 2048；3500 token prompt | 400 context_length_exceeded | 通过 |
 | 成功截断 | 5 条各 100 字符的历史消息 | 丢弃旧消息后 200；content=`Hello world` | 通过 |
 | 方法不匹配 | GET `/v1/chat/completions` | 405 | 通过 |
 | 请求体上限 | max_body_bytes=512；发送更大 body | 413 | 通过 |
@@ -108,13 +110,13 @@ ctest --test-dir Service/build --output-on-failure
 ```text
 Test project D:/Mobile_Net/Service/build
     Start 1: tokenizer_test
-1/2 Test #1: tokenizer_test ...................   Passed    0.32 sec
+1/2 Test #1: tokenizer_test ...................   Passed    0.39 sec
     Start 2: session_test
-2/2 Test #2: session_test .....................   Passed    3.88 sec
+2/2 Test #2: session_test .....................   Passed    4.62 sec
 
 100% tests passed out of 2
 
-Total Test time (real) =   4.41 sec
+Total Test time (real) =   5.14 sec
 ```
 
 ## 5. OCL 真实模型冒烟
@@ -208,6 +210,60 @@ SECOND_CONTENT 'The capital of Germany is Berlin.'
 - 两个响应均带同一个 `session_id`；
 - `completion_tokens=7`：终态 EOS 未计入 usage（与设计契约一致）；
 - 真实多轮文字交互可用。
+
+### 5.6 2048 上下文与长 prompt 验证
+
+为支持更长对话，本次将 `engine.max_num_tokens=256`（单步图预算）与
+`generation.max_context_tokens=2048`（单请求 prompt+生成预算）解耦，
+`kv_cache_bytes` 设为 256 MiB。
+
+设备信息（`ocl_contract_test.exe`）：
+
+```text
+device.name: Intel(R) Arc(TM) 130T GPU (16GB)
+device.global_bytes: 17612341248
+device.max_alloc_bytes: 4294959104
+```
+
+显存估算：
+
+| 项目 | 大小 |
+| --- | --- |
+| 权重 `weights.bin` | 1,192,099,840 B ≈ 1.11 GiB |
+| Activation arena（单步 256） | 78,317,568 B ≈ 74.7 MiB |
+| KV Cache（256 MiB） | 268,435,456 B；146 个 block × 16 token ≈ 2336 token |
+| 合计 | ≈ 1.45 GiB |
+| OpenCL 报告全局显存 | ≈ 16.4 GiB（集显共享内存，实际可用受系统/驱动限制） |
+
+2048 token 的 KV 约 `2048 × 112 KiB ≈ 224 MiB`，256 MiB 预算留有
+约 288 token 余量。服务启动后 `/health` 显示
+`kv_free_blocks=146`。
+
+实际请求（OCL，`max_context_tokens=2048`）：
+
+```text
+=== short: content_tokens=49 status=200 elapsed=1.00s ===
+content: 'OK.'
+finish: stop usage: {'prompt_tokens': 67, 'completion_tokens': 2, 'total_tokens': 69}
+
+=== medium_800: content_tokens=817 status=200 elapsed=12.26s ===
+content: 'OK.'
+finish: stop usage: {'prompt_tokens': 835, 'completion_tokens': 2, 'total_tokens': 837}
+
+=== near_1800: content_tokens=1801 status=200 elapsed=37.66s ===
+content: 'OK.'
+finish: stop usage: {'prompt_tokens': 1819, 'completion_tokens': 2, 'total_tokens': 1821}
+
+=== over_2200: content_tokens=2209 status=400 elapsed=0.02s ===
+{"error": {"message": "context_length_exceeded: prompt exceeds max_context_tokens=2048", "type": "invalid_request_error", "param": null, "code": "context_length_exceeded"}}
+```
+
+结论：
+
+- 835 与 1819 token prompt 均成功，说明 chunked prefill + KV 长上下文工作；
+- 2209 token 单条消息快速拒绝，未进入 BPE/Engine；
+- 长 prompt 的 prefill 时间为 12 s / 38 s（本机 Intel Arc 130T），明显高于短 prompt，属预期；
+- 2048 上下文下生成上限由 `max_tokens` 与剩余预算共同决定。
 
 ## 6. Runtime 依赖回归
 

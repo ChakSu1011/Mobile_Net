@@ -15,15 +15,16 @@
   "engine": {
     "backend": "ocl",
     "device_id": 0,
-    "kv_cache_bytes": 67108864,
+    "kv_cache_bytes": 268435456,
     "max_num_tokens": 256,
     "max_concurrent_requests": 1,
     "verify_weights_sha256": true,
     "recompute_attention": false
   },
   "generation": {
-    "default_max_tokens": 128,
-    "enable_thinking": false
+    "default_max_tokens": 256,
+    "enable_thinking": false,
+    "max_context_tokens": 2048
   },
   "session": {
     "max_sessions": 64,

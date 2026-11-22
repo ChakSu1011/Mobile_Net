@@ -990,6 +990,54 @@ void TestExclusiveBind(const std::string& model_dir,
   (void)first.Stop();
 }
 
+// 检查上下文预算与单步 max_num_tokens 解耦。
+void TestLongContextBudget(const std::string& model_dir,
+                           const std::vector<I64>& output_ids) {
+  mobilenet::service::ServerConfig config =
+      MakeConfig(model_dir, 5000, 16);
+  config.max_context_tokens = 2048;
+  mobilenet::service::Server server;
+  auto engine = std::make_unique<FakeEngine>(
+      FakeEngine::Options{output_ids, 0});
+  mobilenet::Status status = server.Init(config, std::move(engine));
+  Expect(status.ok(), "long context init failed: " + status.message());
+  if (!status.ok()) {
+    return;
+  }
+  status = server.Start();
+  Expect(status.ok(), "long context start failed: " + status.message());
+  if (!status.ok()) {
+    (void)server.Stop();
+    return;
+  }
+  const U16 port = server.port();
+  HttpResponse response;
+
+  std::string long_prompt;
+  for (I32 index = 0; index < 50; ++index) {
+    long_prompt += "The quick brown fox jumps over the lazy dog. ";
+  }
+  Expect(HttpCall(port, "POST", "/v1/chat/completions",
+                  ChatBody(long_prompt, "\"max_tokens\":32"), &response),
+         "long context call failed");
+  Expect(response.status == 200, "long context should be accepted");
+  mobilenet::runtime::JsonValue long_result;
+  Expect(ParseJsonText(response.body, &long_result),
+         "long context JSON failed");
+  Expect(ChoiceContent(long_result) == "Hello world",
+         "long context content mismatch");
+
+  std::string too_long;
+  for (I32 index = 0; index < 350; ++index) {
+    too_long += "The quick brown fox jumps over the lazy dog. ";
+  }
+  Expect(HttpCall(port, "POST", "/v1/chat/completions",
+                  ChatBody(too_long, "\"max_tokens\":32"), &response),
+         "too long context call failed");
+  Expect(response.status == 400, "too long context should be rejected");
+  (void)server.Stop();
+}
+
 // 检查请求体上限。
 void TestBodyLimit(const std::string& model_dir,
                    const std::vector<I64>& output_ids) {
@@ -1229,6 +1277,7 @@ I32 main(I32 argc, C8** argv) {
   TestHistoryCap(model_dir, output_ids);
   TestRestart(model_dir, output_ids);
   TestExclusiveBind(model_dir, output_ids);
+  TestLongContextBudget(model_dir, output_ids);
   TestBodyLimit(model_dir, output_ids);
   TestSessionBusy(model_dir, output_ids);
   TestConcurrentChats(model_dir, output_ids);

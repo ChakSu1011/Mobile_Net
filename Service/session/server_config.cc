@@ -220,8 +220,23 @@ Status LoadServerConfig(const std::string& path, ServerConfig* config) {
   }
   parsed.max_concurrent_requests = static_cast<I32>(checked);
 
+  const I64 max_context_tokens =
+      ReadInt(generation, "max_context_tokens", parsed.max_context_tokens);
   const I64 default_max_tokens =
       ReadInt(generation, "default_max_tokens", parsed.default_max_tokens);
+  status = CheckRange(max_context_tokens, 1, 1 << 20,
+                      "generation.max_context_tokens", &checked);
+  if (!status.ok()) {
+    return status;
+  }
+  parsed.max_context_tokens = static_cast<U32>(checked);
+  if (parsed.max_context_tokens <
+      static_cast<U32>(parsed.max_num_tokens)) {
+    return MakeStatus(
+        ErrorCode::kInvalidArgument,
+        "LoadServerConfig: generation.max_context_tokens must be >= "
+        "engine.max_num_tokens");
+  }
   status = CheckRange(default_max_tokens, 1, 1 << 20,
                       "generation.default_max_tokens", &checked);
   if (!status.ok()) {

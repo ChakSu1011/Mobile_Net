@@ -97,9 +97,12 @@
    Session 只把事件入队。不要在回调里调用 `AddRequest/CancelRequest`。
 2. **request_id 先注册再提交**：Session 预分配 `Request.request_id` 并
    注册 PendingRequest，避免推理线程先回调、注册后到的竞态。
-3. **上下文预算 256**：当前 `qwen3_0_6b_kv` 图输入 `[1,256]`；prompt +
-   max_tokens 超限时 Session 会丢弃旧消息，无法满足则返回
-   `context_length_exceeded`。提升上限需重新规划模型包。
+3. **上下文预算**：`engine.max_num_tokens` 是单步图预算（当前 256），
+   不要改大；单请求总上下文由 `generation.max_context_tokens` 控制。
+   默认 256，演示配置 2048。prompt + max_tokens 超限会丢弃旧消息，仍
+   无法满足则返回 `context_length_exceeded`。
+   2048 token 的 KV 约 224 MiB，需同步设置 `engine.kv_cache_bytes`
+   （演示配置 256 MiB；Qwen3-0.6B 约 112 KiB/token）。
 4. **采样参数暂不生效**：Engine 阶段一/二为 argmax；temperature/top_p/
    top_k/seed 接受并校验，但不会改变输出。不要把它当作采样服务。
 5. **多轮无 PrefixCache**：每轮重渲染完整历史并重新 Prefill，延迟随历史
@@ -113,8 +116,8 @@
 9. **stop 字符串**：在解码文本上检测，跨 token 通过尾部缓冲处理；
    最多 4 个、每个 256 字节。stop token ids 透传 Engine。
 9.1 **会话历史上限**：每轮成功后按 `max_history_messages`（默认 64，
-   最小 4）裁剪，保留 system 与最近消息；prompt 预算仍由 256 token 上限
-   控制。
+   最小 4）裁剪，保留 system 与最近消息；prompt 预算由
+   `generation.max_context_tokens` 控制（默认 256，演示 2048）。
 10. **测试不要加载真实模型**：`session_test` 用 FakeEngine；真实 OCL
     冒烟测试耗时数十秒，建议单独手动执行并记录。
 11. **错误映射依赖消息前缀**：`context_length_exceeded`、`session_busy`、

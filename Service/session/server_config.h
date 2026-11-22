@@ -73,6 +73,9 @@ struct ServerConfig {
   // 是否使用无 KV 的 recompute 模式（调试/Mock）。
   Bool recompute_attention = false;
 
+  // 单请求 prompt + 生成的总上下文预算。
+  U32 max_context_tokens = 256;
+
   // 默认最大生成 token 数。
   I32 default_max_tokens = 128;
 

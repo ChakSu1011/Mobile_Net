@@ -91,8 +91,11 @@ Service/session（HttpServer → Router → OpenAI/原生 handler）
 - Engine 的 `Response` 每步回调；`Response`/`Sequence` 为值快照，
   `logits` 仅在回调期间有效；Session 不保存 logits。
 - Engine 回调在推理线程同步触发；严禁在回调中调用 Engine。
-- 当前模型包图输入 `[1,256]`，单请求 prompt + 生成 token 上限为 256；
-  Session 配置必须与模型包一致。
+- 当前模型包图输入 `[1,256]`，`max_num_tokens=256` 是**单步**图执行
+  预算；KV 模式支持 chunked prefill，单请求总上下文由 Session 的
+  `max_context_tokens` 控制（默认 256，可按 KV 显存提高，演示配置 2048）。
+- `max_context_tokens` 必须与 `kv_cache_bytes` 匹配；Qwen3-0.6B 约
+  112 KiB/token，2048 token 需约 224 MiB KV。
 - 当前 Engine 采样为 argmax；`temperature/top_p/top_k/seed` 接受但暂不生效。
 - 模型资产位于 `Models/`，不提交 Git；测试通过路径参数或环境变量定位。
 - 所有 C++ 整数类型使用 `Utils/cpp/types.h` 别名；不使用异常穿越模块边界。
@@ -412,7 +415,7 @@ struct PendingRequest {
 输入：`messages`、请求参数、会话默认采样。
 
 1. 校验角色与内容（OpenAI 层已完成大部分）；按消息总字节数做快速
-   上限检查（`max_num_tokens * 64`），明显超限时直接返回
+   上限检查（`max_context_tokens * 64`），明显超限时直接返回
    `context_length_exceeded`，避免对超长文本执行完整 BPE。接近上限的
    文本仍会完整编码；预算内提前终止是后续优化项。
 2. `Tokenizer::ApplyChatTemplate` 生成 prompt 文本。
@@ -420,7 +423,7 @@ struct PendingRequest {
 4. 计算 `max_tokens`：
    - `requested = request.max_tokens > 0 ? request.max_tokens
                                         : config.default_max_tokens`；
-   - `budget = config.max_num_tokens - prompt_ids.size()`；
+   - `budget = config.max_context_tokens - prompt_ids.size()`；
    - 若 `budget <= 0` → `context_length_exceeded`；
    - `max_tokens = min(requested, budget)`。
 5. 截断策略（无状态与有状态共用）：
@@ -531,9 +534,9 @@ class SessionManager {
   `session_idle_timeout_s` 且非 busy 的会话；基础版采用惰性清理。
 - 历史上限：每轮成功后按 `max_history_messages` 裁剪，保留首条 system
   与最近消息，避免长会话内存无界增长；详细 prompt 截断仍由 §4.6.1 负责。
-- 上下文预算：每轮构造 prompt 时按 §4.6.1 截断；成功后按
-  `max_history_messages` 裁剪存储历史。`GET /v1/sessions/{id}` 返回当前
-  保留的消息条数。
+- 上下文预算：每轮构造 prompt 时按 §4.6.1 与
+  `max_context_tokens` 截断；成功后按 `max_history_messages` 裁剪存储
+  历史。`GET /v1/sessions/{id}` 返回当前保留的消息条数。
 
 ### 4.9 OpenAI 协议映射
 
@@ -739,7 +742,7 @@ Server::Stop
 | TC-SVC-05 | 多轮会话 | 创建 + 两轮 chat | 历史增长；两会话隔离；消息回滚正确 |
 | TC-SVC-06 | 取消/stop | 客户端断开；stop 字符串；stop token | Engine 请求被取消；输出截断；服务可用 |
 | TC-SVC-07 | 错误路径 | 非法 JSON、未知会话、busy、超长、模型不匹配、不支持参数 | 对应 HTTP/错误码，不崩溃 |
-| TC-SVC-08 | 上下文预算 | prompt 接近 256 | 按策略截断；无法满足时 400 |
+| TC-SVC-08 | 上下文预算 | prompt 接近 `max_context_tokens`（默认 256，演示 2048） | 按策略截断；无法满足时 400 |
 | TC-SVC-09 | OpenAPI | GET /openapi.json | 合法 JSON；含 P0 路径 |
 | TC-SVC-10 | 并发 | 多连接/多会话；FakeEngine 延迟 | 无串扰；busy 409；回调不阻塞 |
 | TC-SVC-11 | 性能基线 | FakeEngine；OCL 可选 | 记录首 token 延迟、吞吐 |
@@ -771,14 +774,14 @@ ctest --test-dir Service/build --output-on-failure
 - ChatService::Stream 支持可选 ChatOutcome，供 SessionManager 保存流式
   助手文本。
 - FakeEngine 集成测试覆盖非流式/流式/多轮/隔离/stop/错误/忙/超时/
-  多连接并发/客户端断开/OpenAPI；真实 OCL 单轮、流式与两轮会话冒烟结果
-  见 `tests/test_results.md`。
+  多连接并发/客户端断开/OpenAPI；真实 OCL 单轮、流式、两轮会话与
+  2048 上下文冒烟结果见 `tests/test_results.md`。
 
 ### 6.7 未覆盖项与风险
 
 - 无 TLS/鉴权：不适用于公网。
 - Engine argmax：采样参数不生效；文档与日志明确标注。
-- 单请求 256 token：多轮对话需要截断；提升上限需重新规划模型包。
+- 单步预算固定 256；单请求上下文由 `max_context_tokens` 控制。演示 2048 需要约 224 MiB KV（配置 256 MiB）；只有提高单步预算才需要重新规划模型包。
 - 无 PrefixCache：多轮重复 Prefill，延迟随历史增长。
 - 无 Keep-Alive：每请求新建连接，性能有限；基础版可接受。
 - Windows/Android socket 差异：需在 Android NDK 环境补充构建/运行验证。

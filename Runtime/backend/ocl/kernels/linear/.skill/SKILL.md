@@ -38,22 +38,25 @@
 4. 大 N 网格过大：`ceil(151936/64)=2374` 个 N 块；用 grid-stride 或更大 BN。
 5. 寄存器 spill：16 个 FP32 累加器 + half8 向量；若 spill，降 TM/TN。
 6. Mali local 是 CL_GLOBAL；不要用大 local tile 冒充专用 SRAM。
-7. 不要 fast-relaxed-math；FP16 乘、FP32 累加。
+7. 不要 fast-relaxed-math；当前 Intel 路径为 FP16 乘 + FP16 累加（half FMA）。
 8. lm_head 输出 77.8 MB；不要额外复制或转置。
 9. 小 M/N 时 launch 开销主导；性能结论以真实形状为准。
 
-## 性能数据（Intel Arc 130T，2026-11-20）
+## 性能数据（Intel Arc 130T，2026-11-23）
 
-warmup 1 + 3 次 `Execute+Synchronize` 平均；基线与优化后交替 5 组、
-取中位数（ms）：
+FP16 累加 + half8 FMA，4×4 入口；5 次中位数（ms）：
 
-| 形状 | 优化前（4×4 标量） | P4.5（half8） | Mock | P4.5 vs Mock |
-| --- | --- | --- | --- | --- |
-| 256×1024×1024 | 2.689 | 1.622 | 833.313 | 514x |
-| 256×1024×3072 | 13.583 | 5.297 | 2597.460 | 490x |
-| 256×1024×151936 (lm_head) | 918.614 | 372.242 | 未测（过慢） | — |
+| 形状 | FP32 累加（4×8） | FP16 累加（4×4） | Mock |
+| --- | --- | --- | --- |
+| 256×1024×1024 | 约 1.39 | **0.556** | 810.632 |
+| 256×1024×3072 | 约 3.65–4.59 | **1.554** | 2464.520 |
+| 256×1024×151936（全量 lm_head） | 约 359–382 | 472.258 | 未测（过慢） |
 
-Mali-G925 已断开，真机数据待重连后补测。
+- 全量 lm_head 的 FP16 累加比 FP32 慢约 1.24x；生产 prefill 走
+  `linear_nt_rows`（sample_rows），不会计算完整 256 行，需用真实 4 并发
+  benchmark 复核；
+- 4×8 + FP16 累加会寄存器溢出（约 13.2/36.2 ms），已停用；
+- Mali-G925 已断开，真机数据待重连后补测。
 
 ## P4.3 实现状态
 
@@ -76,7 +79,22 @@ Mali-G925 已断开，真机数据待重连后补测。
 
 - LM Head Linear 带 `sample_rows=true`，使用 `linear_nt_rows` 只算
   `output_slot` 行；`row_count==1` 走单行路径，≤4 行按组复用 B。
-- 常规 Linear 使用 `linear_nt_4x8`；decode（M<8）或 N≥16384 切换到
-  `linear_nt_4x4` 备用 entry。
+- **2026-11-23 修正**：FP16 累加下 4×8 的 32 个 half 累加器 + 12 个
+  half8 向量导致寄存器溢出，实测比 4×4 慢 8–10x；常规 Linear 统一使用
+  `linear_nt_4x4`，`linear_nt_4x8` 保留源码但不再启用。
+
+## FP16 累加 + FMA（2026-11-23，Intel 优先）
+
+- 累加器改为 `half`，K 维 `fma(half, half, half)`；SiLU/其他 epilogue
+  仍在 FP32 中计算；
+- half8 直接指针装载需要 16 B 对齐：Buffer 基址由后端保证 128 B，
+  `k`/offset 为 8 的倍数时直接 `*(const __global half8*)`，否则
+  `vload_half8 + convert_half8` 回退；K 尾部标量 half；
+- `vload_half8` 返回 float8；要 half8 运算必须显式 `convert_half8` 或
+  对齐指针转换；
+- 精度：`ocl_vs_mock_test` max_abs 4.9e-4–2.0e-3、cosine=1；Qwen3-0.6B
+  3 条 prompt 的 token 与 golden 一致；长序列/多 seed 仍需补测；
+- 4×8 FP16 会溢出；lm_head 全量 M=256 比 FP32 慢约 1.24x，生产
+  sample_rows 路径需单独基准。
 - 常见陷阱：rows kernel 的输出写回原始行号 `c[row*n+col]`，不要压缩行；
   `sample_rows` 未启用时仍走全量 4×4/4×8 路径。

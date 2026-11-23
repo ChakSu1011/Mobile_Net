@@ -169,4 +169,6 @@ int m, int hidden, int intermediate
 - 真实形状性能与端到端 Token 结果见 `ocl/tests/test_results.md` 11.3–11.5；
 - P4.5：接入 `packed_tokens` 有效 token 截断，只计算有效行的 gate/up/SiLU；
 - P4.5：K 维 `vload_half8` 向量化 gate/up 双点积，K 非 8 倍数保留标量尾部；
-  实测 M=256/K=1024/I=3072：104.773→41.856 ms（2.50x），Mock 3795.8 ms。
+- 2026-11-23：gate/up 点积改为 FP16 FMA 累加（half8 装载），SiLU epilogue
+  保持 FP32；实测 M=256/K=1024/I=3072：41.856→22.595 ms（1.85x），
+  `ocl_vs_mock_test` max_abs≈9.8e-4、cosine=1，e2e token 一致。

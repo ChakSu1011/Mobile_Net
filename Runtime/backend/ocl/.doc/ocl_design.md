@@ -27,11 +27,15 @@ P4.6 已新增 `Runtime/backend/ocl/tests/ocl_e2e_test.cc`：用 Engine 加载
 （`ocl=12095/21806/17`，Mock 同值），详见 `tests/test_results.md` 第 11 节。
 P4.5 已完成第一轮优化：`packed_tokens` 有效 token 截断（8 个 Kernel 接入）、
 attention 单遍 online softmax、linear 的 K 维 `vload_half8` 向量化与单行
-尾部、swiglu/rope 的 K 维 half8 向量化；OCL 单步从约 6.1 s 降到
-52.2/86.6/68.4 ms（1/5/4 token）。交替 5 组基准中位数：linear/lm_head
-1.66–2.56x、swiglu 2.50x、rope 2.22x、attention 1.22x（vs 优化前）。
-数值回归由 `ocl_vs_mock_test` 与 `ocl_contract_test` 覆盖（64 条 PASS）。
-当前主测试环境为本机 Intel Arc；手机 Mali-G925 已断开，Mali 性能待重连补测。
+尾部、swiglu/rope 的 K 维 half8 向量化。
+2026-11-23 按 Intel 优先策略进一步把 linear/swiglu/rope 的线性点积改为
+FP16 累加 + 显式 `fma(half, half, half)`；4×8 因寄存器溢出停用，统一
+4×4；OCL 单步降到 33.9/59.4/50.9 ms（1/5/4 token），linear 0.556/1.554 ms、
+swiglu 22.595 ms、rope 3.368 ms；全量 lm_head 的 FP16 累加比 FP32 慢
+约 1.24x（生产 sample_rows 路径待复核）。详细数据见 `tests/test_results.md`
+第 12 节。数值回归由 `ocl_vs_mock_test` 与 `ocl_contract_test` 覆盖。
+Attention 仍为 FP32；tiled FlashAttention/FlashDecoding 是下一轮优化，
+本轮未实现。当前主测试环境为本机 Intel Arc；Adreno/Mali 暂不调优。
 P4.8 Paged Attention（KV store + 块表 attention）已实现：4 个 prompt 单请求与
 4 并发生成 8 token 均与 PyTorch 金标准一致；性能 baseline 已记录。
 下一轮重点：attention 寄存器分块/GQA K/V 复用与多 batch 截断。

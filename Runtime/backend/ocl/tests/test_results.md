@@ -1183,3 +1183,90 @@ head 在 L1 中复用 K/V，避免私有内存翻倍。
   decode 约 **12.5 token/s**（聚合）；TTFT 约 **2.25/4.55/6.86/9.13 s**。
 - 剩余瓶颈仍是 prefill 的 28 层 GEMM/MLP/RoPE 与 lm_head；下一步可做
   swiglu 的 N 分块、RoPE 向量化与 LM Head 的进一步 GEMV 优化。
+
+## 12. Intel 优先：FP16 累加 + FMA（2026-11-23）
+
+### 12.1 变更
+
+- `linear`（4×4/rows/4×8）、`linear_swi_glu`、`per_head_rmsnorm_rope` 的
+  线性点积累加器从 FP32 改为 FP16，并使用显式 `fma(half, half, half)`；
+  SiLU、RMSNorm 平方和、RoPE 仍保持 FP32。
+- half8 直接指针装载要求 16 B 对齐：Buffer 基址由后端保证 128 B，
+  `k`/offset 为 8 的倍数时直接 `*(const __global half8*)`，否则
+  `vload_half8 + convert_half8` 回退；K 尾部标量 half。
+- **4×8 入口停用**：FP16 累加下 32 个 half 累加器 + 12 个 half8 向量
+  导致寄存器溢出，实测比 4×4 慢 8–10x；常规 Linear 统一走 4×4。
+- Attention 保持 FP32 累加；本轮未改 FlashAttention。
+
+### 12.2 数值与端到端
+
+```bash
+cmake -S Runtime -B Runtime/build
+cmake --build Runtime/build --target ocl_vs_mock_test ocl_e2e_test ocl_benchmark
+./Runtime/build/backend/ocl_vs_mock_test.exe
+./Runtime/build/ocl_e2e_test.exe Models/Qwen3/artifacts/qwen3_0_6b -1 no-mock
+```
+
+`ocl_vs_mock_test`：全部算子通过；linear max_abs 4.9e-4–2.0e-3，
+swiglu 约 9.8e-4，rope ≤4.9e-4，cosine 均为 1。
+
+e2e 实际输出：
+
+```text
+[ocl] loading model package...
+[ocl] load done in 9366.2 ms
+[ocl] Hello                    token=21806 step=33.9 ms
+[ocl] The capital of France is token=12095 step=59.4 ms
+[ocl] 1+1=                     token=17 step=50.9 ms
+Hello                    expected=21806 ocl=21806
+The capital of France is expected=12095 ocl=12095
+1+1=                     expected=17 ocl=17
+all ocl e2e checks passed
+```
+
+### 12.3 性能（Intel Arc 130T，5 次中位数，ms）
+
+```text
+bench                                   fp16_ms    mock_ms
+add_262144                                0.036      1.430
+gather_256x151936x1024                    0.022      0.008
+rms_norm_256x1024                         0.040      1.584
+linear_256x1024x1024                      0.556    810.632
+linear_256x1024x3072                      1.554   2464.520
+swiglu_256x1024x3072                     22.595   3649.240
+rope_q_256x1024x2048                      3.368   1649.680
+attention_256h16kv8d128                  27.693    568.687
+sample_256x151936                         1.346     62.339
+lm_head_256x1024x151936                 472.258        nan
+```
+
+相对 FP32 累加：
+
+- linear 1024：约 1.39 → 0.556 ms（约 2.5x）；
+- linear 3072：约 3.65–4.59 → 1.554 ms（约 2.3–2.9x）；
+- swiglu：41.856 → 22.595 ms（1.85x）；
+- rope：10.218 → 3.368 ms（3.03x）；
+- attention 未变（FP32，~27.7 ms，属运行波动）；
+- 全量 lm_head（M=256、无 sample_rows）：FP32 约 359–382 ms →
+  FP16 472.3 ms（慢约 1.24x）；生产 prefill 走 `linear_nt_rows` 只算
+  sample_rows，未走该全量路径，需用 RuntimeCore 的 4 并发 benchmark 复核。
+
+### 12.4 结论与风险
+
+| 检查项 | 结论 |
+| --- | --- |
+| FP16 累加 + FMA | 已落地（linear/swiglu/rope 的线性部分） |
+| 数值 vs Mock | 通过；max_abs ≤2e-3，cosine=1 |
+| Qwen3 e2e token | 3/3 与 golden 一致 |
+| 性能 | linear 2.3–2.9x、swiglu 1.85x、rope 3.03x；attention 未动 |
+| 4×8 FP16 | 寄存器溢出，已停用 |
+| 全量 lm_head FP16 | 比 FP32 慢约 1.24x，生产 rows 路径待复核 |
+
+未覆盖/风险：
+
+- 仅 3 条短 prompt 验证 token；长序列、多 seed、4 并发下的 FP16 累加
+  误差仍需 RuntimeCore 的 benchmark/回归；
+- FP16 累加在 K=1024/3072 上的误差虽通过当前用例，不能保证所有输入；
+- FlashAttention/分块 query 的全量 attention 优化尚未实现，本轮 attention
+  保持 FP32 与现有 online softmax；
+- Mali/Adreno 未调优；half8 对齐路径依赖后端 128 B 基址契约。

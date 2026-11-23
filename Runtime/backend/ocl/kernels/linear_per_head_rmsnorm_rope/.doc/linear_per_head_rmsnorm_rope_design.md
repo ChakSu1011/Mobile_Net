@@ -203,5 +203,7 @@ int rows, int heads, int head_dim, float eps
 - 真实形状性能与端到端 Token 结果见 `ocl/tests/test_results.md` 11.3–11.5；
 - P4.5：接入 `packed_tokens` 有效 token 截断，positions 只读有效行；
 - P4.5：per-head GEMM 的 K 维改为 `vload_half8` + FP32 累加，K 非 8 倍数
-  保留标量尾部；实测 q M=256/K=1024：22.668→10.218 ms（2.22x），
-  Mock 1699.4 ms。
+  保留标量尾部；
+- 2026-11-23：per-head 点积改为 FP16 FMA 累加，RMSNorm 平方和与 RoPE
+  仍保持 FP32；实测 q M=256/K=1024：10.218→3.368 ms（3.03x），
+  `ocl_vs_mock_test` max_abs≤4.9e-4、cosine=1，e2e token 一致。

@@ -208,3 +208,27 @@ int m, int n, int k
   - `lm_head_256x1024x151936`（无 sample_rows 的基准）：约 359–382 ms，
     与 4×4 基线持平。
 - 全模型 4 并发 × 256 prompt：prefill 3.24 s → 2.32 s / 256 token。
+
+## 9. 2026-11-23 优化（FP16 累加 + FMA，Intel 优先）
+
+- 目标设备：本机 Intel Arc 130T；Adreno/Mali 暂不调优。
+- `linear_nt_4x4`、`linear_nt_rows`、`linear_nt_4x8` 的累加器由 FP32
+  改为 FP16，K 维使用 half8 装载 + 显式 `fma(half, half, half)`；
+  `-cl-mad-enable` 保留。
+- **4×8 入口不再启用**：FP16 累加下 32 个 half 累加器 + 12 个 half8
+  向量导致寄存器溢出，实测 `linear_256x1024x1024` 约 13.2 ms、
+  `256x1024x3072` 约 36.2 ms；统一回退 4×4 后分别约 0.56 ms / 1.55 ms。
+- 对齐策略：Buffer 基址由后端保证 128 B 对齐；`k`、`a_offset`、`b_offset`
+  均为 8 的倍数时直接 half8 指针装载，否则 `vload_half8 + convert_half8`
+  回退；K 尾部仍走标量 half FMA。
+- 精度（`ocl_vs_mock_test`，FP32 Mock 参考）：linear 的 max_abs 为
+  4.9e-4–2.0e-3、cosine=1；Qwen3-0.6B e2e 3 条 prompt 的 token 与
+  PyTorch golden 完全一致。
+- 实测（Intel Arc 130T，5 次中位数，ms）：
+  - `linear_256x1024x1024`：0.556（FP32 4×8 约 1.39）；
+  - `linear_256x1024x3072`：1.554（FP32 4×8 约 3.65–4.59）；
+  - `lm_head_256x1024x151936` 全量 M=256：472.3（FP32 约 359–382，慢约
+    1.24x）；生产 prefill 走 `linear_nt_rows` 只算 sample_rows，不走该全量
+    路径，需用真实 4 并发 benchmark 复核。
+- 后续：lm_head rows 路径单独基准；若长序列 token 漂移，考虑 partial
+  FP16 累加（每 32/64 个 K 元素提升到 FP32）或 lm_head 保持 FP32。

@@ -1,7 +1,8 @@
-// OCL LinearPerHeadRMSNormRope Kernel（P4.3 基线）。
+// OCL LinearPerHeadRMSNormRope Kernel（P4.5，Intel 优先）。
 //
 // 一 (row, head) 一 workgroup，local size 128；lane 负责一个 head 维度：
-// 点积 GEMM → per-head RMSNorm → NeoX RoPE。D ≤ 128；offsets 为元素偏移。
+// half8 装载 + FP16 FMA 点积 GEMM → FP32 per-head RMSNorm → FP32 NeoX RoPE。
+// D ≤ 128；offsets 为元素偏移。
 
 #pragma OPENCL EXTENSION cl_khr_fp16 : enable
 
@@ -35,25 +36,37 @@ __kernel void per_head_rmsnorm_rope(
   __local float squares[128];
   __local float scale_shared;
 
-  float value = 0.0f;
+  const int vec_ok = ((in_features & 7) == 0) &&
+                     ((x_offset & 7) == 0) && ((weight_offset & 7) == 0);
+  half value = (half)0.0f;
   if (lane < head_dim) {
     const int column = head * head_dim + lane;
     const int x_base = x_offset + row * in_features;
     const int w_base = weight_offset + column * in_features;
-    // K 维 half8 向量化：同址读 x 与 weight 各 8 个 half，FP32 累加。
+    // K 维 half8 向量化：同址读 x 与 weight 各 8 个 half，FP16 FMA 累加。
     int i = 0;
     for (; i + 8 <= in_features; i += 8) {
-      const float8 xv = vload_half8(0, x + x_base + i);
-      const float8 wv = vload_half8(0, weight + w_base + i);
-      value += xv.s0 * wv.s0 + xv.s1 * wv.s1 + xv.s2 * wv.s2 +
-               xv.s3 * wv.s3 + xv.s4 * wv.s4 + xv.s5 * wv.s5 +
-               xv.s6 * wv.s6 + xv.s7 * wv.s7;
+      const __global half* x_ptr = x + x_base + i;
+      const __global half* w_ptr = weight + w_base + i;
+      const half8 xv = vec_ok ? *((const __global half8*)x_ptr)
+                              : convert_half8(vload_half8(0, x_ptr));
+      const half8 wv = vec_ok ? *((const __global half8*)w_ptr)
+                              : convert_half8(vload_half8(0, w_ptr));
+      value = fma(xv.s0, wv.s0, value);
+      value = fma(xv.s1, wv.s1, value);
+      value = fma(xv.s2, wv.s2, value);
+      value = fma(xv.s3, wv.s3, value);
+      value = fma(xv.s4, wv.s4, value);
+      value = fma(xv.s5, wv.s5, value);
+      value = fma(xv.s6, wv.s6, value);
+      value = fma(xv.s7, wv.s7, value);
     }
     for (; i < in_features; ++i) {
-      value += (float)x[x_base + i] * (float)weight[w_base + i];
+      value = fma(x[x_base + i], weight[w_base + i], value);
     }
-    values[lane] = value;
-    squares[lane] = value * value;
+    const float dot = (float)value;
+    values[lane] = dot;
+    squares[lane] = dot * dot;
   } else {
     values[lane] = 0.0f;
     squares[lane] = 0.0f;

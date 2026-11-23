@@ -389,6 +389,17 @@ int main() {
             {HalfTensor({1, 1, 16}, 24), HalfTensor({3, 16}, 25)},
             HalfTensor({1, 1, 3}, 0), attrs, 2e-2f, &failures);
   }
+  // Linear：M=8 覆盖 4×8 prefill 路径。
+  {
+    AttrMap attrs;
+    attrs["in_features"] = static_cast<I64>(16);
+    attrs["out_features"] = static_cast<I64>(3);
+    attrs["transpose_weight"] = true;
+    attrs["bias"] = false;
+    CheckOp(mock.get(), ocl.get(), "linear", OpType::kLinear,
+            {HalfTensor({1, 8, 16}, 32), HalfTensor({3, 16}, 33)},
+            HalfTensor({1, 8, 3}, 0), attrs, 2e-2f, &failures);
+  }
 
   // LinearSwiGlu。
   {

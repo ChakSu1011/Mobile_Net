@@ -94,13 +94,9 @@ Status LinearOclKernel::Prepare(
   if (sample_rows_mode_) {
     return Compile("linear_nt_rows", "-cl-mad-enable");
   }
-  // 主 entry 为 4×8；备用 4×4 用于 decode（M<8）或超大 N。
-  Status compile_status = Compile("linear_nt_4x8", "-cl-mad-enable");
-  if (!compile_status.ok()) {
-    return compile_status;
-  }
-  return CompileExtra("linear_nt_4x4", "-cl-mad-enable",
-                      &alt_kernel_);
+  // FP16 累加下 4×8 的 32 个 half 累加器会导致寄存器溢出，实测比 4×4
+  // 慢约 8–10 倍；因此统一使用 4×4 + half8 装载。
+  return Compile("linear_nt_4x4", "-cl-mad-enable");
 }
 
 // 执行：LM Head 行选择 / prefill 4×8 / decode 4×4 三条路径。
@@ -199,15 +195,13 @@ Status LinearOclKernel::ExecuteImpl(
     return Enqueue1D(work, 1);
   }
 
-  // Prefill 使用 4×8（N 方向加倍）；decode 或超大 N 回退 4×4。
-  const Bool use_4x8 = valid_m >= 8 && n < 16384 &&
-                       alt_kernel_ != nullptr;
-  cl_kernel active = use_4x8 ? kernel_ : alt_kernel_;
+  // 统一使用 4×4 入口；FP16 累加下 4×8 会寄存器溢出（见 Prepare 注释）。
+  cl_kernel active = kernel_;
   if (active == nullptr) {
     return MakeStatus(ErrorCode::kStateError,
                       "LinearOclKernel: no active kernel");
   }
-  const I32 n_tile = use_4x8 ? 8 : 4;
+  const I32 n_tile = 4;
   status = SetMemArg(active, 0, a);
   if (!status.ok()) return status;
   status = SetIntArg(active, 1, a_offset);

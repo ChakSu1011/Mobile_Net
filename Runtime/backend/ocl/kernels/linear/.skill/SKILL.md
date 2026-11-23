@@ -98,3 +98,13 @@ FP16 累加 + half8 FMA，4×4 入口；5 次中位数（ms）：
   sample_rows 路径需单独基准。
 - 常见陷阱：rows kernel 的输出写回原始行号 `c[row*n+col]`，不要压缩行；
   `sample_rows` 未启用时仍走全量 4×4/4×8 路径。
+
+## 最终结论（2026-11-23 晚，FP16 回退）
+
+- FP16 累加虽快（linear 0.556/1.554 ms），但 KV 长序列 8/20-token 贪心
+  出现 token 漂移；单独保留 rope 的 FP16 仍失败。
+- 全部回退 FP32 后 `ocl_kv_e2e_test` 的 8/20-token、4 并发、mixed 用例
+  全部通过；4×8 主 entry 恢复，保留 half8 装载与 `packed_tokens` 截断。
+- 当前默认：FP32 累加；FP16 累加仅作实验记录，不作为生产路径。
+- 若继续 FP16，需 partial FP16（每 32/64 K 提升 FP32）或按层混合精度，
+  并把 8/20-token KV e2e 加入回归门槛。

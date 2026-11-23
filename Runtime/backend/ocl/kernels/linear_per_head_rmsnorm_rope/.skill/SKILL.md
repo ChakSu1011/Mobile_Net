@@ -66,3 +66,9 @@ Mali-G925 已断开，真机数据待重连后补测。
 - P4.5：接入 `packed_tokens` 有效 token 截断；
 - P4.5：per-head GEMM 的 K 维改为 `vload_half8` + FP32 累加，K 非 8 倍数
   保留标量尾部；`ocl_vs_mock_test` 增加 K=16 向量路径用例。
+
+## 最终结论（2026-11-23 晚，FP16 回退）
+
+- FP16 累加（per-head 点积）虽快（3.37 ms vs FP32 10.2 ms），但单独保留
+  rope 的 FP16 累加仍导致 KV 8/20-token 贪心 token 漂移。
+- 已回退 FP32 累加；RMSNorm/RoPE 原本就是 FP32；保留 half8 装载。

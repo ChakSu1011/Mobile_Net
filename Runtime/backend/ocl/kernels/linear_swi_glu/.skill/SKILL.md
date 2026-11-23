@@ -61,3 +61,10 @@ Mali-G925 已断开，真机数据待重连后补测。
 - P4.5：接入 `packed_tokens` 有效 token 截断；
 - P4.5：K 维 `vload_half8` 向量化 gate/up 双点积，K 非 8 倍数保留标量尾部；
   `ocl_vs_mock_test` 增加 K=16 向量路径用例。
+
+## 最终结论（2026-11-23 晚，FP16 回退）
+
+- FP16 累加（gate/up 点积）虽快（22.6 ms vs FP32 41.9 ms），但 KV
+  8/20-token 贪心生成出现 token 漂移；即使 linear 回退 FP32，swiglu 的
+  FP16 仍会导致失败。
+- 已回退 FP32 累加；保留 half8 装载与 `packed_tokens` 截断。

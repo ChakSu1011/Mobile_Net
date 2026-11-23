@@ -1184,7 +1184,10 @@ head 在 L1 中复用 K/V，避免私有内存翻倍。
 - 剩余瓶颈仍是 prefill 的 28 层 GEMM/MLP/RoPE 与 lm_head；下一步可做
   swiglu 的 N 分块、RoPE 向量化与 LM Head 的进一步 GEMV 优化。
 
-## 12. Intel 优先：FP16 累加 + FMA（2026-11-23）
+## 12. Intel 优先：FP16 累加 + FMA 实验（2026-11-23）
+
+> **状态：实验完成但未采用。** FP16 累加在 KV 8/20-token 长序列上出现
+> token 漂移（见 12.5），最终交付已回退 FP32；本节保留实验数据。
 
 ### 12.1 变更
 
@@ -1255,18 +1258,60 @@ lm_head_256x1024x151936                 472.258        nan
 
 | 检查项 | 结论 |
 | --- | --- |
-| FP16 累加 + FMA | 已落地（linear/swiglu/rope 的线性部分） |
-| 数值 vs Mock | 通过；max_abs ≤2e-3，cosine=1 |
-| Qwen3 e2e token | 3/3 与 golden 一致 |
-| 性能 | linear 2.3–2.9x、swiglu 1.85x、rope 3.03x；attention 未动 |
-| 4×8 FP16 | 寄存器溢出，已停用 |
-| 全量 lm_head FP16 | 比 FP32 慢约 1.24x，生产 rows 路径待复核 |
+| FP16 累加 + FMA | **实验完成，未采用**（KV 长序列 token 漂移，已回退 FP32） |
+| 数值 vs Mock | 实验通过；max_abs ≤2e-3，cosine=1 |
+| 短 recompute e2e | 实验通过 3/3 |
+| KV 8/20-token e2e | **实验失败**；全 FP32 回退后全部通过（12.5） |
+| 性能（实验） | linear 2.3–2.9x、swiglu 1.85x、rope 3.03x；未作为交付 |
+| 4×8 FP16 | 寄存器溢出，已停用；FP32 4×8 已恢复 |
+| 全量 lm_head FP16 | 比 FP32 慢约 1.24x |
 
 未覆盖/风险：
 
-- 仅 3 条短 prompt 验证 token；长序列、多 seed、4 并发下的 FP16 累加
-  误差仍需 RuntimeCore 的 benchmark/回归；
-- FP16 累加在 K=1024/3072 上的误差虽通过当前用例，不能保证所有输入；
+- FP16 累加已确认在 KV 8/20-token 长序列上失败，不能作为默认；
+- 若继续追求 FP16 收益，需要 partial FP16（每 32/64 个 K 提升 FP32）或
+  按层混合精度，并把 8/20-token KV 用例加入回归门槛；
 - FlashAttention/分块 query 的全量 attention 优化尚未实现，本轮 attention
   保持 FP32 与现有 online softmax；
 - Mali/Adreno 未调优；half8 对齐路径依赖后端 128 B 基址契约。
+
+### 12.5 KV 长序列回归与最终决策（2026-11-23 晚）
+
+FP16 累加在短 prompt 的 recompute e2e 通过，但 RuntimeCore 用
+`qwen3_0_6b_kv` 做 8/20-token 贪心生成时出现 token 漂移：
+
+```text
+The capital of France is (8):
+  expected 12095,13,576,6722,315,15344,374,21718
+  ocl      12095,13,576,6722,315,9625,374,1083
+Hello (20): 第 17 个 token 起漂移
+The capital of France is (20): 第 5 个 token 起漂移
+```
+
+单独保留 `per_head_rmsnorm_rope` 的 FP16 累加、linear/swiglu 回退 FP32
+仍失败；全部 linear/swiglu/rope 回退 FP32 后：
+
+```text
+Hello 8/20、The capital... 8/20、1+1= 8/20、The weather... 8/20、
+4 并发 8、mixed 3 条 prompt：全部 PASS
+all ocl KV e2e checks passed
+```
+
+结论：**FP16 累加在 28 层、长序列上会造成 token 级漂移，不能作为默认
+路径**。当前已回退：
+
+- `linear`（4×4/rows/4×8）、`linear_swi_glu`、`per_head_rmsnorm_rope`
+  的累加器恢复 FP32；
+- 保留 half8 装载、4×8 N 分块、4×4 单行/尾部、`packed_tokens` 截断；
+- 4×8 主 entry 恢复（FP32 下不回退，性能优于 4×4）；
+- Attention 继续 FP32 online softmax；FlashAttention 仍未实现。
+
+最终 FP32 性能（RuntimeCore，4 并发 × Prompt 256 × Decode 8，3 次中位数）：
+
+- Prefill：2.283 s / 256 token，**112.2 token/s**
+- Decode：0.321 s / 4 token，**12.5 token/s**
+- 总墙钟约 11.70 s
+
+FP16 版本虽然达到 182.5/14.16 token/s，但 token 正确性不通过，不作为
+交付版本。后续若继续追求 FP16 收益，需要 partial FP16（每 32/64 个 K
+元素提升到 FP32）或按层混合精度，并把本节 8/20-token KV 用例加入回归门槛。

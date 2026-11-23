@@ -207,3 +207,9 @@ int rows, int heads, int head_dim, float eps
 - 2026-11-23：per-head 点积改为 FP16 FMA 累加，RMSNorm 平方和与 RoPE
   仍保持 FP32；实测 q M=256/K=1024：10.218→3.368 ms（3.03x），
   `ocl_vs_mock_test` max_abs≤4.9e-4、cosine=1，e2e token 一致。
+
+## 8. 回退结论（2026-11-23 晚）
+
+FP16 累加虽把 per-head 点积从 10.2 ms 降到 3.37 ms，但单独保留该 FP16
+路径仍导致 KV 8/20-token 贪心 token 漂移。当前已回退 FP32 累加；
+RMSNorm 平方和与 RoPE 原本保持 FP32。

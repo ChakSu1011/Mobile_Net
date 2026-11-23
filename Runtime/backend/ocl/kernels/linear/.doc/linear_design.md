@@ -232,3 +232,18 @@ int m, int n, int k
     路径，需用真实 4 并发 benchmark 复核。
 - 后续：lm_head rows 路径单独基准；若长序列 token 漂移，考虑 partial
   FP16 累加（每 32/64 个 K 元素提升到 FP32）或 lm_head 保持 FP32。
+
+### 9.1 回退结论（2026-11-23 晚）
+
+FP16 累加在短 prompt 的 e2e 通过，但 `qwen3_0_6b_kv` 的 8/20-token
+贪心生成出现 token 漂移（`The capital...` 第 5 个 token 起）。单独保留
+rope 的 FP16 累加仍失败；全部回退 FP32 后 KV e2e 全部通过。
+
+因此当前交付版本：
+
+- 累加器恢复 FP32；保留 half8 装载、4×8 N 分块、4×4 单行/尾部、
+  `packed_tokens` 截断；
+- 4×8 主 entry 恢复（FP32 下性能优于 4×4）；
+- FP16 累加代码/数据仅作为实验记录保留在 9 节，不再作为默认路径；
+- 下一轮若继续 FP16，需要 partial FP16（每 32/64 个 K 提升到 FP32）或
+  按层混合精度，并以 8/20-token KV e2e 为门槛。

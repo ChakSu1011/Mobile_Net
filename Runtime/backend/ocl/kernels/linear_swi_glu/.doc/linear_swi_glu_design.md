@@ -172,3 +172,9 @@ int m, int hidden, int intermediate
 - 2026-11-23：gate/up 点积改为 FP16 FMA 累加（half8 装载），SiLU epilogue
   保持 FP32；实测 M=256/K=1024/I=3072：41.856→22.595 ms（1.85x），
   `ocl_vs_mock_test` max_abs≈9.8e-4、cosine=1，e2e token 一致。
+
+## 8. 回退结论（2026-11-23 晚）
+
+FP16 累加虽把 kernel 从 41.9 ms 降到 22.6 ms，但 KV 8/20-token 贪心生成
+出现 token 漂移；即使 linear 回退 FP32，swiglu 的 FP16 仍导致失败。
+当前已回退 FP32 累加，保留 half8 装载与 `packed_tokens` 截断。

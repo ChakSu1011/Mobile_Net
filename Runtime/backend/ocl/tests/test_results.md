@@ -1308,9 +1308,18 @@ all ocl KV e2e checks passed
 
 最终 FP32 性能（RuntimeCore，4 并发 × Prompt 256 × Decode 8，3 次中位数）：
 
-- Prefill：2.283 s / 256 token，**112.2 token/s**
-- Decode：0.321 s / 4 token，**12.5 token/s**
-- 总墙钟约 11.70 s
+- Prefill：2.075 s / 256 token，**123.4 token/s**
+- Decode：0.295 s / 4 token，**13.54 token/s**
+- 总墙钟约 10.64 s
+- TTFT：约 2.08 / 4.15 / 6.22 / 8.30 s，平均 5.2 s
+
+三次运行：
+
+| 运行 | Prefill 每 256 token | Decode 每 4 token |
+| --- | --- | --- |
+| 1 | 2.069 s | 0.296 s |
+| 2 | 2.075 s | 0.293 s |
+| 3 | 2.090 s | 0.295 s |
 
 FP16 版本虽然达到 182.5/14.16 token/s，但 token 正确性不通过，不作为
 交付版本。后续若继续追求 FP16 收益，需要 partial FP16（每 32/64 个 K

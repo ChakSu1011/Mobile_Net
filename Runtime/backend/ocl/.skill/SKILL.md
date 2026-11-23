@@ -355,3 +355,12 @@ P4.6 关键陷阱：
   decode local=1。显式 GQA head pair 因私有内存翻倍回退。
 - 4 并发 × 256 prompt：prefill 约 112 token/s，decode 约 12.5 token/s；
   512/128/32 MiB KV 对比未发现 512 MiB 带宽降级。
+
+## 最终 FP32 复测（2026-11-23 晚，bbc562b）
+
+- FP16 累加因 KV 8/20-token token 漂移回退；最终默认 FP32。
+- 4 并发 × 256 prompt × 8 decode（3 次中位数）：
+  prefill 2.075 s / 256 token，123.4 token/s；decode 0.295 s / 4 token，
+  13.54 token/s；TTFT 约 2.08/4.15/6.22/8.30 s。
+- 正确性：ocl_vs_mock_test 全 PASS；ocl_kv_e2e 8/20-token、4 并发、
+  mixed 全 PASS。
